@@ -717,7 +717,7 @@ if ( ! $bangumi_id ) {
 }
 if ( $bangumi_id > 0 ) :
 ?>
-    <a href="<?php echo esc_url( 'https://anitabi.cn/map?bangumiId=' . $bangumi_id ); ?>"
+    <a href="<?php echo esc_url( 'https://www.anitabi.cn/map?bangumiId=' . $bangumi_id ); ?>"
        target="_blank"
        rel="noopener noreferrer"
        data-go-confirm="1"
@@ -726,6 +726,7 @@ if ( $bangumi_id > 0 ) :
         🗺 巡禮地圖
     </a>
 <?php endif; ?>
+
 
 </div>
 
