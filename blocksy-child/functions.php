@@ -291,7 +291,6 @@ if (is_singular('anime')) {
     foreach ([
         'smaacg-anime-js'    => 'anime.js',
         'smacg-anime-status' => 'anime-status.js',
-        'smacg-anime-rating' => 'anime-rating.js',  // ← 新增這行
     ] as $h=>$f) {
         $p = SMAACG_THEME_DIR.'/assets/js/'.$f;
         if (file_exists($p)) wp_enqueue_script($h, SMAACG_THEME_URL.'/assets/js/'.$f, ['smaacg-api'], filemtime($p), true);
@@ -306,15 +305,6 @@ if (is_singular('anime')) {
         'postId'    => get_the_ID(),
         'permalink' => get_permalink(),
         'title'     => get_the_title(),
-    ]);
-    // ← 新增：把 SmacgConfig 也綁到 anime-rating，避免它讀不到
-    wp_localize_script('smacg-anime-rating','SmacgConfig',[
-        'apiUrl'    => esc_url_raw(rest_url('smileacg/v1/')),
-        'ajaxUrl'   => admin_url('admin-ajax.php'),
-        'nonce'     => wp_create_nonce('wp_rest'),
-        'ajaxNonce' => wp_create_nonce('smacg_nonce'),
-        'loggedIn'  => is_user_logged_in(),
-        'postId'    => get_the_ID(),
     ]);
 }
 
@@ -645,15 +635,6 @@ function smacg_add_points(int $uid, int $pts, string $reason=''): void {
     update_user_meta($uid,'anime_points_log',wp_json_encode($log));
 }
 
-function smacg_get_anime_data(int $uid): array {
-    $r = get_user_meta($uid,'anime_user_data',true);
-    return $r ? json_decode($r,true) : [];
-}
-
-function smacg_save_anime_data(int $uid, array $data): void {
-    update_user_meta($uid,'anime_user_data',wp_json_encode($data));
-}
-
 function smacg_check_cooldown(int $uid, string $action, int $post_id): bool {
     $key = "smacg_cd_{$action}_{$post_id}";
     if (time()-(int)get_user_meta($uid,$key,true) < DAY_IN_SECONDS) return false;
@@ -715,58 +696,8 @@ add_action('rest_api_init', function() {
             return rest_ensure_response($map);
         }]);
 
-    register_rest_route('smacg/v1','/anime-data',['methods'=>'GET','permission_callback'=>'is_user_logged_in','callback'=>fn()=>rest_ensure_response(smacg_get_anime_data(get_current_user_id()))]);
     register_rest_route('smacg/v1','/user-level',['methods'=>'GET','permission_callback'=>'is_user_logged_in','callback'=>fn()=>rest_ensure_response(smacg_get_user_level(get_current_user_id()))]);
-    register_rest_route('smacg/v1','/anime-update',['methods'=>'POST','permission_callback'=>'is_user_logged_in','callback'=>'smacg_api_update',
-        'args'=>['post_id'=>['required'=>true,'type'=>'integer','minimum'=>1],'action'=>['required'=>true,'type'=>'string','enum'=>['status','progress','favorite','fullclear']],'value'=>['required'=>false]]]);
 });
-
-function smacg_api_update(WP_REST_Request $req): WP_REST_Response|WP_Error {
-    $uid = (int)get_current_user_id();
-    $post_id = (int)$req->get_param('post_id');
-    $action  = sanitize_text_field($req->get_param('action'));
-    $value   = $req->get_param('value');
-    if (!get_post($post_id)) return new WP_Error('not_found','找不到文章',['status'=>404]);
-    $data = smacg_get_anime_data($uid);
-    $e = $data[$post_id] ?? ['status'=>null,'progress'=>0,'favorited'=>false,'fullcleared'=>false];
-    $pts = 0;
-    switch ($action) {
-        case 'status':
-            $old = $e['status'] ?? null;
-            $e['status'] = $value === 'none' ? null : $value;
-            if ($value !== 'none' && $value !== $old && smacg_check_cooldown($uid,"status_{$value}",$post_id))
-                $pts = match($value) {'want'=>SMACG_POINT_WANT,'watching'=>SMACG_POINT_WATCHING,'completed'=>SMACG_POINT_COMPLETED,default=>0};
-            if ($value === 'completed') {
-                $ep = (int)get_post_meta($post_id,'anime_episodes',true);
-                if ($ep > 0) $e['progress'] = $ep;
-                if (!$e['fullcleared']) { $e['fullcleared'] = true; if (smacg_check_cooldown($uid,'fullclear',$post_id)) $pts += SMACG_POINT_FULLCLEAR; }
-            }
-            break;
-        case 'progress':
-            $total = (int)get_post_meta($post_id,'anime_episodes',true); $delta = (int)$value;
-            $new = max(0,$e['progress']+$delta); if ($total > 0) $new = min($total,$new);
-            if ($delta > 0 && $new > $e['progress'] && smacg_check_cooldown($uid,"ep_{$post_id}_{$new}",$post_id)) $pts = SMACG_POINT_EPISODE;
-            $e['progress'] = $new;
-            if ($total > 0 && $new >= $total && !$e['fullcleared']) { $e['fullcleared'] = true; if (smacg_check_cooldown($uid,'fullclear',$post_id)) $pts += SMACG_POINT_FULLCLEAR; }
-            break;
-        case 'favorite':
-            $e['favorited'] = !$e['favorited'];
-            if ($e['favorited'] && smacg_check_cooldown($uid,'favorite',$post_id)) $pts = SMACG_POINT_FAVORITE;
-            break;
-        case 'fullclear':
-            if (!$e['fullcleared']) {
-                $e['fullcleared'] = true;
-                if (smacg_check_cooldown($uid,'fullclear',$post_id)) $pts = SMACG_POINT_FULLCLEAR;
-                $total = (int)get_post_meta($post_id,'anime_episodes',true);
-                if ($total > 0) $e['progress'] = $total;
-                $e['status'] = 'completed';
-            }
-            break;
-    }
-    $data[$post_id] = $e; smacg_save_anime_data($uid,$data);
-    if ($pts > 0) smacg_add_points($uid,$pts,"{$action}:{$post_id}");
-    return rest_ensure_response(['success'=>true,'entry'=>$e,'points_earned'=>$pts,'total_points'=>(int)get_user_meta($uid,'anime_total_points',true),'level'=>smacg_get_user_level($uid)]);
-}
 
 /* ============================================================
    AJAX 處理
@@ -1024,4 +955,36 @@ add_action('wp_ajax_smacg_get_my_rating', function() {
         'avg'       => (float) ($detail['avg']       ?? 5),
     ]);
 });
+
+
+/**
+ * 載入自訂模板專用 CSS
+ * 取代直接寫 <link> 在模板裡的方式，讓 LiteSpeed/CDN 能正確處理
+ */
+add_action( 'wp_enqueue_scripts', function () {
+    $base_url = get_stylesheet_directory_uri() . '/assets/css/';
+    $base_dir = get_stylesheet_directory()     . '/assets/css/';
+
+    // 用檔案修改時間當版本號，更新 CSS 自動破快取
+    $ver_news    = file_exists( $base_dir . 'news.css' )    ? filemtime( $base_dir . 'news.css' )    : '1.0';
+    $ver_single  = file_exists( $base_dir . 'single.css' )  ? filemtime( $base_dir . 'single.css' )  : '1.0';
+    $ver_columns = file_exists( $base_dir . 'columns.css' ) ? filemtime( $base_dir . 'columns.css' ) : '1.0';
+
+    // 分類 archive（/news/、/review/、/feature/、/announcement/、/news/anime/...）
+    if ( is_category() || is_tax( 'channel' ) ) {
+        wp_enqueue_style( 'smacg-news', $base_url . 'news.css', [], $ver_news );
+    }
+
+    // 單篇文章（/news/anime/post-slug/、/announcement/post-slug/...）
+    if ( is_singular( 'post' ) ) {
+        wp_enqueue_style( 'smacg-news',   $base_url . 'news.css',   [],            $ver_news );
+        wp_enqueue_style( 'smacg-single', $base_url . 'single.css', [ 'smacg-news' ], $ver_single );
+    }
+
+    // /columns/ 頁面
+    if ( is_page_template( 'page-columns.php' ) ) {
+        wp_enqueue_style( 'smacg-news',    $base_url . 'news.css',    [],              $ver_news );
+        wp_enqueue_style( 'smacg-columns', $base_url . 'columns.css', [ 'smacg-news' ], $ver_columns );
+    }
+}, 20 );
 
