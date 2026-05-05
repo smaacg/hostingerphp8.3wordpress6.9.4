@@ -1,7 +1,7 @@
 /* ============================================================
    微笑動漫 — 動漫追蹤 + 評分 UI 腳本
    路徑：/blocksy-child/assets/js/anime-status.js
-   版本：15.0 — 統一架構，修正評分初始值
+   版本：15.1 — P0 cutover，統一追番 API 到 smileacg/v1
    ============================================================ */
 'use strict';
 
@@ -17,7 +17,7 @@ document.addEventListener('DOMContentLoaded', function () {
     const postId   = parseInt(bar.dataset.postId, 10);
     const totalEp  = parseInt(bar.dataset.episodes, 10) || 0;
     const loggedIn = cfg.loggedIn === true || cfg.loggedIn === '1' || cfg.loggedIn === 1;
-    const apiBase  = cfg.apiUrl  || '/wp-json/smacg/v1/';
+    const apiBase  = cfg.apiUrl  || '/wp-json/smileacg/v1/';
     const nonce    = cfg.nonce   || '';
 
     /* ── 未登入彈出 Modal ── */
