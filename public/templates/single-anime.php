@@ -710,22 +710,23 @@ window.SmacgUserRating = <?php echo wp_json_encode( $user_rating ); ?>;
         <a href="<?php echo esc_url( $official_site ); ?>" target="_blank" rel="noopener noreferrer" class="asd-action-btn asd-action-btn--ghost">🌐 官方網站</a>
     <?php endif; ?>
 
-    <?php
-    // 🗺 動畫巡禮地圖（資料來源：anitabi.cn，CC BY-NC-SA 4.0）
-    $bangumi_id = (int) get_post_meta( get_the_ID(), 'anime_bangumi_id', true );
-    if ( ! $bangumi_id ) {
-        $bangumi_id = (int) get_post_meta( get_the_ID(), 'bangumi_id', true );
-    }
-    if ( $bangumi_id > 0 ) :
-    ?>
-        <a href="<?php echo esc_url( 'https://anitabi.cn/map?bangumiId=' . $bangumi_id ); ?>"
-           target="_blank"
-           rel="noopener noreferrer"
-           class="asd-action-btn asd-action-btn--ghost"
-           title="<?php echo esc_attr( $display_title ); ?> 動畫巡禮地圖（資料來源：anitabi.cn）">
-            🗺 巡禮地圖
-        </a>
-    <?php endif; ?>
+<?php
+$bangumi_id = (int) get_post_meta( get_the_ID(), 'anime_bangumi_id', true );
+if ( ! $bangumi_id ) {
+    $bangumi_id = (int) get_post_meta( get_the_ID(), 'bangumi_id', true );
+}
+if ( $bangumi_id > 0 ) :
+?>
+    <a href="<?php echo esc_url( 'https://anitabi.cn/map?bangumiId=' . $bangumi_id ); ?>"
+       target="_blank"
+       rel="noopener noreferrer"
+       data-go-confirm="1"
+       class="asd-action-btn asd-action-btn--ghost"
+       title="<?php echo esc_attr( $display_title ); ?> 動漫巡禮地圖（資料來源：anitabi.cn）">
+        🗺 巡禮地圖
+    </a>
+<?php endif; ?>
+
 </div>
 
 
