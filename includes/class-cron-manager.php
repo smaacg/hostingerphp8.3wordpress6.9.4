@@ -102,7 +102,7 @@ class Anime_Sync_Cron_Manager {
         // [修改] 新增：每日 05:30 執行主題曲＋集數同步（錯開評分更新時間）
         if ( ! wp_next_scheduled( self::HOOK_THEMES_EPISODES_UPDATE ) ) {
             $daily_hour    = (int) get_option( 'anime_sync_daily_hour', 3 );
-            $themes_hour   = $daily_hour + 2; // 比評分更新晚 2 小時，避免同時壓 API
+            $themes_hour   = ( $daily_hour + 2 ) % 24; // 比評分更新晚 2 小時，避免同時壓 API（%24 防止溢位）
             $today_themes  = strtotime( gmdate( "Y-m-d {$themes_hour}:30:00" ) );
             $start_themes  = $today_themes < time() ? $today_themes + DAY_IN_SECONDS : $today_themes;
             wp_schedule_event( $start_themes, 'daily', self::HOOK_THEMES_EPISODES_UPDATE );
