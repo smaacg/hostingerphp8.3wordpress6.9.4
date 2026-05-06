@@ -2,6 +2,16 @@
 /**
  * 檔案名稱: includes/class-acf-fields.php
  *
+ * 修正紀錄(對應 repo 完整體檢):
+ *   - Bug 1: anime_studio → anime_studios(對齊 import-manager / single-anime / CONTEXT.md)
+ *   - 修正 2: anime_score_anilist step 0.01 → 1
+ *   - 修正 3: anime_score_bangumi instructions 文字
+ *   - 修正 4: anime_trailer_url 用 <br> 換行
+ *   - 修正 5: 用 acf/prepare_field hook 讓 readonly 真的生效
+ *   - 修正 6: wrapper width 第一排重排為 25/25/25/25
+ *   - 修正 7: 加上 crunchyroll(對齊 single-anime.php $provider_icon_map)
+ *   - 修正 8: anime_anilist_id required 改為 0(避免 wp_insert_post race)
+ *
  * @package Anime_Sync_Pro
  */
 
@@ -12,8 +22,11 @@ if ( ! defined( 'ABSPATH' ) ) {
 class Anime_Sync_ACF_Fields {
 
     public function __construct() {
-        add_action( 'acf/init', [ $this, 'register_all_field_groups' ] );
-        add_action( 'add_meta_boxes', [ $this, 'register_resync_metabox' ] );
+        add_action( 'acf/init',         [ $this, 'register_all_field_groups' ] );
+        add_action( 'add_meta_boxes',   [ $this, 'register_resync_metabox' ] );
+
+        // 修正 5:讓 readonly 真的生效(免費版 ACF 透過 wrapper class + CSS)
+        add_action( 'acf/input/admin_head', [ $this, 'inject_readonly_css' ] );
     }
 
     public function register_all_field_groups(): void {
@@ -34,7 +47,7 @@ class Anime_Sync_ACF_Fields {
     }
 
     // =========================================================================
-    // 群組 1：基本資訊
+    // 群組 1:基本資訊
     // =========================================================================
     private function register_basic_info(): void {
         acf_add_local_field_group( [
@@ -46,8 +59,8 @@ class Anime_Sync_ACF_Fields {
                     'label'         => 'AniList ID',
                     'name'          => 'anime_anilist_id',
                     'type'          => 'number',
-                    'instructions'  => '請填入 AniList 作品 ID（數字），例如：21。',
-                    'required'      => 1,
+                    'instructions'  => '請填入 AniList 作品 ID(數字),例如:21。',
+                    'required'      => 0, // 修正 8:不強制 required,避免 wp_insert_post race
                     'min'           => 1,
                     'step'          => 1,
                     'wrapper'       => [ 'width' => '25' ],
@@ -57,7 +70,7 @@ class Anime_Sync_ACF_Fields {
                     'label'         => 'MyAnimeList ID',
                     'name'          => 'anime_mal_id',
                     'type'          => 'number',
-                    'instructions'  => '由 AniList API 自動填入（idMal 欄位）。若為空表示 MAL 無對應條目。',
+                    'instructions'  => '由 AniList API 自動填入(idMal 欄位)。若為空表示 MAL 無對應條目。',
                     'required'      => 0,
                     'min'           => 1,
                     'step'          => 1,
@@ -68,7 +81,7 @@ class Anime_Sync_ACF_Fields {
                     'label'         => 'Bangumi ID',
                     'name'          => 'anime_bangumi_id',
                     'type'          => 'number',
-                    'instructions'  => '由三層查找自動填入。若自動查找失敗，請手動填入 Bangumi 條目 ID。',
+                    'instructions'  => '由三層查找自動填入。若自動查找失敗,請手動填入 Bangumi 條目 ID。',
                     'required'      => 0,
                     'min'           => 1,
                     'step'          => 1,
@@ -79,25 +92,25 @@ class Anime_Sync_ACF_Fields {
                     'label'         => 'AnimeThemes Anime ID',
                     'name'          => 'anime_animethemes_id',
                     'type'          => 'text',
-                    'instructions'  => '由 AnimeThemes API 自動填入 anime.id。若舊資料曾把 slug 寫在這裡，系統會在重新同步時自動搬移到下方 Slug 欄位。',
+                    'instructions'  => '由 AnimeThemes API 自動填入 anime.id。舊資料若把 slug 寫在這,系統會在重新同步時自動搬到下方 Slug 欄位。',
                     'required'      => 0,
-                    'wrapper'       => [ 'width' => '20' ],
+                    'wrapper'       => [ 'width' => '25' ], // 修正 6:第一排統一 25
                 ],
                 [
                     'key'           => 'field_anime_animethemes_slug',
                     'label'         => 'AnimeThemes Slug',
                     'name'          => 'anime_animethemes_slug',
                     'type'          => 'text',
-                    'instructions'  => 'AnimeThemes slug（例如 shingeki-no-kyojin）。找不到 anime.id 時，系統與人工補抓都會以此欄位作為 fallback。',
+                    'instructions'  => 'AnimeThemes slug(例如 shingeki-no-kyojin)。找不到 anime.id 時,系統與人工補抓都會以此欄位作為 fallback。',
                     'required'      => 0,
-                    'wrapper'       => [ 'width' => '30' ],
+                    'wrapper'       => [ 'width' => '50' ],
                 ],
                 [
                     'key'           => 'field_anime_title_chinese',
-                    'label'         => '中文標題（台灣繁體）',
+                    'label'         => '中文標題(台灣繁體)',
                     'name'          => 'anime_title_chinese',
                     'type'          => 'text',
-                    'instructions'  => '優先使用 Bangumi name_cn，若為空則 fallback 至 AniList english → AniList romaji。',
+                    'instructions'  => '優先使用 Bangumi name_cn,若為空則 fallback 至 AniList english → AniList romaji。',
                     'required'      => 0,
                     'wrapper'       => [ 'width' => '50' ],
                 ],
@@ -106,7 +119,7 @@ class Anime_Sync_ACF_Fields {
                     'label'         => '日文原名',
                     'name'          => 'anime_title_native',
                     'type'          => 'text',
-                    'instructions'  => '由 AniList title.native 自動填入（日文原始標題）。',
+                    'instructions'  => '由 AniList title.native 自動填入(日文原始標題)。',
                     'required'      => 0,
                     'wrapper'       => [ 'width' => '50' ],
                 ],
@@ -199,10 +212,10 @@ class Anime_Sync_ACF_Fields {
                     'instructions'  => '由 AniList season 欄位自動填入。',
                     'required'      => 0,
                     'choices'       => [
-                        'WINTER' => '冬季（1月）',
-                        'SPRING' => '春季（4月）',
-                        'SUMMER' => '夏季（7月）',
-                        'FALL'   => '秋季（10月）',
+                        'WINTER' => '冬季(1月)',
+                        'SPRING' => '春季(4月)',
+                        'SUMMER' => '夏季(7月)',
+                        'FALL'   => '秋季(10月)',
                     ],
                     'wrapper'       => [ 'width' => '50' ],
                 ],
@@ -242,7 +255,7 @@ class Anime_Sync_ACF_Fields {
                 ],
                 [
                     'key'           => 'field_anime_duration',
-                    'label'         => '每集時長（分鐘）',
+                    'label'         => '每集時長(分鐘)',
                     'name'          => 'anime_duration',
                     'type'          => 'number',
                     'instructions'  => '由 AniList duration 欄位自動填入。',
@@ -256,7 +269,7 @@ class Anime_Sync_ACF_Fields {
                     'label'          => '開播日期',
                     'name'           => 'anime_start_date',
                     'type'           => 'date_picker',
-                    'instructions'   => '由 AniList startDate 欄位自動填入。格式：YYYY-MM-DD。',
+                    'instructions'   => '由 AniList startDate 欄位自動填入。格式:YYYY-MM-DD。',
                     'required'       => 0,
                     'display_format' => 'Y-m-d',
                     'return_format'  => 'Y-m-d',
@@ -280,7 +293,7 @@ class Anime_Sync_ACF_Fields {
                     'label'         => '下一集播出時間',
                     'name'          => 'anime_next_airing',
                     'type'          => 'text',
-                    'instructions'  => '格式：YYYY-MM-DD HH:MM（台灣時間）。由每日 cron 自動更新；完結後清空。',
+                    'instructions'  => '格式:YYYY-MM-DD HH:MM(台灣時間)。由每日 cron 自動更新;完結後清空。',
                     'required'      => 0,
                     'wrapper'       => [ 'width' => '34' ],
                 ],
@@ -298,7 +311,7 @@ class Anime_Sync_ACF_Fields {
     }
 
     // =========================================================================
-    // 群組 2：評分資訊
+    // 群組 2:評分資訊
     // =========================================================================
     private function register_ratings(): void {
         acf_add_local_field_group( [
@@ -310,11 +323,11 @@ class Anime_Sync_ACF_Fields {
                     'label'         => 'AniList 評分',
                     'name'          => 'anime_score_anilist',
                     'type'          => 'number',
-                    'instructions'  => '範圍 0–100。由每週 cron 自動更新。',
+                    'instructions'  => '範圍 0–100(原始分數)。由每週 cron 自動更新,前台顯示時除以 10。',
                     'required'      => 0,
                     'min'           => 0,
                     'max'           => 100,
-                    'step'          => 0.01,
+                    'step'          => 1, // 修正 2:原 0.01 改為 1
                     'wrapper'       => [ 'width' => '25' ],
                 ],
                 [
@@ -322,7 +335,7 @@ class Anime_Sync_ACF_Fields {
                     'label'         => 'MyAnimeList 評分',
                     'name'          => 'anime_score_mal',
                     'type'          => 'number',
-                    'instructions'  => '範圍 0–100（原始分數 × 10）。由每週 cron 透過 Jikan API 自動更新。',
+                    'instructions'  => '範圍 0–100(原始分數 × 10 儲存)。由每週 cron 透過 Jikan API 自動更新,前台顯示時除以 10。',
                     'required'      => 0,
                     'min'           => 0,
                     'max'           => 100,
@@ -334,7 +347,7 @@ class Anime_Sync_ACF_Fields {
                     'label'         => 'Bangumi 評分',
                     'name'          => 'anime_score_bangumi',
                     'type'          => 'number',
-                    'instructions'  => '範圍 0–10。由每週 cron 自動更新。',
+                    'instructions'  => '範圍 0–100(原始分數 × 10 儲存)。由每週 cron 自動更新,前台顯示時除以 10。', // 修正 3
                     'required'      => 0,
                     'min'           => 0,
                     'max'           => 100,
@@ -346,18 +359,7 @@ class Anime_Sync_ACF_Fields {
                     'label'         => 'AniList 人氣數',
                     'name'          => 'anime_popularity',
                     'type'          => 'number',
-                    'instructions'  => '由 AniList popularity 欄位自動填入（收藏人數）。每週更新。',
-                    'required'      => 0,
-                    'min'           => 0,
-                    'step'          => 1,
-                    'wrapper'       => [ 'width' => '25' ],
-                ],
-                [
-                    'key'           => 'field_anime_ranking',
-                    'label'         => 'AniList 排名',
-                    'name'          => 'anime_ranking',
-                    'type'          => 'number',
-                    'instructions'  => '由 AniList rankings 欄位自動填入（全時期評分排名）。每週更新。',
+                    'instructions'  => '由 AniList popularity 欄位自動填入(收藏人數)。每週更新。',
                     'required'      => 0,
                     'min'           => 0,
                     'step'          => 1,
@@ -375,7 +377,7 @@ class Anime_Sync_ACF_Fields {
     }
 
     // =========================================================================
-    // 群組 3：簡介
+    // 群組 3:簡介
     // =========================================================================
     private function register_synopsis(): void {
         acf_add_local_field_group( [
@@ -384,10 +386,10 @@ class Anime_Sync_ACF_Fields {
             'fields' => [
                 [
                     'key'           => 'field_anime_synopsis_chinese',
-                    'label'         => '中文簡介（台灣繁體）',
+                    'label'         => '中文簡介(台灣繁體)',
                     'name'          => 'anime_synopsis_chinese',
                     'type'          => 'textarea',
-                    'instructions'  => '優先使用 Bangumi summary（自動簡繁轉換）。若 Bangumi 無資料，留空並請人工填入。修改後請在「同步控制」勾選「鎖定中文簡介」。',
+                    'instructions'  => '優先使用 Bangumi summary(自動簡繁轉換)。若 Bangumi 無資料,留空並請人工填入。',
                     'required'      => 0,
                     'rows'          => 6,
                     'new_lines'     => 'br',
@@ -405,7 +407,7 @@ class Anime_Sync_ACF_Fields {
     }
 
     // =========================================================================
-    // 群組 4：媒體素材
+    // 群組 4:媒體素材
     // =========================================================================
     private function register_media(): void {
         acf_add_local_field_group( [
@@ -430,24 +432,25 @@ class Anime_Sync_ACF_Fields {
                     'required'      => 0,
                     'wrapper'       => [ 'width' => '100' ],
                 ],
-[
-    'key'           => 'field_anime_trailer_url',
-    'label'         => 'YouTube 預告片網址（支援多支 PV）',
-    'name'          => 'anime_trailer_url',
-    'type'          => 'textarea',
-    'instructions'  => '可填一支或多支 YouTube 網址，分隔方式：換行 / 逗號 / 分號 / 空格 皆可。' . "\n"
-                     . '可選擇加標題（用 | 分隔），未填標題會自動編號 PV 1、PV 2…' . "\n\n"
-                     . '範例（單支）：https://www.youtube.com/watch?v=XXXXX' . "\n"
-                     . '範例（多支，每行一筆，建議寫法）：' . "\n"
-                     . 'https://youtu.be/abc12345678 | 主視覺PV' . "\n"
-                     . 'https://youtu.be/def09876543 | 第二彈PV' . "\n"
-                     . 'https://youtu.be/ghi13579246 | 角色PV',
-    'rows'          => 4,
-    'new_lines'     => '',
-    'required'      => 0,
-    'wrapper'       => [ 'width' => '100' ],
-],
-
+                [
+                    'key'           => 'field_anime_trailer_url',
+                    'label'         => 'YouTube 預告片網址(支援多支 PV)',
+                    'name'          => 'anime_trailer_url',
+                    'type'          => 'textarea',
+                    // 修正 4:用 <br> 換行(ACF instruction 會 wpautop)
+                    'instructions'  => '可填一支或多支 YouTube 網址,分隔方式:換行 / 逗號 / 分號 / 空格 皆可。<br>'
+                                     . '可選擇加標題(用 | 分隔),未填標題會自動編號 PV 1、PV 2…<br><br>'
+                                     . '<strong>範例(單支):</strong><br>'
+                                     . '<code>https://www.youtube.com/watch?v=XXXXX</code><br><br>'
+                                     . '<strong>範例(多支,每行一筆):</strong><br>'
+                                     . '<code>https://youtu.be/abc12345678 | 主視覺PV</code><br>'
+                                     . '<code>https://youtu.be/def09876543 | 第二彈PV</code><br>'
+                                     . '<code>https://youtu.be/ghi13579246 | 角色PV</code>',
+                    'rows'          => 4,
+                    'new_lines'     => '',
+                    'required'      => 0,
+                    'wrapper'       => [ 'width' => '100' ],
+                ],
             ],
             'location'    => [
                 [ [ 'param' => 'post_type', 'operator' => '==', 'value' => 'anime' ] ],
@@ -460,7 +463,7 @@ class Anime_Sync_ACF_Fields {
     }
 
     // =========================================================================
-    // 群組 5：製作資訊
+    // 群組 5:製作資訊
     // =========================================================================
     private function register_production(): void {
         acf_add_local_field_group( [
@@ -468,17 +471,17 @@ class Anime_Sync_ACF_Fields {
             'title'  => '🎬 製作資訊',
             'fields' => [
                 [
-                    'key'           => 'field_anime_studio',
+                    'key'           => 'field_anime_studios', // 修正 1
                     'label'         => '製作公司',
-                    'name'          => 'anime_studio',
+                    'name'          => 'anime_studios',       // 修正 1:單數 → 複數
                     'type'          => 'text',
-                    'instructions'  => '由 AniList studios（isMain: true）自動填入主要製作公司名稱。',
+                    'instructions'  => '由 AniList studios 自動填入(逗號分隔字串)。可手動編輯。',
                     'required'      => 0,
                     'wrapper'       => [ 'width' => '100' ],
                 ],
                 [
                     'key'           => 'field_anime_staff_json',
-                    'label'         => 'STAFF 資料（JSON）',
+                    'label'         => 'STAFF 資料(JSON)',
                     'name'          => 'anime_staff_json',
                     'type'          => 'textarea',
                     'instructions'  => '由 Bangumi STAFF API 自動填入。可手動修正繁簡轉換錯誤後儲存。修改後請在「同步控制」勾選「鎖定 STAFF 製作資料」。',
@@ -489,7 +492,7 @@ class Anime_Sync_ACF_Fields {
                 ],
                 [
                     'key'           => 'field_anime_cast_json',
-                    'label'         => 'CAST 角色資料（JSON）',
+                    'label'         => 'CAST 角色資料(JSON)',
                     'name'          => 'anime_cast_json',
                     'type'          => 'textarea',
                     'instructions'  => '由 Bangumi CAST API 自動填入。可手動修正繁簡轉換錯誤後儲存。修改後請在「同步控制」勾選「鎖定 CAST 角色資料」。',
@@ -500,10 +503,10 @@ class Anime_Sync_ACF_Fields {
                 ],
                 [
                     'key'           => 'field_anime_episodes_json',
-                    'label'         => '集數列表（JSON）',
+                    'label'         => '集數列表(JSON)',
                     'name'          => 'anime_episodes_json',
                     'type'          => 'textarea',
-                    'instructions'  => '由 Bangumi Episodes API 自動填入。可手動修正繁簡轉換錯誤後儲存。修改後請在「同步控制」勾選「鎖定集數列表」。格式：[{"ep":1,"name":"...","name_cn":"...","airdate":"YYYY-MM-DD"}]',
+                    'instructions'  => '由 Bangumi Episodes API 自動填入。修改後請在「同步控制」勾選「鎖定集數列表」。格式:[{"ep":1,"name":"...","name_cn":"...","airdate":"YYYY-MM-DD"}]',
                     'required'      => 0,
                     'rows'          => 6,
                     'new_lines'     => '',
@@ -521,7 +524,7 @@ class Anime_Sync_ACF_Fields {
     }
 
     // =========================================================================
-    // 群組 6：主題曲與串流平台
+    // 群組 6:主題曲與串流平台
     // =========================================================================
     private function register_themes_and_streaming(): void {
         acf_add_local_field_group( [
@@ -530,27 +533,25 @@ class Anime_Sync_ACF_Fields {
             'fields' => [
                 [
                     'key'           => 'field_anime_themes_json',
-                    'label'         => 'OP/ED 主題曲資料（JSON）',
+                    'label'         => 'OP/ED 主題曲資料(JSON)',
                     'name'          => 'anime_themes',
                     'type'          => 'textarea',
-                    'instructions'  => '由 AnimeThemes API 自動抓取。請勿手動編輯。格式：[{"type":"OP1","song_title":"...","artist":"...","audio_url":"https://a.animethemes.moe/..."}]',
+                    'instructions'  => '由 AnimeThemes API 自動抓取。請勿手動編輯。',
                     'required'      => 0,
                     'rows'          => 4,
                     'new_lines'     => '',
-                    'wrapper'       => [ 'width' => '100' ],
-                    'readonly'      => 1,
+                    'wrapper'       => [ 'width' => '100', 'class' => 'asp-readonly' ], // 修正 5
                 ],
                 [
                     'key'           => 'field_anime_streaming_json',
-                    'label'         => '串流平台資料（JSON）',
+                    'label'         => '串流平台資料(JSON)',
                     'name'          => 'anime_streaming',
                     'type'          => 'textarea',
-                    'instructions'  => '由 AniList externalLinks（type: STREAMING）自動填入。請勿手動編輯。',
+                    'instructions'  => '由 AniList externalLinks(type: STREAMING)自動填入。請勿手動編輯。',
                     'required'      => 0,
                     'rows'          => 4,
                     'new_lines'     => '',
-                    'wrapper'       => [ 'width' => '100' ],
-                    'readonly'      => 1,
+                    'wrapper'       => [ 'width' => '100', 'class' => 'asp-readonly' ], // 修正 5
                 ],
             ],
             'location'    => [
@@ -564,7 +565,7 @@ class Anime_Sync_ACF_Fields {
     }
 
     // =========================================================================
-    // 群組 7：外部連結
+    // 群組 7:外部連結
     // =========================================================================
     private function register_external_links(): void {
         acf_add_local_field_group( [
@@ -603,7 +604,7 @@ class Anime_Sync_ACF_Fields {
                     'label'         => 'TikTok 官方帳號',
                     'name'          => 'anime_tiktok_url',
                     'type'          => 'url',
-                    'instructions'  => '請人工填入 TikTok 官方帳號連結（選填）。',
+                    'instructions'  => '請人工填入 TikTok 官方帳號連結(選填)。',
                     'required'      => 0,
                     'wrapper'       => [ 'width' => '50' ],
                 ],
@@ -618,10 +619,8 @@ class Anime_Sync_ACF_Fields {
         ] );
     }
 
-      // =========================================================================
-    // 群組 8：台灣在地資訊
-    // ★ 修改：get_tw_platforms() 全改 underscore key，移除 str_replace
-    // ★ 新增：anime_youranimes_url 欄位（YourAnimes 同步來源網址）
+    // =========================================================================
+    // 群組 8:台灣在地資訊
     // =========================================================================
     private function register_taiwan_info(): void {
 
@@ -629,13 +628,12 @@ class Anime_Sync_ACF_Fields {
         $url_fields = [];
 
         foreach ( $platforms as $key => $label ) {
-            // key 已確保為 underscore 格式，直接使用，不需 str_replace
             $url_fields[] = [
                 'key'          => 'field_anime_tw_streaming_url_' . $key,
                 'label'        => $label . ' 直達連結',
                 'name'         => 'anime_tw_streaming_url_' . $key,
                 'type'         => 'url',
-                'instructions' => '勾選上方「' . $label . '」後，可在此填入該動漫的直達連結（留空則顯示純文字）。',
+                'instructions' => '勾選上方「' . $label . '」後,可在此填入該動漫的直達連結(留空則顯示純文字)。',
                 'required'     => 0,
                 'wrapper'      => [ 'width' => '50' ],
             ];
@@ -651,9 +649,9 @@ class Anime_Sync_ACF_Fields {
                         'label'         => '台灣串流平台',
                         'name'          => 'anime_tw_streaming',
                         'type'          => 'checkbox',
-                        'instructions'  => '勾選有上架的平台；下方可對應填入該動漫的直達連結。',
+                        'instructions'  => '勾選有上架的平台;下方可對應填入該動漫的直達連結。',
                         'required'      => 0,
-                        'choices'       => $platforms,  // key 與 URL 欄位名稱完全一致
+                        'choices'       => $platforms,
                         'layout'        => 'horizontal',
                         'toggle'        => 0,
                         'return_format' => 'value',
@@ -664,19 +662,19 @@ class Anime_Sync_ACF_Fields {
                 [
                     [
                         'key'           => 'field_anime_tw_streaming_other',
-                        'label'         => '其他串流平台（自訂）',
+                        'label'         => '其他串流平台(自訂)',
                         'name'          => 'anime_tw_streaming_other',
                         'type'          => 'text',
-                        'instructions'  => '上方平台以外的服務，多個請用逗號分隔。',
+                        'instructions'  => '上方平台以外的服務,多個請用逗號分隔。',
                         'required'      => 0,
                         'wrapper'       => [ 'width' => '100' ],
                     ],
                     [
                         'key'           => 'field_anime_tw_distributor',
-                        'label'         => '台灣代理商／發行商',
+                        'label'         => '台灣代理商/發行商',
                         'name'          => 'anime_tw_distributor',
                         'type'          => 'select',
-                        'instructions'  => '請選擇台灣代理商；若不在清單中請選「其他（自訂）」並於下方填寫。',
+                        'instructions'  => '請選擇台灣代理商;若不在清單中請選「其他(自訂)」並於下方填寫。',
                         'required'      => 0,
                         'choices'       => [
                             ''            => '── 請選擇 ──',
@@ -690,13 +688,13 @@ class Anime_Sync_ACF_Fields {
                             'tien'        => '提恩傳媒',
                             'garage'      => '車庫娛樂',
                             'carsun'      => '采昌國際',
-                            'jbf'         => '日本橋文化（JBF）',
-                            'righttime'   => '利得時代（Right Time）',
+                            'jbf'         => '日本橋文化(JBF)',
+                            'righttime'   => '利得時代(Right Time)',
                             'aniplus'     => 'ANIPLUS Asia',
                             'tongli'      => '東立出版社',
                             'remow'       => 'REMOW',
                             'gaga'        => 'GaGa OOLala',
-                            'other'       => '其他（自訂）',
+                            'other'       => '其他(自訂)',
                         ],
                         'default_value' => '',
                         'allow_null'    => 1,
@@ -704,10 +702,10 @@ class Anime_Sync_ACF_Fields {
                     ],
                     [
                         'key'           => 'field_anime_tw_distributor_custom',
-                        'label'         => '台灣代理商（自訂名稱）',
+                        'label'         => '台灣代理商(自訂名稱)',
                         'name'          => 'anime_tw_distributor_custom',
                         'type'          => 'text',
-                        'instructions'  => '僅在上方選「其他（自訂）」時生效。',
+                        'instructions'  => '僅在上方選「其他(自訂)」時生效。',
                         'required'      => 0,
                         'wrapper'       => [ 'width' => '50' ],
                     ],
@@ -716,7 +714,7 @@ class Anime_Sync_ACF_Fields {
                         'label'         => '台灣播出時間',
                         'name'          => 'anime_tw_broadcast',
                         'type'          => 'text',
-                        'instructions'  => '請人工填入台灣播出時間（例：每週六 23:00 Netflix）。',
+                        'instructions'  => '請人工填入台灣播出時間(例:每週六 23:00 Netflix)。',
                         'required'      => 0,
                         'wrapper'       => [ 'width' => '100' ],
                     ],
@@ -725,7 +723,7 @@ class Anime_Sync_ACF_Fields {
                         'label'         => 'YourAnimes 網址',
                         'name'          => 'anime_youranimes_url',
                         'type'          => 'url',
-                        'instructions'  => '貼上 YourAnimes 動畫頁網址（例：https://youranimes.tw/animes/5480/onair），點下方按鈕同步台灣串流連結。同步會覆蓋既有 URL，並自動勾選對應平台。',
+                        'instructions'  => '貼上 YourAnimes 動畫頁網址(例:https://youranimes.tw/animes/5480/onair),點下方按鈕同步台灣串流連結。同步會覆蓋既有 URL,並自動勾選對應平台。',
                         'required'      => 0,
                         'placeholder'   => 'https://youranimes.tw/animes/XXXX/onair',
                         'wrapper'       => [ 'width' => '100', 'class' => 'anime-youranimes-url-field' ],
@@ -743,19 +741,21 @@ class Anime_Sync_ACF_Fields {
     }
 
     // =========================================================================
-    // 群組 9：常見問題（FAQ）
+    // 群組 9:常見問題(FAQ)
     // =========================================================================
     private function register_faq(): void {
         acf_add_local_field_group( [
             'key'    => 'group_anime_faq',
-            'title'  => '❓ 常見問題（FAQ）',
+            'title'  => '❓ 常見問題(FAQ)',
             'fields' => [
                 [
                     'key'           => 'field_anime_faq_json',
                     'label'         => 'FAQ JSON',
                     'name'          => 'anime_faq_json',
                     'type'          => 'textarea',
-                    'instructions'  => "完全人工輸入，留空則不顯示 FAQ 區塊與 Schema.org FAQPage。\n格式範例：\n[\n  {\"q\": \"問題一\", \"a\": \"答案一\"},\n  {\"q\": \"問題二\", \"a\": \"答案二\"}\n]",
+                    'instructions'  => '完全人工輸入,留空則不顯示 FAQ 區塊與 Schema.org FAQPage。<br>'
+                                     . '<strong>格式範例:</strong><br>'
+                                     . '<code>[{"q":"問題一","a":"答案一"},{"q":"問題二","a":"答案二"}]</code>',
                     'required'      => 0,
                     'rows'          => 8,
                     'new_lines'     => '',
@@ -774,7 +774,7 @@ class Anime_Sync_ACF_Fields {
     }
 
     // =========================================================================
-    // 群組 10：同步控制
+    // 群組 10:同步控制
     // =========================================================================
     private function register_sync_control(): void {
         acf_add_local_field_group( [
@@ -788,8 +788,7 @@ class Anime_Sync_ACF_Fields {
                     'type'          => 'text',
                     'instructions'  => '由系統自動記錄。請勿手動修改。',
                     'required'      => 0,
-                    'readonly'      => 1,
-                    'wrapper'       => [ 'width' => '50' ],
+                    'wrapper'       => [ 'width' => '50', 'class' => 'asp-readonly' ], // 修正 5
                 ],
                 [
                     'key'           => 'field_anime_last_updated',
@@ -798,15 +797,14 @@ class Anime_Sync_ACF_Fields {
                     'type'          => 'text',
                     'instructions'  => '每次任何欄位更新時由系統自動記錄。',
                     'required'      => 0,
-                    'readonly'      => 1,
-                    'wrapper'       => [ 'width' => '50' ],
+                    'wrapper'       => [ 'width' => '50', 'class' => 'asp-readonly' ], // 修正 5
                 ],
                 [
                     'key'           => 'field_anime_locked_fields',
-                    'label'         => '鎖定欄位（防止自動覆寫）',
+                    'label'         => '鎖定欄位(防止自動覆寫)',
                     'name'          => 'anime_locked_fields',
                     'type'          => 'checkbox',
-                    'instructions'  => '勾選後，自動更新 cron 與重新同步 Bangumi 將跳過該欄位，保留您的人工修改。',
+                    'instructions'  => '勾選後,自動更新 cron 與重新同步 Bangumi 將跳過該欄位,保留您的人工修改。',
                     'required'      => 0,
                     'choices'       => [
                         'anime_title_chinese'    => '中文標題',
@@ -835,7 +833,7 @@ class Anime_Sync_ACF_Fields {
     }
 
     // =========================================================================
-    // Meta Box：重新同步 Bangumi
+    // Meta Box:重新同步 Bangumi
     // =========================================================================
     public function register_resync_metabox(): void {
         add_meta_box(
@@ -855,14 +853,14 @@ class Anime_Sync_ACF_Fields {
         <div id="anime-resync-wrap">
             <?php if ( $bangumi_id ) : ?>
                 <p style="margin:0 0 8px;">
-                    Bangumi ID：<strong><?php echo esc_html( $bangumi_id ); ?></strong>
+                    Bangumi ID:<strong><?php echo esc_html( $bangumi_id ); ?></strong>
                 </p>
             <?php else : ?>
                 <p style="margin:0 0 8px;color:#999;">尚未設定 Bangumi ID。</p>
             <?php endif; ?>
             <?php if ( $last_sync ) : ?>
                 <p style="margin:0 0 8px;font-size:11px;color:#666;">
-                    上次同步：<?php echo esc_html( $last_sync ); ?>
+                    上次同步:<?php echo esc_html( $last_sync ); ?>
                 </p>
             <?php endif; ?>
             <button
@@ -879,8 +877,30 @@ class Anime_Sync_ACF_Fields {
     }
 
     // =========================================================================
-    // Helper：台灣串流平台定義（僅調整顯示與欄位，不動既有同步邏輯）
-    // ★ 所有 key 維持 underscore 格式，checkbox 儲存值 = URL 欄位後綴
+    // 修正 5:用 CSS 讓 readonly 真的生效
+    // =========================================================================
+    public function inject_readonly_css(): void {
+        ?>
+        <style>
+            .acf-field.asp-readonly input[type="text"],
+            .acf-field.asp-readonly textarea {
+                background: #f6f7f7 !important;
+                color: #50575e !important;
+                pointer-events: none;
+                cursor: not-allowed;
+            }
+            .acf-field.asp-readonly .acf-label label::after {
+                content: ' (唯讀)';
+                color: #999;
+                font-weight: normal;
+                font-size: 11px;
+            }
+        </style>
+        <?php
+    }
+
+    // =========================================================================
+    // Helper:台灣串流平台定義
     // =========================================================================
     private function get_tw_platforms(): array {
         return [
@@ -892,18 +912,19 @@ class Anime_Sync_ACF_Fields {
             'ofiii'        => 'Ofiii 歐飛',
             'catchplay'    => 'CatchPlay+',
             'bilibili'     => 'Bilibili 台灣',
-            'ani_one'      => 'Ani-One 羚邦集團 YouTube（官方頻道）',
-            'muse'         => 'Muse 木棉花 YouTube（官方頻道）',
-            'mighty'       => '曼迪 YouTube（官方頻道）',
-            'ani_mi'       => 'Ani-Mi 動漫迷動畫頻道（官方頻道）',
+            'ani_one'      => 'Ani-One 羚邦集團 YouTube(官方頻道)',
+            'muse'         => 'Muse 木棉花 YouTube(官方頻道)',
+            'mighty'       => '曼迪 YouTube(官方頻道)',
+            'ani_mi'       => 'Ani-Mi 動漫迷動畫頻道(官方頻道)',
             'netflix'      => 'Netflix',
             'disney'       => 'Disney+',
             'litv'         => 'LiTV 立視線上影視',
-            'tropicsanime' => '回歸線娛樂 YouTube（官方頻道）',
+            'tropicsanime' => '回歸線娛樂 YouTube(官方頻道)',
             'iqiyi'        => '愛奇藝',
             'renta'        => 'renta!亂搭',
             'anipass'      => 'AniPASS 車庫娛樂旗下',
             'amazon'       => 'Amazon Prime Video',
+            'crunchyroll'  => 'Crunchyroll', // 修正 7
         ];
     }
 
@@ -919,7 +940,6 @@ class Anime_Sync_ACF_Fields {
             'anime_score_mal'      => 'MAL 評分',
             'anime_score_bangumi'  => 'Bangumi 評分',
             'anime_popularity'     => 'AniList 人氣數',
-            'anime_ranking'        => 'AniList 排名',
             'anime_end_date'       => '完結日期',
         ];
     }
