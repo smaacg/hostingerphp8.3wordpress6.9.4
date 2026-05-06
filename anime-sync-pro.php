@@ -2,12 +2,22 @@
 /**
  * Plugin Name: Anime Sync Pro
  * Description: 從 AniList、Bangumi 自動同步動畫資料。
- * Version:     1.0.7
+ * Version:     1.0.8
  * Author:      weixiaoacg
  * Requires PHP: 8.0
  * Text Domain: anime-sync-pro
  *
  * Changelog:
+ *   1.0.8 — 主檔優化
+ *           - [修正] 啟用時 flush_rewrite_rules() 時機過早（CPT 還沒註冊）
+ *                   改用 anime_sync_flush_rewrite option 標記，由 init priority 99 處理
+ *           - [修正] genre taxonomy 不再註冊到不存在的 manga / novel CPT
+ *           - [修正] save_post_anime 與 ACF 同步衝突：priority 改 20，
+ *                   且只在 meta 為空時才用 post_title 回填，避免覆蓋人工編輯
+ *           - [修正] save_post_anime 補上 wp_is_post_revision() 與 REST 自動草稿過濾
+ *           - [改進] 拆分 ACF-依賴 與 非 ACF-依賴 的初始化，
+ *                   讓評分系統與使用者狀態系統在 ACF 缺失時仍可運作
+ *           - [改進] anime_sync_enrich_post 加入錯誤處理與指數退避重試（最多 3 次）
  *   1.0.7 — 新增使用者追蹤狀態系統（巴哈級規模）
  *           - wp_anime_user_status 主表（取代 user_meta JSON）
  *           - wp_anime_user_status_stats 彙總表（排行榜預計算）
@@ -23,7 +33,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 // ============================================================
 // 1. 常數定義
 // ============================================================
-define( 'ANIME_SYNC_PRO_VERSION',  '1.0.7' );
+define( 'ANIME_SYNC_PRO_VERSION',  '1.0.8' );
 define( 'ANIME_SYNC_PRO_DIR',      plugin_dir_path( __FILE__ ) );
 define( 'ANIME_SYNC_PRO_URL',      plugin_dir_url( __FILE__ ) );
 define( 'ANIME_SYNC_PRO_BASENAME', plugin_basename( __FILE__ ) );
@@ -36,9 +46,13 @@ spl_autoload_register( function ( $class ) {
 		return;
 	}
 
+	// Anime_Sync_API_Handler → class-api-handler.php
 	$file_name = 'class-' . strtolower(
 		str_replace( [ 'Anime_Sync_', '_' ], [ '', '-' ], $class )
 	) . '.php';
+
+	// 防呆：避免連續底線產生連續連字號
+	$file_name = preg_replace( '/-+/', '-', $file_name );
 
 	$sources = [
 		ANIME_SYNC_PRO_DIR . 'includes/',
@@ -92,8 +106,12 @@ add_action( 'init', function () {
 
 	// ----------------------------------------------------------
 	// Taxonomy: genre
+	// [修正] 原本註冊到 [ 'anime', 'manga', 'novel' ]，
+	//        但 manga/novel CPT 並未註冊，會造成 _doing_it_wrong 警告。
+	//        若日後新增 manga/novel CPT，可在那邊用
+	//        register_taxonomy_for_object_type() 動態加入。
 	// ----------------------------------------------------------
-	register_taxonomy( 'genre', [ 'anime', 'manga', 'novel' ], [
+	register_taxonomy( 'genre', [ 'anime' ], [
 		'labels' => [
 			'name'          => '類型',
 			'singular_name' => '類型',
@@ -193,6 +211,10 @@ add_action( 'init', function () {
 
 // ============================================================
 // 4. 啟用 Hook
+// [修正] 移除原本的 flush_rewrite_rules() 直接呼叫。
+//        register_activation_hook 在 init 之前執行，CPT 尚未註冊，
+//        flush 出來的規則不包含 anime 的 rewrite，會導致前台 404。
+//        改用 option 標記，交給第 7 段（init priority 99）處理。
 // ============================================================
 register_activation_hook( __FILE__, function () {
 
@@ -218,7 +240,8 @@ register_activation_hook( __FILE__, function () {
 		Anime_Sync_Cron_Manager::activate();
 	}
 
-	flush_rewrite_rules();
+	// [修正] 不直接 flush，改設旗標讓 init hook 在 CPT 註冊完成後再 flush
+	update_option( 'anime_sync_flush_rewrite', 1 );
 } );
 
 // ============================================================
@@ -243,53 +266,64 @@ register_deactivation_hook( __FILE__, function () {
 
 // ============================================================
 // 6. 載入外掛核心（plugins_loaded）
+// [改進] 拆成兩段：
+//        6A. 不依賴 ACF 的元件（評分、使用者狀態、Editorial Routing）
+//        6B. 依賴 ACF 的元件（ACF Fields、Frontend、後台、Cron）
+//        這樣 ACF 暫時停用時，前端評分與追蹤系統仍能運作。
 // ============================================================
 add_action( 'plugins_loaded', function () {
 
-	// 6-1. ACF 相依性檢查
+	// ----------------------------------------------------------
+	// 6A. 不依賴 ACF 的元件
+	// ----------------------------------------------------------
+
+	// 6A-1. 文章內容路由（純 rewrite 規則，不需 ACF）
+	if ( class_exists( 'Anime_Sync_Editorial_Routing' ) ) {
+		new Anime_Sync_Editorial_Routing();
+	}
+
+	// 6A-2. 評分系統（自有資料表 anime_ratings，不需 ACF）
+	if ( class_exists( 'Anime_Sync_Rating_Manager' ) ) {
+		new Anime_Sync_Rating_Manager();
+	}
+
+	// 6A-3. 使用者追蹤狀態系統（自有資料表，不需 ACF）
+	if ( class_exists( 'Anime_Sync_User_Status_Manager' ) ) {
+		new Anime_Sync_User_Status_Manager();
+	}
+
+	// 6A-4. 追蹤狀態彙總 cron
+	if ( class_exists( 'Anime_Sync_User_Status_Cron' ) ) {
+		new Anime_Sync_User_Status_Cron();
+	}
+
+	// ----------------------------------------------------------
+	// 6B. ACF 相依性檢查
+	// ----------------------------------------------------------
 	if ( ! class_exists( 'ACF' ) ) {
 		if ( is_admin() ) {
 			add_action( 'admin_notices', function () {
-				echo '<div class="notice notice-error"><p>';
-				echo '<strong>Anime Sync Pro</strong> 需要安裝並啟用 ';
-				echo '<a href="https://www.advancedcustomfields.com/" target="_blank">Advanced Custom Fields</a> 才能正常運作。';
+				echo '<div class="notice notice-warning"><p>';
+				echo '<strong>Anime Sync Pro</strong>：未偵測到 ';
+				echo '<a href="https://www.advancedcustomfields.com/" target="_blank" rel="noopener">Advanced Custom Fields</a>';
+				echo '，匯入 / 同步 / 後台管理功能將停用。前端評分與追蹤狀態系統仍可使用。';
 				echo '</p></div>';
 			} );
 		}
 		return;
 	}
 
-	// 6-2. 初始化 ACF 欄位組
+	// 6B-1. 初始化 ACF 欄位組
 	if ( class_exists( 'Anime_Sync_ACF_Fields' ) ) {
 		new Anime_Sync_ACF_Fields();
 	}
 
-	// 6-2-1. 初始化文章內容路由
-	if ( class_exists( 'Anime_Sync_Editorial_Routing' ) ) {
-		new Anime_Sync_Editorial_Routing();
-	}
-
-	// 6-3. 初始化前台
+	// 6B-2. 初始化前台
 	if ( class_exists( 'Anime_Sync_Frontend' ) ) {
 		new Anime_Sync_Frontend();
 	}
 
-	// 6-3-1. 初始化評分系統
-	if ( class_exists( 'Anime_Sync_Rating_Manager' ) ) {
-		new Anime_Sync_Rating_Manager();
-	}
-
-	// 6-3-2. 初始化使用者追蹤狀態系統（巴哈級規模）
-	if ( class_exists( 'Anime_Sync_User_Status_Manager' ) ) {
-		new Anime_Sync_User_Status_Manager();
-	}
-
-	// 6-3-3. 初始化追蹤狀態彙總 cron
-	if ( class_exists( 'Anime_Sync_User_Status_Cron' ) ) {
-		new Anime_Sync_User_Status_Cron();
-	}
-
-	// 6-4. 後台 + Cron 環境
+	// 6B-3. 後台 + Cron 環境
 	if ( is_admin() || ( defined( 'DOING_CRON' ) && DOING_CRON ) ) {
 
 		$rate_limiter = class_exists( 'Anime_Sync_Rate_Limiter' )
@@ -324,14 +358,55 @@ add_action( 'plugins_loaded', function () {
 			new Anime_Sync_Custom_Post_Type();
 		}
 
+		// ------------------------------------------------------
+		// [改進] enrich 補抓動作：加入錯誤處理與指數退避重試
+		// ------------------------------------------------------
 		if ( $import_manager ) {
 			add_action(
 				'anime_sync_enrich_post',
 				function ( int $post_id ) use ( $import_manager ) {
+
 					if ( get_post_meta( $post_id, '_enriched_at', true ) ) {
 						return;
 					}
-					$import_manager->enrich_single( $post_id );
+
+					$result = $import_manager->enrich_single( $post_id );
+
+					if ( ! is_wp_error( $result ) ) {
+						// 成功：清掉重試計數
+						delete_post_meta( $post_id, '_enrich_retry' );
+						return;
+					}
+
+					// 失敗：指數退避重試（1h → 4h → 16h）
+					$retry_count = (int) get_post_meta( $post_id, '_enrich_retry', true );
+					$max_retries = 3;
+
+					if ( $retry_count < $max_retries ) {
+						$retry_count++;
+						update_post_meta( $post_id, '_enrich_retry', $retry_count );
+						$delay = HOUR_IN_SECONDS * ( 4 ** ( $retry_count - 1 ) );
+						wp_schedule_single_event(
+							time() + $delay,
+							'anime_sync_enrich_post',
+							[ $post_id ]
+						);
+					} else {
+						// 超過重試次數，標記放棄
+						update_post_meta( $post_id, '_enrich_failed', current_time( 'mysql' ) );
+					}
+
+					if ( class_exists( 'Anime_Sync_Error_Logger' ) ) {
+						Anime_Sync_Error_Logger::error(
+							"Enrich failed for post {$post_id}: " . $result->get_error_message(),
+							[
+								'post_id'     => $post_id,
+								'retry'       => $retry_count,
+								'max_retries' => $max_retries,
+								'error_code'  => $result->get_error_code(),
+							]
+						);
+					}
 				}
 			);
 		}
@@ -341,6 +416,7 @@ add_action( 'plugins_loaded', function () {
 
 // ============================================================
 // 7. Rewrite Rules 刷新
+//     啟用後或設定頁手動觸發時，在 init priority 99（CPT 已註冊完成）才 flush
 // ============================================================
 add_action( 'init', function () {
 	if ( get_option( 'anime_sync_flush_rewrite' ) ) {
@@ -351,6 +427,12 @@ add_action( 'init', function () {
 
 // ============================================================
 // 8. 同步 post_title → anime_title_chinese
+// [修正] 原本 priority 10 與 ACF 衝突，且會無條件覆寫 ACF 欄位。
+//        現在：
+//        - priority 改 20，跑在 ACF（priority 10）之後
+//        - 補上 wp_is_post_revision() 與 REST 自動草稿過濾
+//        - 只在「meta 為空」時才用 post_title 回填，
+//          不再覆寫使用者已透過 ACF 編輯的 anime_title_chinese
 // ============================================================
 add_action( 'save_post_anime', function ( int $post_id, WP_Post $post, bool $update ) {
 
@@ -358,11 +440,16 @@ add_action( 'save_post_anime', function ( int $post_id, WP_Post $post, bool $upd
 		return;
 	}
 
+	if ( wp_is_post_revision( $post_id ) ) {
+		return;
+	}
+
 	if ( ! current_user_can( 'edit_post', $post_id ) ) {
 		return;
 	}
 
-	if ( $post->post_status === 'auto-draft' ) {
+	// auto-draft / inherit / trash 全部跳過
+	if ( in_array( $post->post_status, [ 'auto-draft', 'inherit', 'trash' ], true ) ) {
 		return;
 	}
 
@@ -372,8 +459,11 @@ add_action( 'save_post_anime', function ( int $post_id, WP_Post $post, bool $upd
 	}
 
 	$current_meta = get_post_meta( $post_id, 'anime_title_chinese', true );
-	if ( $current_meta !== $new_title ) {
+
+	// 只在 meta 為空（尚未填入中文標題）時才用 post_title 回填。
+	// 若 meta 已有值，代表使用者已透過 ACF 編輯過，不應被 post_title 覆寫。
+	if ( $current_meta === '' || $current_meta === null ) {
 		update_post_meta( $post_id, 'anime_title_chinese', $new_title );
 	}
 
-}, 10, 3 );
+}, 20, 3 );
