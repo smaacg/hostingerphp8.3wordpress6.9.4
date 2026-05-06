@@ -693,18 +693,18 @@ public function get_series_tree( int $anilist_id ): array|WP_Error {
     $is_locked = static function ( string $key ) use ( $locked_fields ): bool {
         return in_array( $key, $locked_fields, true );
     };
-
-    // 2. 中文標題
-    $title_raw = $bgm_data['name_cn'] ?? $bgm_data['name'] ?? '';
-    if ( $title_raw !== '' ) {
-        if ( $is_locked( 'anime_title_chinese' ) ) {
-            $skipped[] = 'anime_title_chinese';
-        } else {
-            $title_chinese = (string) $title_raw; // ★ 不再經 OpenCC，保留原始繁體
-            update_post_meta( $post_id, 'anime_title_chinese', $title_chinese );
-            $updated[] = 'anime_title_chinese';
-        }
+// 2. 中文標題
+$title_raw = $bgm_data['name_cn'] ?? $bgm_data['name'] ?? '';
+if ( $title_raw !== '' ) {
+    if ( $is_locked( 'anime_title_chinese' ) ) {
+        $skipped[] = 'anime_title_chinese';
+    } else {
+        $title_chinese = Anime_Sync_CN_Converter::static_convert( (string) $title_raw );
+        update_post_meta( $post_id, 'anime_title_chinese', $title_chinese );
+        $updated[] = 'anime_title_chinese';
     }
+}
+
 
     // 3. 中文簡介
     if ( ! empty( $bgm_data['summary'] ) ) {
