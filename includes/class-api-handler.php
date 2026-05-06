@@ -30,7 +30,7 @@ class Anime_Sync_API_Handler {
     const WIKI_EN_REST      = 'https://en.wikipedia.org/api/rest_v1/page/summary/';
 
     // ACG 新增：統一 User-Agent 常數
-    const USER_AGENT = 'SmaACG-Project/1.0 (https://weixiaoacg.com)';
+    const USER_AGENT = 'weixiaoacg-Project/1.0 (https://weixiaoacg.com)';
 
     const SERIES_RELATION_TYPES = [
         'PREQUEL',

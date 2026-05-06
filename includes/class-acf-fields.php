@@ -3,7 +3,7 @@
  * Plugin Name: Anime Sync Pro
  * Description: 從 AniList、Bangumi 自動同步動畫資料。
  * Version:     1.0.7
- * Author:      SmaACG
+ * Author:      weixiaoacg
  * Requires PHP: 8.0
  * Text Domain: anime-sync-pro
  *

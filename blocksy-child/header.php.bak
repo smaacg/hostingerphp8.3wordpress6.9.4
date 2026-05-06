@@ -8,7 +8,7 @@
  * - 註冊改為跳轉方案，避免 nonce 衝突
  * - 登入後顯示頭像下拉選單，未登入只顯示登入／註冊按鈕
  *
- * @package SmileACG
+ * @package weixiaoacg
  */
 ?><!DOCTYPE html>
 <html <?php language_attributes(); ?>>
@@ -186,7 +186,7 @@
                 'container'      => false,
                 'fallback_cb'    => false,
                 'items_wrap'     => '%3$s',
-                'walker'         => new SmileACG_Nav_Walker(),
+                'walker'         => new weixiaoacg_Nav_Walker(),
             ] );
         } else {
             $nav_links = [
@@ -249,13 +249,13 @@
   }
 
   function fetchResults(q) {
-    if (typeof smaacg_ajax === 'undefined' || !dropdown) return;
-    fetch(smaacg_ajax.ajax_url, {
+    if (typeof weixiaoacg_ajax === 'undefined' || !dropdown) return;
+    fetch(weixiaoacg_ajax.ajax_url, {
       method : 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body   : new URLSearchParams({
-        action: 'smaacg_search',
-        nonce : smaacg_ajax.nonce,
+        action: 'weixiaoacg_search',
+        nonce : weixiaoacg_ajax.nonce,
         query : q
       }),
     })

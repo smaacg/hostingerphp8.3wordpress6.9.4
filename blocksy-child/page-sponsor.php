@@ -694,7 +694,7 @@ get_header();
           <li class="cost-item">
             <span class="cost-item-label">
               <i class="fa-solid fa-globe"></i>
-              域名年費（smileacg.com）
+              域名年費（weixiaoacg.com）
             </span>
             <span class="cost-item-amt">NT$ 55 / 月</span>
           </li>
@@ -823,10 +823,10 @@ get_header();
         <i class="fa-solid fa-envelope"></i>
         <p style="font-size:14px;color:var(--text-secondary);margin:0 0 16px;line-height:1.7;">
           目前贊助功能建置中，如有意願贊助，<br>
-          歡迎寄信至 <strong style="color:var(--text-primary);">sponsor@smileacg.com</strong><br>
+          歡迎寄信至 <strong style="color:var(--text-primary);">sponsor@weixiaoacg.com</strong><br>
           我們會回覆付款方式與感謝資訊。
         </p>
-        <a href="mailto:sponsor@smileacg.com" class="btn btn-primary btn-sm">
+        <a href="mailto:sponsor@weixiaoacg.com" class="btn btn-primary btn-sm">
           <i class="fa-solid fa-paper-plane"></i> 聯絡我們
         </a>
       </div>
@@ -906,7 +906,7 @@ get_header();
         <details class="faq-item-sp">
           <summary class="faq-q-sp">贊助之後可以退款嗎？</summary>
           <div class="faq-a-sp">
-            由於贊助屬於自願性支持，原則上不接受退款申請。若有特殊情況，請於 3 日內聯絡 sponsor@smileacg.com，我們將個案處理。
+            由於贊助屬於自願性支持，原則上不接受退款申請。若有特殊情況，請於 3 日內聯絡 sponsor@weixiaoacg.com，我們將個案處理。
           </div>
         </details>
 
@@ -920,7 +920,7 @@ get_header();
         <details class="faq-item-sp">
           <summary class="faq-q-sp">我有其他支持方式嗎？</summary>
           <div class="faq-a-sp">
-            當然！你可以：① 分享微笑動漫給身邊的動漫迷；② 在討論區積極參與，豐富社群內容；③ 在發現資料錯誤時到錯誤回報區回報，幫助我們改善品質；④ 在社群媒體上標記 SmileACG，讓更多人認識我們。
+            當然！你可以：① 分享微笑動漫給身邊的動漫迷；② 在討論區積極參與，豐富社群內容；③ 在發現資料錯誤時到錯誤回報區回報，幫助我們改善品質；④ 在社群媒體上標記 weixiaoacg，讓更多人認識我們。
           </div>
         </details>
 

@@ -1,8 +1,8 @@
 <?php
 /**
- * 404 Template — 微笑動漫 SmileACG
+ * 404 Template — 微笑動漫 weixiaoacg
  *
- * @package SmileACG
+ * @package weixiaoacg
  */
 get_header();
 ?>

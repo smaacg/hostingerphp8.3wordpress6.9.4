@@ -8,7 +8,7 @@
  * - 註冊改為跳轉方案，避免 nonce 衝突
  * - 登入後顯示頭像下拉選單，未登入只顯示登入／註冊按鈕
  *
- * @package SmileACG
+ * @package weixiaoacg
  */
 ?><!DOCTYPE html>
 <html <?php language_attributes(); ?>>
@@ -32,7 +32,7 @@
     </button>
 
     <div class="lm-logo">
-      <span class="logo-icon-box" aria-hidden="true"><img src="https://dev.weixiaoacg.com/wp-content/uploads/2026/04/Remove_background-1777296587273.png" alt="SmileACG" style="height:38px;width:auto;vertical-align:middle;display:inline-block;" /></span>
+      <span class="logo-icon-box" aria-hidden="true"><img src="https://dev.weixiaoacg.com/wp-content/uploads/2026/04/Remove_background-1777296587273.png" alt="weixiaoacg" style="height:38px;width:auto;vertical-align:middle;display:inline-block;" /></span>
       <span class="logo-text">微笑動漫<span class="logo-plus">+</span></span>
     </div>
 
@@ -127,7 +127,7 @@
 
     <!-- Logo -->
     <a href="<?php echo esc_url( home_url('/') ); ?>" class="site-logo" aria-label="微笑動漫首頁">
-      <span class="logo-icon-box" aria-hidden="true"><img src="https://dev.weixiaoacg.com/wp-content/uploads/2026/04/Remove_background-1777296587273.png" alt="SmileACG" style="height:38px;width:auto;vertical-align:middle;display:inline-block;" /></span>
+      <span class="logo-icon-box" aria-hidden="true"><img src="https://dev.weixiaoacg.com/wp-content/uploads/2026/04/Remove_background-1777296587273.png" alt="weixiaoacg" style="height:38px;width:auto;vertical-align:middle;display:inline-block;" /></span>
       <div class="logo-text-wrap">
         <span class="logo-text">微笑動漫<span class="logo-plus">+</span></span>
         <span class="logo-tagline">動漫的便利商店</span>
@@ -221,7 +221,7 @@
                 'container'      => false,
                 'fallback_cb'    => false,
                 'items_wrap'     => '%3$s',
-                'walker'         => new SmileACG_Nav_Walker(),
+                'walker'         => new weixiaoacg_Nav_Walker(),
             ] );
         } else {
             $nav_links = [
@@ -284,13 +284,13 @@
   }
 
   function fetchResults(q) {
-    if (typeof smaacg_ajax === 'undefined' || !dropdown) return;
-    fetch(smaacg_ajax.ajax_url, {
+    if (typeof weixiaoacg_ajax === 'undefined' || !dropdown) return;
+    fetch(weixiaoacg_ajax.ajax_url, {
       method : 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body   : new URLSearchParams({
-        action: 'smaacg_search',
-        nonce : smaacg_ajax.nonce,
+        action: 'weixiaoacg_search',
+        nonce : weixiaoacg_ajax.nonce,
         query : q
       }),
     })
@@ -436,9 +436,9 @@
       btn.disabled = true;
       btn.textContent = '註冊中...';
       const fd = new FormData(registerForm);
-      fd.append('action', 'smaacg_ajax_register');
-      fd.append('nonce', smaacg_ajax.nonce);
-      fetch(smaacg_ajax.ajax_url, { method: 'POST', body: fd })
+      fd.append('action', 'weixiaoacg_ajax_register');
+      fd.append('nonce', weixiaoacg_ajax.nonce);
+      fetch(weixiaoacg_ajax.ajax_url, { method: 'POST', body: fd })
         .then(r => r.json())
         .then(d => {
           if (d.success) {
@@ -470,9 +470,9 @@
       btn.disabled = true;
       btn.textContent = '登入中...';
       const fd = new FormData(loginForm);
-      fd.append('action', 'smaacg_ajax_login');
-      fd.append('nonce', smaacg_ajax.nonce);
-      fetch(smaacg_ajax.ajax_url, { method: 'POST', body: fd })
+      fd.append('action', 'weixiaoacg_ajax_login');
+      fd.append('nonce', weixiaoacg_ajax.nonce);
+      fetch(weixiaoacg_ajax.ajax_url, { method: 'POST', body: fd })
         .then(r => r.json())
         .then(d => {
           if (d.success) {

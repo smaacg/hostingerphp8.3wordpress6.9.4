@@ -410,7 +410,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
         const cfg    = window.SmacgConfig || {};
         const postId = parseInt(cfg.postId, 10) || 0;
-        const apiUrl = cfg.apiUrl || '/wp-json/smileacg/v1/';
+        const apiUrl = cfg.apiUrl || '/wp-json/weixiaoacg/v1/';
         const nonce  = cfg.nonce  || '';
 
         if (!postId) {

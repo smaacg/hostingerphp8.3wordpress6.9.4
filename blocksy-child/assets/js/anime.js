@@ -32,8 +32,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   initDiscussionTabs();
   initToast();
 
-  // WordPress 部署時：若 smaacgAcf 已由 wp_localize_script 注入，優先套用 ACF 資料
-  // 純前端預覽環境下此函式會因 window.smaacgAcf 不存在而直接 return
+  // WordPress 部署時：若 weixiaoacgAcf 已由 wp_localize_script 注入，優先套用 ACF 資料
+  // 純前端預覽環境下此函式會因 window.weixiaoacgAcf 不存在而直接 return
   applyAcfData();
 
   /* ── 支援 ?bgm=BANGUMI_ID：先橋接到 AniList ID ── */
@@ -964,7 +964,7 @@ function updatePageSEO(media, bgmData) {
      - 首播後 cron job：一週內一次拉取評分 / 人氣數，專載資料入 ACF
      - 綜合評分公式調整： scored_by 權重 < popularity 權重
      - api-sync.php 新增欄位：coffee_url / coffee_image_url / coffee_btn_text
-     - single-anime.php: main title → get_field('smaacg_title_zh'), subtitle → get_field('smaacg_title_ja')
+     - single-anime.php: main title → get_field('weixiaoacg_title_zh'), subtitle → get_field('weixiaoacg_title_ja')
      - SEO meta: 英文標題只用於 og:title / twitter:title / JSON-LD alternateName，不顯示於前端 UI
   */
 }
@@ -973,8 +973,8 @@ function updatePageSEO(media, bgmData) {
 /* ============================================================
    RENDER TAIWAN BROADCAST CARD（台灣播出資訊卡）
    SEO: 台灣在地化資訊、台灣連結不加 nofollow
-   WP TODO: 台灣代理商 → get_field('smaacg_distributor_tw')
-            台灣播出時間 → get_field('smaacg_air_time_tw')
+   WP TODO: 台灣代理商 → get_field('weixiaoacg_distributor_tw')
+            台灣播出時間 → get_field('weixiaoacg_air_time_tw')
    ============================================================ */
 function renderTaiwanBroadcast(media, jikanData, bgmData) {
   const section = document.getElementById('tw-broadcast-section');
@@ -1944,37 +1944,37 @@ function showError(msg) {
    1. 靜態前端（GenSpark / 預覽）— API 資料已由上方各 render 函式填入，
       data-acf 屬性僅作為標記，供 WP 模板識別對應的 ACF 欄位。
    2. WordPress 部署 — 以下函式可在 WP 模板初始化時被呼叫，
-      從 wp_localize_script 注入的 window.smaacgAcf 物件讀取 ACF 值，
+      從 wp_localize_script 注入的 window.weixiaoacgAcf 物件讀取 ACF 值，
       覆蓋前端動態資料（確保 SSR 結果優先）。
 
    WP TODO: 在 functions.php 中：
-     wp_localize_script('smaacg-anime', 'smaacgAcf', [
-       'smaacg_title_zh'     => get_field('smaacg_title_zh'),
-       'smaacg_title_ja'     => get_field('smaacg_title_ja'),
-       'smaacg_episodes'     => get_field('smaacg_episodes'),
-       'smaacg_duration'     => get_field('smaacg_duration'),
-       'smaacg_year'         => get_field('smaacg_year'),
-       'smaacg_source'       => get_field('smaacg_source'),
-       'smaacg_studio'       => get_field('smaacg_studio'),
-       'smaacg_director'     => get_field('smaacg_director'),
-       'smaacg_author'       => get_field('smaacg_author'),
-       'smaacg_official_site'=> get_field('smaacg_official_site'),
-       'smaacg_twitter_url'  => get_field('smaacg_twitter_url'),
-       'smaacg_mal_id'       => get_field('smaacg_mal_id'),
-       'smaacg_favourites'   => get_field('smaacg_favourites'),
-       'smaacg_popularity'   => get_field('smaacg_popularity'),
-       'smaacg_stat_watching'=> get_field('smaacg_stat_watching'),
-       'smaacg_stat_completed'=> get_field('smaacg_stat_completed'),
-       'smaacg_score_anilist'=> get_field('smaacg_score_anilist'),
-       'smaacg_distributor_tw'=> get_field('smaacg_distributor_tw'),
-       'smaacg_platform_tw'  => get_field('smaacg_platform_tw'),  // repeater array
-       'smaacg_op_ed'        => get_field('smaacg_op_ed'),         // repeater array
-       'smaacg_characters'   => get_field('smaacg_characters'),    // repeater array
+     wp_localize_script('weixiaoacg-anime', 'weixiaoacgAcf', [
+       'weixiaoacg_title_zh'     => get_field('weixiaoacg_title_zh'),
+       'weixiaoacg_title_ja'     => get_field('weixiaoacg_title_ja'),
+       'weixiaoacg_episodes'     => get_field('weixiaoacg_episodes'),
+       'weixiaoacg_duration'     => get_field('weixiaoacg_duration'),
+       'weixiaoacg_year'         => get_field('weixiaoacg_year'),
+       'weixiaoacg_source'       => get_field('weixiaoacg_source'),
+       'weixiaoacg_studio'       => get_field('weixiaoacg_studio'),
+       'weixiaoacg_director'     => get_field('weixiaoacg_director'),
+       'weixiaoacg_author'       => get_field('weixiaoacg_author'),
+       'weixiaoacg_official_site'=> get_field('weixiaoacg_official_site'),
+       'weixiaoacg_twitter_url'  => get_field('weixiaoacg_twitter_url'),
+       'weixiaoacg_mal_id'       => get_field('weixiaoacg_mal_id'),
+       'weixiaoacg_favourites'   => get_field('weixiaoacg_favourites'),
+       'weixiaoacg_popularity'   => get_field('weixiaoacg_popularity'),
+       'weixiaoacg_stat_watching'=> get_field('weixiaoacg_stat_watching'),
+       'weixiaoacg_stat_completed'=> get_field('weixiaoacg_stat_completed'),
+       'weixiaoacg_score_anilist'=> get_field('weixiaoacg_score_anilist'),
+       'weixiaoacg_distributor_tw'=> get_field('weixiaoacg_distributor_tw'),
+       'weixiaoacg_platform_tw'  => get_field('weixiaoacg_platform_tw'),  // repeater array
+       'weixiaoacg_op_ed'        => get_field('weixiaoacg_op_ed'),         // repeater array
+       'weixiaoacg_characters'   => get_field('weixiaoacg_characters'),    // repeater array
      ]);
    ============================================================ */
 
 /**
- * 讀取 window.smaacgAcf（WP 注入）並用其值覆蓋 [data-acf] 元素。
+ * 讀取 window.weixiaoacgAcf（WP 注入）並用其值覆蓋 [data-acf] 元素。
  * 純文字欄位：直接設定 textContent。
  * 連結欄位（href）：設定 href。
  * 陣列欄位（platform_tw / op_ed / characters）：呼叫對應 render 函式。
@@ -1984,18 +1984,18 @@ function showError(msg) {
  */
 function applyAcfData() {
   /** @type {Object} */
-  const acf = window.smaacgAcf;
+  const acf = window.weixiaoacgAcf;
   if (!acf || typeof acf !== 'object') return; // 非 WP 環境，跳過
 
   /* ── 文字欄位（data-acf 對應 acf 物件 key）── */
   const TEXT_FIELDS = [
-    'smaacg_title_zh', 'smaacg_title_ja',
-    'smaacg_episodes', 'smaacg_duration', 'smaacg_year',
-    'smaacg_source',   'smaacg_studio',
-    'smaacg_director', 'smaacg_author',
-    'smaacg_favourites', 'smaacg_popularity',
-    'smaacg_stat_watching', 'smaacg_stat_completed', 'smaacg_score_anilist',
-    'smaacg_distributor_tw',
+    'weixiaoacg_title_zh', 'weixiaoacg_title_ja',
+    'weixiaoacg_episodes', 'weixiaoacg_duration', 'weixiaoacg_year',
+    'weixiaoacg_source',   'weixiaoacg_studio',
+    'weixiaoacg_director', 'weixiaoacg_author',
+    'weixiaoacg_favourites', 'weixiaoacg_popularity',
+    'weixiaoacg_stat_watching', 'weixiaoacg_stat_completed', 'weixiaoacg_score_anilist',
+    'weixiaoacg_distributor_tw',
   ];
 
   TEXT_FIELDS.forEach(fieldName => {
@@ -2008,8 +2008,8 @@ function applyAcfData() {
 
   /* ── 連結欄位（href）── */
   const HREF_FIELDS = {
-    'smaacg_official_site': '#official-link',
-    'smaacg_twitter_url':   '#twitter-link',
+    'weixiaoacg_official_site': '#official-link',
+    'weixiaoacg_twitter_url':   '#twitter-link',
   };
   Object.entries(HREF_FIELDS).forEach(([field, selector]) => {
     if (!acf[field]) return;
@@ -2018,24 +2018,24 @@ function applyAcfData() {
   });
 
   /* ── MAL ID → 組成 href ── */
-  if (acf['smaacg_mal_id']) {
+  if (acf['weixiaoacg_mal_id']) {
     const malEl = document.getElementById('mal-link');
-    if (malEl) malEl.href = `https://myanimelist.net/anime/${acf['smaacg_mal_id']}`;
+    if (malEl) malEl.href = `https://myanimelist.net/anime/${acf['weixiaoacg_mal_id']}`;
   }
 
-  /* ── 陣列欄位：台灣平台 smaacg_platform_tw ── */
-  if (Array.isArray(acf['smaacg_platform_tw']) && acf['smaacg_platform_tw'].length) {
-    _renderAcfPlatforms(acf['smaacg_platform_tw']);
+  /* ── 陣列欄位：台灣平台 weixiaoacg_platform_tw ── */
+  if (Array.isArray(acf['weixiaoacg_platform_tw']) && acf['weixiaoacg_platform_tw'].length) {
+    _renderAcfPlatforms(acf['weixiaoacg_platform_tw']);
   }
 
-  /* ── 陣列欄位：OP/ED smaacg_op_ed ── */
-  if (Array.isArray(acf['smaacg_op_ed']) && acf['smaacg_op_ed'].length) {
-    _renderAcfOpEd(acf['smaacg_op_ed']);
+  /* ── 陣列欄位：OP/ED weixiaoacg_op_ed ── */
+  if (Array.isArray(acf['weixiaoacg_op_ed']) && acf['weixiaoacg_op_ed'].length) {
+    _renderAcfOpEd(acf['weixiaoacg_op_ed']);
   }
 
-  /* ── 陣列欄位：角色 smaacg_characters ── */
-  if (Array.isArray(acf['smaacg_characters']) && acf['smaacg_characters'].length) {
-    _renderAcfCharacters(acf['smaacg_characters']);
+  /* ── 陣列欄位：角色 weixiaoacg_characters ── */
+  if (Array.isArray(acf['weixiaoacg_characters']) && acf['weixiaoacg_characters'].length) {
+    _renderAcfCharacters(acf['weixiaoacg_characters']);
   }
 }
 
@@ -2070,7 +2070,7 @@ function _renderAcfPlatforms(platforms) {
       return `
         <a href="${escapeHtml(p.url)}" target="_blank" rel="noopener"
            class="platform-card glass" data-platform-name="${escapeHtml(p.name)}"
-           data-acf-item="smaacg_platform_tw">
+           data-acf-item="weixiaoacg_platform_tw">
           <i class="${cfg.icon} platform-icon" style="color:${cfg.color};"></i>
           <div>
             <div class="platform-name">${escapeHtml(p.name)}</div>
@@ -2101,7 +2101,7 @@ function _renderAcfOpEd(opEdList) {
     const typeLabel = (item.type || '').startsWith('OP') ? 'OP' : 'ED';
     const card = document.createElement('div');
     card.className = 'theme-item glass';
-    card.dataset.acfItem = 'smaacg_op_ed';
+    card.dataset.acfItem = 'weixiaoacg_op_ed';
     card.innerHTML = `
       <button class="theme-play-btn" onclick="playTheme(${_themes.length + idx})" title="播放">
         <i class="fa-solid fa-play play-icon" id="play-icon-acf-${idx}"></i>
@@ -2146,7 +2146,7 @@ function _renderAcfCharacters(characters) {
         : '';
 
     return `
-      <div class="character-card${mainCls}" data-acf-item="smaacg_characters" title="${escapeHtml(showName)}">
+      <div class="character-card${mainCls}" data-acf-item="weixiaoacg_characters" title="${escapeHtml(showName)}">
         <div class="char-poster-wrap">
           ${c.image
             ? `<img class="char-poster" src="${escapeHtml(c.image)}" alt="${escapeHtml(showName)}" loading="lazy"
@@ -2304,7 +2304,7 @@ function injectSchemaJsonLd(media, bgmData, jikanData) {
  * fillFaqContent(media, bgmData)
  * ─ 動態填入 FAQ JSON-LD 的問答內容
  * ─ 同時更新 HTML 頁面上的 FAQ 區塊（若存在 #faq-section）
- * <!-- WP SEO: FAQ 內容可由 ACF 'smaacg_faq' repeater 覆蓋 -->
+ * <!-- WP SEO: FAQ 內容可由 ACF 'weixiaoacg_faq' repeater 覆蓋 -->
  */
 function fillFaqContent(media, bgmData) {
   const zhTitle  = (typeof getDisplayTitle === 'function') ? getDisplayTitle(media) : (media.displayName || '此動畫');

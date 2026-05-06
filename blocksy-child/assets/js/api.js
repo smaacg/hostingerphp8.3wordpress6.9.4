@@ -429,7 +429,7 @@ const BangumiAPI = (() => {
     // 用 .catch(() => null) 降級隔離錯誤，避免一個請求失敗導致整條 queue 塍死
     const task = _queue.then(() =>
       fetch(url, {
-        headers: { 'Accept': 'application/json', 'User-Agent': 'SmileACG/1.0', ...opts.headers },
+        headers: { 'Accept': 'application/json', 'User-Agent': 'weixiaoacg/1.0', ...opts.headers },
         ...opts,
       }).then(r => r.ok ? r.json() : Promise.reject(new Error(`Bgm HTTP ${r.status}`)))
     );
@@ -611,7 +611,7 @@ const BangumiAPI = (() => {
     try {
       const res = await fetch(`${BASE_V0}/search/subjects`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', 'User-Agent': 'SmileACG/1.0' },
+        headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', 'User-Agent': 'weixiaoacg/1.0' },
         body: JSON.stringify({ type: 2, sort: 'rank', filter: { type: [2] } }),
       });
       if (!res.ok) throw new Error('BGM search ' + res.status);

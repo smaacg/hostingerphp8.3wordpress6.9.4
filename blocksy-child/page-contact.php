@@ -90,7 +90,7 @@ get_header(); ?>
 
             // ── Nonce ──
             if ( empty( $form_error ) ) {
-                if ( ! isset( $_POST['contact_nonce'] ) || ! wp_verify_nonce( $_POST['contact_nonce'], 'smaacg_contact' ) ) {
+                if ( ! isset( $_POST['contact_nonce'] ) || ! wp_verify_nonce( $_POST['contact_nonce'], 'weixiaoacg_contact' ) ) {
                     $form_error = '安全驗證失敗，請重新整理頁面後再試。';
                 }
             }
@@ -261,7 +261,7 @@ get_header(); ?>
         <?php endif; ?>
 
         <form class="contact-form" method="post" action="" enctype="multipart/form-data">
-          <?php wp_nonce_field( 'smaacg_contact', 'contact_nonce' ); ?>
+          <?php wp_nonce_field( 'weixiaoacg_contact', 'contact_nonce' ); ?>
           <input type="hidden" name="contact_submit" value="1">
           <input type="hidden" name="contact_ref" value="<?php echo esc_attr( $field_ref ); ?>">
           <input type="text" name="contact_website" style="display:none !important;" tabindex="-1" autocomplete="off" aria-hidden="true">

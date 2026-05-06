@@ -7,7 +7,7 @@
 ## 專案基本資訊
 
 - **插件名稱**：Anime Sync Pro
-- **GitHub**：https://github.com/smaacg/anime-sync-pro-2-
+- **GitHub**：https://github.com/weixiaoacg/anime-sync-pro-2-
 - **WordPress 版本**：依主機環境（6.9.4）
 - **ACF 版本**：6.8.0（免費版，不支援 conditional_logic）
 - **自訂文章類型**：`anime`

@@ -1,7 +1,7 @@
 /* ============================================================
    微笑動漫 — ranking.js
-   ★ 修改：加入站內 SmileACG+ 真實排行
-     - fetchSiteRanking() 呼叫 /wp-json/smileacg/v1/ranking/site
+   ★ 修改：加入站內 weixiaoacg+ 真實排行
+     - fetchSiteRanking() 呼叫 /wp-json/weixiaoacg/v1/ranking/site
      - site 平台下隱藏 period-btns，顯示 site-sub-tabs
      - site 子分類：rating 真實資料，views/favorites 顯示即將上線
      - rankRenderList() 站內排行連結指向站內頁面（非外部）
@@ -15,7 +15,7 @@
 const PLATFORMS = {
   // ★ 新增 site 平台設定
   site: {
-    label: 'SmileACG+', icon: '⭐', color: '#6c63ff',
+    label: 'weixiaoacg+', icon: '⭐', color: '#6c63ff',
     desc: '來自本站會員的真實評分，採用貝葉斯加權公式，確保評分公平可信',
     tags: ['本站真實數據', '貝葉斯加權', '四維度評分'],
     link: null   // 無外部連結
@@ -129,7 +129,7 @@ function rankInitSiteSubTabs() {
         }
         // 更新計數列文字
         const countEl = document.getElementById('rank-count-info');
-        if (countEl) countEl.textContent = 'SmileACG+ · 即將上線';
+        if (countEl) countEl.textContent = 'weixiaoacg+ · 即將上線';
         return;
       }
 
@@ -243,14 +243,14 @@ async function rankFetchAndRender() {
 }
 
 /* ============================================================
-   ★ 新增：SmileACG+ 站內評分排行
-   呼叫 /wp-json/smileacg/v1/ranking/site
+   ★ 新增：weixiaoacg+ 站內評分排行
+   呼叫 /wp-json/weixiaoacg/v1/ranking/site
    回傳格式對齊 rankRenderList() 所需的 items 結構
    站內排行的 url 指向站內動漫頁面（非外部），不開新分頁
    ============================================================ */
 async function fetchSiteRanking(limit = 20) {
   const res = await fetch(
-    `/wp-json/smileacg/v1/ranking/site?limit=${limit}`,
+    `/wp-json/weixiaoacg/v1/ranking/site?limit=${limit}`,
     { headers: { 'Accept': 'application/json' } }
   );
 
@@ -491,7 +491,7 @@ function rankRenderList(items) {
   if (countEl) {
     const periodLabels = { daily:'今日', weekly:'本週', monthly:'本月', yearly:'年度' };
     if (platform === 'site') {
-      countEl.textContent = `SmileACG+ 評分排行 · Top ${items.length}`;
+      countEl.textContent = `weixiaoacg+ 評分排行 · Top ${items.length}`;
     } else {
       countEl.textContent = `${periodLabels[period] || '本週'} ${p?.label || ''} 排行 · Top ${items.length}`;
     }

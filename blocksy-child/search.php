@@ -1,8 +1,8 @@
 <?php
 /**
- * Search Results — 微笑動漫 SmileACG
+ * Search Results — 微笑動漫 weixiaoacg
  *
- * @package SmileACG
+ * @package weixiaoacg
  */
 get_header();
 

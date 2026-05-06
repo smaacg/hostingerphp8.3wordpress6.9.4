@@ -3,7 +3,7 @@
  * Plugin Name: Anime Sync Pro
  * Description: 從 AniList、Bangumi 自動同步動畫資料。
  * Version:     1.0.7
- * Author:      SmaACG
+ * Author:      weixiaoacg
  * Requires PHP: 8.0
  * Text Domain: anime-sync-pro
  *
@@ -11,7 +11,7 @@
  *   1.0.7 — 新增使用者追蹤狀態系統（巴哈級規模）
  *           - wp_anime_user_status 主表（取代 user_meta JSON）
  *           - wp_anime_user_status_stats 彙總表（排行榜預計算）
- *           - REST API: /smileacg/v1/user-status/{anime_id}
+ *           - REST API: /weixiaoacg/v1/user-status/{anime_id}
  *           - Cron: 每 15 分鐘重算彙總表
  *   1.0.6 — 系列分類、ACF 欄位擴充、Editorial Routing
  */

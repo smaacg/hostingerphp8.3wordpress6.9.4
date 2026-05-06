@@ -2,7 +2,7 @@
 /**
  * 微笑動漫 Child Theme — functions.php
  *
- * @package SmileACG
+ * @package weixiaoacg
  * @version 1.5.0
  */
 defined( 'ABSPATH' ) || exit;
@@ -10,10 +10,10 @@ defined( 'ABSPATH' ) || exit;
 /* ============================================================
    常數
    ============================================================ */
-define( 'SMAACG_VERSION',    '1.5.0' );
-define( 'SMAACG_THEME_URL',  get_stylesheet_directory_uri() );
-define( 'SMAACG_THEME_DIR',  get_stylesheet_directory() );
-define( 'SMAACG_PLUGIN_URL', plugins_url( 'smaacg-core' ) );
+define( 'weixiaoacg_VERSION',    '1.5.0' );
+define( 'weixiaoacg_THEME_URL',  get_stylesheet_directory_uri() );
+define( 'weixiaoacg_THEME_DIR',  get_stylesheet_directory() );
+define( 'weixiaoacg_PLUGIN_URL', plugins_url( 'weixiaoacg-core' ) );
 
 define( 'SMACG_POINT_FAVORITE',  5  );
 define( 'SMACG_POINT_WANT',      1  );
@@ -36,15 +36,15 @@ add_action( 'after_setup_theme', function() {
     add_theme_support( 'menus' );
 
     foreach ([
-        'smaacg-cover'  => [300, 420, true],
-        'smaacg-banner' => [1280,400, true],
-        'smaacg-thumb'  => [160, 224, true],
+        'weixiaoacg-cover'  => [300, 420, true],
+        'weixiaoacg-banner' => [1280,400, true],
+        'weixiaoacg-thumb'  => [160, 224, true],
         'anime-thumb'   => [300, 420, true],
         'news-thumb'    => [800, 450, true],
         'season-thumb'  => [180, 260, true],
     ] as $name => [$w,$h,$c]) add_image_size($name,$w,$h,$c);
 
-    load_child_theme_textdomain( 'smaacg', SMAACG_THEME_DIR . '/languages' );
+    load_child_theme_textdomain( 'weixiaoacg', weixiaoacg_THEME_DIR . '/languages' );
 } );
 
 /* ============================================================
@@ -94,7 +94,7 @@ add_action('template_redirect', function() {
 /* ============================================================
    自訂 Nav Walker
    ============================================================ */
-class SmileACG_Nav_Walker extends Walker_Nav_Menu {
+class weixiaoacg_Nav_Walker extends Walker_Nav_Menu {
     public function start_el(&$out,$item,$depth=0,$args=null,$id=0) {
         $c    = (array)$item->classes;
         $curr = in_array('current-menu-item',$c)||in_array('current-page-ancestor',$c)||in_array('current-menu-ancestor',$c);
@@ -146,7 +146,7 @@ add_action( 'wp_enqueue_scripts', function() {
    ============================================================ */
 add_action( 'wp_enqueue_scripts', function() {
     wp_enqueue_style(
-        'smaacg-fa6',
+        'weixiaoacg-fa6',
         'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css',
         [],
         '6.5.0'
@@ -162,11 +162,11 @@ add_action( 'wp_enqueue_scripts', function() {
     wp_enqueue_style(
         'blocksy-parent',
         get_template_directory_uri().'/style.css',
-        ['smaacg-fa6'],
+        ['weixiaoacg-fa6'],
         wp_get_theme('blocksy')->get('Version')
     );
     wp_enqueue_style(
-        'smaacg-fonts',
+        'weixiaoacg-fonts',
         'https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@300;400;500;700&family=Inter:wght@300;400;500;600;700;800&display=swap',
         [],
         null
@@ -174,36 +174,36 @@ add_action( 'wp_enqueue_scripts', function() {
 
     /* ── 共用樣式 ── */
     foreach ([
-        'smaacg-glass' => ['glass.css', ['blocksy-parent']],
-        'smaacg-style' => ['style.css',  ['smaacg-glass']],
+        'weixiaoacg-glass' => ['glass.css', ['blocksy-parent']],
+        'weixiaoacg-style' => ['style.css',  ['weixiaoacg-glass']],
     ] as $h => [$f,$dep]) {
-        $p = SMAACG_THEME_DIR.'/assets/css/'.$f;
-        if (file_exists($p)) wp_enqueue_style($h, SMAACG_THEME_URL.'/assets/css/'.$f, $dep, filemtime($p));
+        $p = weixiaoacg_THEME_DIR.'/assets/css/'.$f;
+        if (file_exists($p)) wp_enqueue_style($h, weixiaoacg_THEME_URL.'/assets/css/'.$f, $dep, filemtime($p));
     }
 
     /* ── 條件式頁面樣式 ── */
     $is_um_user = function_exists('um_is_core_page') && (um_is_core_page('user') || get_query_var('um_user'));
     $cond = [];
-    if ( is_page('news')   || is_page_template('page-news.php') )       $cond['smaacg-news']       = 'news.css';
-    if ( is_page('season') || is_page_template('page-season.php') )     $cond['smaacg-season']     = 'season.css';
-    if ( is_page_template('page-ranking.php') )                          $cond['smaacg-ranking']    = 'ranking.css';
-    if ( is_page_template('page-anime-list.php') )                       $cond['smaacg-anime-list'] = 'anime-list.css';
-    if ( is_page_template('page-music.php') )                            $cond['smaacg-music']      = 'music.css';
-    if ( is_page_template('page-cosplay.php') )                          $cond['smaacg-cosplay']    = 'cosplay.css';
-    if ( is_search() )                                                   $cond['smaacg-search']     = 'search.css';
-    if ( is_404() )                                                      $cond['smaacg-404']        = '404.css';
+    if ( is_page('news')   || is_page_template('page-news.php') )       $cond['weixiaoacg-news']       = 'news.css';
+    if ( is_page('season') || is_page_template('page-season.php') )     $cond['weixiaoacg-season']     = 'season.css';
+    if ( is_page_template('page-ranking.php') )                          $cond['weixiaoacg-ranking']    = 'ranking.css';
+    if ( is_page_template('page-anime-list.php') )                       $cond['weixiaoacg-anime-list'] = 'anime-list.css';
+    if ( is_page_template('page-music.php') )                            $cond['weixiaoacg-music']      = 'music.css';
+    if ( is_page_template('page-cosplay.php') )                          $cond['weixiaoacg-cosplay']    = 'cosplay.css';
+    if ( is_search() )                                                   $cond['weixiaoacg-search']     = 'search.css';
+    if ( is_404() )                                                      $cond['weixiaoacg-404']        = '404.css';
     if ( is_page(['about','contact','disclaimer','sources','privacy','terms','join']) || is_page_template('page-join.php') )
-                                                                         $cond['smaacg-static']     = 'static.css';
-    if ( is_page_template('page-member.php') || $is_um_user )           $cond['smaacg-member']     = 'member.css';
+                                                                         $cond['weixiaoacg-static']     = 'static.css';
+    if ( is_page_template('page-member.php') || $is_um_user )           $cond['weixiaoacg-member']     = 'member.css';
 
     $is_account_page = is_page(1527) || is_page('account') ||
                        (function_exists('um_is_core_page') && um_is_core_page('account')) ||
                        (isset($_SERVER['REQUEST_URI']) && strpos($_SERVER['REQUEST_URI'], '/account') !== false);
-    if ( $is_account_page ) $cond['smaacg-account'] = 'account.css';
+    if ( $is_account_page ) $cond['weixiaoacg-account'] = 'account.css';
 
     foreach ($cond as $h => $f) {
-        $p = SMAACG_THEME_DIR.'/assets/css/'.$f;
-        if (file_exists($p)) wp_enqueue_style($h, SMAACG_THEME_URL.'/assets/css/'.$f, ['smaacg-style'], filemtime($p));
+        $p = weixiaoacg_THEME_DIR.'/assets/css/'.$f;
+        if (file_exists($p)) wp_enqueue_style($h, weixiaoacg_THEME_URL.'/assets/css/'.$f, ['weixiaoacg-style'], filemtime($p));
     }
 
     /* ── ★ 改:Anime Single 頁面樣式（整合載入順序） ── */
@@ -213,30 +213,30 @@ add_action( 'wp_enqueue_scripts', function() {
         $anime_css = WP_PLUGIN_DIR.'/anime-sync-pro/public/assets/css/anime-single.css';
         if (file_exists($anime_css)) {
             wp_enqueue_style(
-                'smaacg-anime',
+                'weixiaoacg-anime',
                 plugins_url('anime-sync-pro/public/assets/css/anime-single.css'),
-                ['smaacg-style','smaacg-fa6'],   // ★ 確保 FA 先載
+                ['weixiaoacg-style','weixiaoacg-fa6'],   // ★ 確保 FA 先載
                 filemtime($anime_css)
             );
         }
 
         // 2) ★ 新增:追蹤列獨立樣式 track-bar.css
-        $tb_css = SMAACG_THEME_DIR.'/assets/css/track-bar.css';
+        $tb_css = weixiaoacg_THEME_DIR.'/assets/css/track-bar.css';
         if (file_exists($tb_css)) {
             wp_enqueue_style(
                 'smacg-track-bar',
-                SMAACG_THEME_URL.'/assets/css/track-bar.css',
-                ['smaacg-anime'],   // ★ 必須在 anime-single.css 之後載入以覆寫
+                weixiaoacg_THEME_URL.'/assets/css/track-bar.css',
+                ['weixiaoacg-anime'],   // ★ 必須在 anime-single.css 之後載入以覆寫
                 filemtime($tb_css)
             );
         }
 
         // 3) anime-status.css（如果有）
-        $p = SMAACG_THEME_DIR.'/assets/css/anime-status.css';
+        $p = weixiaoacg_THEME_DIR.'/assets/css/anime-status.css';
         if (file_exists($p)) {
             wp_enqueue_style(
                 'smacg-anime-status',
-                SMAACG_THEME_URL.'/assets/css/anime-status.css',
+                weixiaoacg_THEME_URL.'/assets/css/anime-status.css',
                 ['smacg-track-bar'],
                 filemtime($p)
             );
@@ -244,14 +244,14 @@ add_action( 'wp_enqueue_scripts', function() {
     }
 
     /* ── 後台同步樣式 ── */
-    $p = SMAACG_THEME_DIR.'/assets/css/admin-sync.css';
-    if (file_exists($p)) wp_enqueue_style('smaacg-admin-sync', SMAACG_THEME_URL.'/assets/css/admin-sync.css', ['smaacg-style'], filemtime($p));
+    $p = weixiaoacg_THEME_DIR.'/assets/css/admin-sync.css';
+    if (file_exists($p)) wp_enqueue_style('weixiaoacg-admin-sync', weixiaoacg_THEME_URL.'/assets/css/admin-sync.css', ['weixiaoacg-style'], filemtime($p));
 
 }, 10 );
 
 add_action( 'admin_enqueue_scripts', function() {
-    $p = SMAACG_THEME_DIR.'/assets/css/admin-sync.css';
-    if (file_exists($p)) wp_enqueue_style('smaacg-admin', SMAACG_THEME_URL.'/assets/css/admin-sync.css', [], filemtime($p));
+    $p = weixiaoacg_THEME_DIR.'/assets/css/admin-sync.css';
+    if (file_exists($p)) wp_enqueue_style('weixiaoacg-admin', weixiaoacg_THEME_URL.'/assets/css/admin-sync.css', [], filemtime($p));
 } );
 
 /* ============================================================
@@ -273,30 +273,30 @@ add_filter('litespeed_optimize_css_excludes', function($excludes) {
 add_action( 'wp_enqueue_scripts', function() {
 
     foreach ([
-        'smaacg-api'           => ['api.js',           []],
-        'smaacg-utils'         => ['utils.js',         ['smaacg-api']],
-        'smaacg-page-template' => ['page-template.js', ['smaacg-utils']],
-        'smaacg-nav'           => ['nav.js',            ['smaacg-utils']],
+        'weixiaoacg-api'           => ['api.js',           []],
+        'weixiaoacg-utils'         => ['utils.js',         ['weixiaoacg-api']],
+        'weixiaoacg-page-template' => ['page-template.js', ['weixiaoacg-utils']],
+        'weixiaoacg-nav'           => ['nav.js',            ['weixiaoacg-utils']],
     ] as $h => [$f,$dep]) {
-        $p = SMAACG_THEME_DIR.'/assets/js/'.$f;
-        if (file_exists($p)) wp_enqueue_script($h, SMAACG_THEME_URL.'/assets/js/'.$f, $dep, filemtime($p), true);
+        $p = weixiaoacg_THEME_DIR.'/assets/js/'.$f;
+        if (file_exists($p)) wp_enqueue_script($h, weixiaoacg_THEME_URL.'/assets/js/'.$f, $dep, filemtime($p), true);
     }
 
     if (is_front_page()) {
-        $p = SMAACG_THEME_DIR.'/assets/js/main.js';
-        if (file_exists($p)) wp_enqueue_script('smaacg-main', SMAACG_THEME_URL.'/assets/js/main.js', ['smaacg-api'], filemtime($p), true);
+        $p = weixiaoacg_THEME_DIR.'/assets/js/main.js';
+        if (file_exists($p)) wp_enqueue_script('weixiaoacg-main', weixiaoacg_THEME_URL.'/assets/js/main.js', ['weixiaoacg-api'], filemtime($p), true);
     }
 
 if (is_singular('anime')) {
     foreach ([
-        'smaacg-anime-js'    => 'anime.js',
+        'weixiaoacg-anime-js'    => 'anime.js',
         'smacg-anime-status' => 'anime-status.js',
     ] as $h=>$f) {
-        $p = SMAACG_THEME_DIR.'/assets/js/'.$f;
-        if (file_exists($p)) wp_enqueue_script($h, SMAACG_THEME_URL.'/assets/js/'.$f, ['smaacg-api'], filemtime($p), true);
+        $p = weixiaoacg_THEME_DIR.'/assets/js/'.$f;
+        if (file_exists($p)) wp_enqueue_script($h, weixiaoacg_THEME_URL.'/assets/js/'.$f, ['weixiaoacg-api'], filemtime($p), true);
     }
     wp_localize_script('smacg-anime-status','SmacgConfig',[
-        'apiUrl'    => esc_url_raw(rest_url('smileacg/v1/')),
+        'apiUrl'    => esc_url_raw(rest_url('weixiaoacg/v1/')),
         'ajaxUrl'   => admin_url('admin-ajax.php'),
         'nonce'     => wp_create_nonce('wp_rest'),
         'ajaxNonce' => wp_create_nonce('smacg_nonce'),
@@ -310,20 +310,20 @@ if (is_singular('anime')) {
 
 
     if (is_page_template('page-ranking.php')) {
-        $p = SMAACG_THEME_DIR.'/assets/js/ranking.js';
-        if (file_exists($p)) wp_enqueue_script('smaacg-ranking', SMAACG_THEME_URL.'/assets/js/ranking.js', ['smaacg-utils','smaacg-api'], filemtime($p), true);
+        $p = weixiaoacg_THEME_DIR.'/assets/js/ranking.js';
+        if (file_exists($p)) wp_enqueue_script('weixiaoacg-ranking', weixiaoacg_THEME_URL.'/assets/js/ranking.js', ['weixiaoacg-utils','weixiaoacg-api'], filemtime($p), true);
     }
 
-    wp_localize_script('smaacg-nav','smaacg_ajax',[
+    wp_localize_script('weixiaoacg-nav','weixiaoacg_ajax',[
         'ajax_url'     => admin_url('admin-ajax.php'),
-        'nonce'        => wp_create_nonce('smaacg_nonce'),
+        'nonce'        => wp_create_nonce('weixiaoacg_nonce'),
         'user_id'      => get_current_user_id(),
         'is_logged_in' => is_user_logged_in(),
-        'user_level'   => smaacg_get_user_level_int(),
+        'user_level'   => weixiaoacg_get_user_level_int(),
         'site_url'     => home_url(),
         'login_url'    => wp_login_url(get_permalink()),
         'register_url' => wp_registration_url(),
-        'rest_url'     => rest_url('smaacg/v1/'),
+        'rest_url'     => rest_url('weixiaoacg/v1/'),
         'rest_nonce'   => wp_create_nonce('wp_rest'),
     ]);
 
@@ -332,32 +332,32 @@ if (is_singular('anime')) {
 /* ============================================================
    輔助函式
    ============================================================ */
-function smaacg_get_user_level_int(): int {
+function weixiaoacg_get_user_level_int(): int {
     if (!is_user_logged_in()) return 0;
     $uid = get_current_user_id();
-    $lv  = (int)get_user_meta($uid,'smaacg_user_level',true);
+    $lv  = (int)get_user_meta($uid,'weixiaoacg_user_level',true);
     if (!$lv && function_exists('um_user')) {
         $role = um_user('role');
-        $lv = match($role) { 'smaacg_vip'=>3,'smaacg_pro'=>2,default=>1 };
+        $lv = match($role) { 'weixiaoacg_vip'=>3,'weixiaoacg_pro'=>2,default=>1 };
     }
     return $lv ?: 1;
 }
 
-function smaacg_get_user_points(int $uid=0): int {
-    return (int)get_user_meta($uid?:get_current_user_id(),'smaacg_points',true);
+function weixiaoacg_get_user_points(int $uid=0): int {
+    return (int)get_user_meta($uid?:get_current_user_id(),'weixiaoacg_points',true);
 }
 
-if (!function_exists('smaacg_get_news_thumb')) {
-    function smaacg_get_news_thumb(int $post_id,string $size='news-thumb'): string {
+if (!function_exists('weixiaoacg_get_news_thumb')) {
+    function weixiaoacg_get_news_thumb(int $post_id,string $size='news-thumb'): string {
         if ($url=get_the_post_thumbnail_url($post_id,$size)) return $url;
         $c = get_post($post_id)->post_content??'';
         if (preg_match('/<img[^>]+src=["\']([^"\']+)["\']/',$c,$m)) return $m[1];
-        return function_exists('get_field') ? (get_field('smaacg_cover_url',$post_id)?:'') : '';
+        return function_exists('get_field') ? (get_field('weixiaoacg_cover_url',$post_id)?:'') : '';
     }
 }
 
-if (!function_exists('smaacg_get_anilist'))  { function smaacg_get_anilist($id)     { return null; } }
-if (!function_exists('smaacg_get_bangumi'))  { function smaacg_get_bangumi($id,$t=2){ return null; } }
+if (!function_exists('weixiaoacg_get_anilist'))  { function weixiaoacg_get_anilist($id)     { return null; } }
+if (!function_exists('weixiaoacg_get_bangumi'))  { function weixiaoacg_get_bangumi($id,$t=2){ return null; } }
 
 add_filter('excerpt_length', fn()=>60);
 add_filter('excerpt_more',   fn()=>'…');
@@ -368,9 +368,9 @@ add_filter('get_search_form', function() {
         <div class="search-box glass-light">
             <i class="fa-solid fa-magnifying-glass search-icon"></i>
             <input type="search" id="search-input" name="s"
-                   placeholder="<?php esc_attr_e('搜尋動畫、角色、聲優、新聞…','smaacg'); ?>"
+                   placeholder="<?php esc_attr_e('搜尋動畫、角色、聲優、新聞…','weixiaoacg'); ?>"
                    value="<?php echo esc_attr(get_search_query()); ?>" autocomplete="off"/>
-            <button type="submit" class="btn-icon btn-ghost" aria-label="<?php esc_attr_e('搜尋','smaacg'); ?>">
+            <button type="submit" class="btn-icon btn-ghost" aria-label="<?php esc_attr_e('搜尋','weixiaoacg'); ?>">
                 <i class="fa-solid fa-arrow-right"></i>
             </button>
         </div>
@@ -420,7 +420,7 @@ add_action('wp_enqueue_scripts', function() {
 add_filter('template_include', function($tpl) {
     if (!function_exists('um_is_core_page')) return $tpl;
     if (um_is_core_page('user') || get_query_var('um_user')) {
-        $c = SMAACG_THEME_DIR.'/page-member.php';
+        $c = weixiaoacg_THEME_DIR.'/page-member.php';
         if (file_exists($c)) return $c;
     }
     return $tpl;
@@ -662,30 +662,30 @@ add_action('wp_ajax_smacg_read_article', function() {
    ============================================================ */
 add_action('rest_api_init', function() {
 
-    register_rest_route('smaacg/v1','/ranking',['methods'=>'GET','permission_callback'=>'__return_true',
+    register_rest_route('weixiaoacg/v1','/ranking',['methods'=>'GET','permission_callback'=>'__return_true',
         'args'=>['platform'=>['default'=>'anilist','sanitize_callback'=>'sanitize_text_field'],'period'=>['default'=>'weekly','sanitize_callback'=>'sanitize_text_field'],'limit'=>['default'=>20,'sanitize_callback'=>'absint']],
         'callback'=>function(WP_REST_Request $req) {
             $platform = $req->get_param('platform'); $limit = min($req->get_param('limit'),50);
-            $field = match($platform) {'mal'=>'smaacg_score_mal','bangumi'=>'smaacg_score_bangumi',default=>'smaacg_score_anilist'};
+            $field = match($platform) {'mal'=>'weixiaoacg_score_mal','bangumi'=>'weixiaoacg_score_bangumi',default=>'weixiaoacg_score_anilist'};
             $q = new WP_Query(['post_type'=>'anime','post_status'=>'publish','posts_per_page'=>$limit,'meta_key'=>$field,'orderby'=>'meta_value_num','order'=>'DESC','meta_query'=>[['key'=>$field,'compare'=>'EXISTS']]]);
             $items = []; $rank = 1;
             while ($q->have_posts()) { $q->the_post(); $pid = get_the_ID();
-                $items[] = ['rank'=>$rank++,'id'=>$pid,'title_zh'=>get_field('smaacg_title_zh',$pid)?:get_the_title(),'title_jp'=>get_field('smaacg_title_ja',$pid),'cover'=>get_the_post_thumbnail_url($pid,'smaacg-cover')?:get_field('smaacg_cover_url',$pid),'score'=>(float)get_field($field,$pid),'url'=>get_permalink(),'anilist_id'=>(int)get_field('smaacg_anilist_id',$pid)];
+                $items[] = ['rank'=>$rank++,'id'=>$pid,'title_zh'=>get_field('weixiaoacg_title_zh',$pid)?:get_the_title(),'title_jp'=>get_field('weixiaoacg_title_ja',$pid),'cover'=>get_the_post_thumbnail_url($pid,'weixiaoacg-cover')?:get_field('weixiaoacg_cover_url',$pid),'score'=>(float)get_field($field,$pid),'url'=>get_permalink(),'anilist_id'=>(int)get_field('weixiaoacg_anilist_id',$pid)];
             }
             wp_reset_postdata();
             return new WP_REST_Response(['platform'=>$platform,'data'=>$items],200);
         }]);
 
-    register_rest_route('smaacg/v1','/user/favorites',['methods'=>'GET','permission_callback'=>'is_user_logged_in',
+    register_rest_route('weixiaoacg/v1','/user/favorites',['methods'=>'GET','permission_callback'=>'is_user_logged_in',
         'callback'=>function() {
             $uid = get_current_user_id();
             $items = array_values(array_filter(array_map(function($pid) {
-                return $pid ? ['id'=>$pid,'title_zh'=>get_field('smaacg_title_zh',$pid)?:get_the_title($pid),'cover'=>get_the_post_thumbnail_url($pid,'smaacg-thumb'),'url'=>get_permalink($pid)] : null;
-            },(array)(get_user_meta($uid,'smaacg_favorites',true)?:[]))));
+                return $pid ? ['id'=>$pid,'title_zh'=>get_field('weixiaoacg_title_zh',$pid)?:get_the_title($pid),'cover'=>get_the_post_thumbnail_url($pid,'weixiaoacg-thumb'),'url'=>get_permalink($pid)] : null;
+            },(array)(get_user_meta($uid,'weixiaoacg_favorites',true)?:[]))));
             return new WP_REST_Response(['favorites'=>$items],200);
         }]);
 
-    register_rest_route('smileacg/v1','/anime-url',['methods'=>'GET','permission_callback'=>'__return_true',
+    register_rest_route('weixiaoacg/v1','/anime-url',['methods'=>'GET','permission_callback'=>'__return_true',
         'args'=>['ids'=>['required'=>true,'sanitize_callback'=>'sanitize_text_field']],
         'callback'=>function(WP_REST_Request $req) {
             $ids = array_filter(array_map('intval',explode(',',$req->get_param('ids'))));
@@ -729,30 +729,30 @@ add_action('wp_ajax_smacg_submit_rating_detail', function() {
     wp_send_json_success(['msg'=>'評分成功！','avg'=>$avg]+$scores+['count'=>1]);
 });
 
-add_action('wp_ajax_smaacg_toggle_favorite', function() {
-    check_ajax_referer('smaacg_nonce','nonce');
+add_action('wp_ajax_weixiaoacg_toggle_favorite', function() {
+    check_ajax_referer('weixiaoacg_nonce','nonce');
     $pid = (int)($_POST['post_id']??0); $uid = get_current_user_id();
     if (!$pid || !$uid) wp_send_json_error(['msg'=>'無效請求']);
-    $favs = get_user_meta($uid,'smaacg_favorites',true)?:[];
+    $favs = get_user_meta($uid,'weixiaoacg_favorites',true)?:[];
     $k = array_search($pid,$favs);
     if ($k !== false) { unset($favs[$k]); $act = 'removed'; } else { $favs[] = $pid; $act = 'added'; }
-    update_user_meta($uid,'smaacg_favorites',array_values($favs));
+    update_user_meta($uid,'weixiaoacg_favorites',array_values($favs));
     wp_send_json_success(['action'=>$act,'count'=>count($favs)]);
 });
 
-add_action('wp_ajax_smaacg_update_progress', function() {
-    check_ajax_referer('smaacg_nonce','nonce');
+add_action('wp_ajax_weixiaoacg_update_progress', function() {
+    check_ajax_referer('weixiaoacg_nonce','nonce');
     $pid = (int)($_POST['post_id']??0); $uid = get_current_user_id();
     if (!$pid || !$uid) wp_send_json_error(['msg'=>'無效請求']);
     $d = ['progress'=>(int)($_POST['progress']??0),'watch_status'=>sanitize_text_field($_POST['watch_status']??''),'updated_at'=>time()];
-    update_user_meta($uid,"smaacg_progress_{$pid}",$d);
+    update_user_meta($uid,"weixiaoacg_progress_{$pid}",$d);
     wp_send_json_success($d);
 });
 
-add_action('wp_ajax_smaacg_search',        'smaacg_ajax_search');
-add_action('wp_ajax_nopriv_smaacg_search', 'smaacg_ajax_search');
-function smaacg_ajax_search() {
-    check_ajax_referer('smaacg_nonce','nonce');
+add_action('wp_ajax_weixiaoacg_search',        'weixiaoacg_ajax_search');
+add_action('wp_ajax_nopriv_weixiaoacg_search', 'weixiaoacg_ajax_search');
+function weixiaoacg_ajax_search() {
+    check_ajax_referer('weixiaoacg_nonce','nonce');
     $kw   = sanitize_text_field($_POST['query']??$_POST['keyword']??'');
     $type = sanitize_text_field($_POST['type']??'all');
     if (strlen($kw) < 2) wp_send_json_error(['msg'=>'關鍵字太短']);
@@ -760,29 +760,29 @@ function smaacg_ajax_search() {
     $q = new WP_Query(['s'=>$kw,'post_type'=>$types,'posts_per_page'=>12,'post_status'=>'publish']);
     $res = [];
     while ($q->have_posts()) { $q->the_post(); $pid = get_the_ID();
-        $res[] = ['id'=>$pid,'title'=>get_the_title(),'title_zh'=>get_field('smaacg_title_zh',$pid)?:get_the_title(),'type'=>get_post_type(),'url'=>get_permalink(),'thumb'=>get_the_post_thumbnail_url($pid,'smaacg-thumb')?:get_field('smaacg_cover_url',$pid),'score'=>get_field('smaacg_score_anilist',$pid)];
+        $res[] = ['id'=>$pid,'title'=>get_the_title(),'title_zh'=>get_field('weixiaoacg_title_zh',$pid)?:get_the_title(),'type'=>get_post_type(),'url'=>get_permalink(),'thumb'=>get_the_post_thumbnail_url($pid,'weixiaoacg-thumb')?:get_field('weixiaoacg_cover_url',$pid),'score'=>get_field('weixiaoacg_score_anilist',$pid)];
     }
     wp_reset_postdata(); wp_send_json_success($res);
 }
 
-add_action('wp_ajax_smaacg_submit_rating', function() {
-    check_ajax_referer('smaacg_nonce','nonce');
+add_action('wp_ajax_weixiaoacg_submit_rating', function() {
+    check_ajax_referer('weixiaoacg_nonce','nonce');
     $pid = (int)($_POST['post_id']??0); $score = (float)($_POST['score']??0); $uid = get_current_user_id();
     if (!$pid || !$uid) wp_send_json_error(['msg'=>'請先登入']);
     if ($score < 1 || $score > 10) wp_send_json_error(['msg'=>'評分範圍 1–10']);
     if (function_exists('yasr_save_visitor_vote')) { wp_send_json_success(['msg'=>'評分成功','yasr'=>yasr_save_visitor_vote($pid,$score)]); }
-    update_user_meta($uid,"smaacg_rating_{$pid}",$score);
+    update_user_meta($uid,"weixiaoacg_rating_{$pid}",$score);
     wp_send_json_success(['msg'=>'評分成功']);
 });
 
-add_action('wp_ajax_smaacg_resync_bangumi', function() {
-    check_ajax_referer('smaacg_nonce','nonce');
+add_action('wp_ajax_weixiaoacg_resync_bangumi', function() {
+    check_ajax_referer('weixiaoacg_nonce','nonce');
     if (!current_user_can('manage_options')) wp_send_json_error(['msg'=>'權限不足']);
     class_exists('Anime_Sync_API_Handler') ? (new Anime_Sync_API_Handler())->ajax_resync_bangumi() : wp_send_json_error(['msg'=>'API Handler 類別未載入']);
 });
 
-add_action('wp_ajax_nopriv_smaacg_ajax_login', function() {
-    check_ajax_referer('smaacg_nonce','nonce');
+add_action('wp_ajax_nopriv_weixiaoacg_ajax_login', function() {
+    check_ajax_referer('weixiaoacg_nonce','nonce');
     $u = sanitize_user($_POST['log']??''); $p = $_POST['pwd']??'';
     if (!$u || !$p) wp_send_json_error(['msg'=>'請輸入帳號和密碼']);
     $user = wp_signon(['user_login'=>$u,'user_password'=>$p,'remember'=>!empty($_POST['rememberme'])],is_ssl());
@@ -815,8 +815,8 @@ add_action( 'um_on_login_before_redirect', function( $user_id ) {
 }, 5 );
 
 /* AJAX 註冊 handler */
-add_action('wp_ajax_nopriv_smaacg_ajax_register', function() {
-    check_ajax_referer('smaacg_nonce', 'nonce');
+add_action('wp_ajax_nopriv_weixiaoacg_ajax_register', function() {
+    check_ajax_referer('weixiaoacg_nonce', 'nonce');
     $username = sanitize_user($_POST['user_login'] ?? '');
     $email    = sanitize_email($_POST['user_email'] ?? '');
     $password = $_POST['user_password'] ?? '';

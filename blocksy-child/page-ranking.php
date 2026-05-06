@@ -81,7 +81,7 @@ get_header(); ?>
                改由 JS 依真實狀態控制顯示 -->
         <div class="rank-platform-row">
           <div class="rank-platform-tabs" id="rank-platform-tabs">
-            <button class="rank-platform-tab" data-platform="site">⭐ SmileACG+</button>
+            <button class="rank-platform-tab" data-platform="site">⭐ weixiaoacg+</button>
             <button class="rank-platform-tab active" data-platform="anilist">🌐 AniList</button>
             <button class="rank-platform-tab" data-platform="mal">📊 MAL / Jikan</button>
             <button class="rank-platform-tab" data-platform="bangumi">🎯 Bangumi</button>
@@ -161,7 +161,7 @@ get_header(); ?>
             <div class="pg-item">
               <span class="pg-icon" style="background:rgba(108,99,255,0.15);color:#6c63ff;">⭐</span>
               <div class="pg-info">
-                <div class="pg-name">SmileACG+</div>
+                <div class="pg-name">weixiaoacg+</div>
                 <div class="pg-desc">本站社群真實數據</div>
               </div>
             </div>

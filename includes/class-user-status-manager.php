@@ -47,7 +47,7 @@ class Anime_Sync_User_Status_Manager {
      * ────────────────────────────────────────────── */
 
     public function register_routes(): void {
-        $ns = 'smileacg/v1';
+        $ns = 'weixiaoacg/v1';
 
         register_rest_route( $ns, '/user-status/list', [
             'methods'             => 'GET',

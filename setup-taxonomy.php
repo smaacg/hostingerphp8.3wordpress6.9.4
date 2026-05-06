@@ -222,7 +222,7 @@ foreach ( $formats as [ $name, $slug ] ) {
 	wx_upsert_term( $name, 'anime_format_tax', [ 'slug' => $slug ] );
 }
 
-update_option( 'smileacg_taxonomy_v5_done', current_time( 'mysql' ) );
+update_option( 'weixiaoacg_taxonomy_v5_done', current_time( 'mysql' ) );
 
 echo '<hr>';
 echo '<h2 style="color:green">✅ 完成</h2>';

@@ -2,7 +2,7 @@
 /**
  * Template Name: 加入我們
  *
- * @package SmileACG
+ * @package weixiaoacg
  */
 get_header();
 ?>
@@ -196,7 +196,7 @@ get_header();
         }
 
         /* Nonce */
-        elseif ( ! wp_verify_nonce( $_POST['_wpnonce_join'] ?? '', 'smaacg_join' ) ) {
+        elseif ( ! wp_verify_nonce( $_POST['_wpnonce_join'] ?? '', 'weixiaoacg_join' ) ) {
           $join_error = '安全驗證失敗，請重新整理頁面後再試。';
         }
 
@@ -302,7 +302,7 @@ get_header();
         <?php endif; ?>
 
         <form class="join-form" method="post" action="">
-          <?php wp_nonce_field( 'smaacg_join', '_wpnonce_join' ); ?>
+          <?php wp_nonce_field( 'weixiaoacg_join', '_wpnonce_join' ); ?>
 
           <!-- Honeypot -->
           <div style="display:none;" aria-hidden="true">

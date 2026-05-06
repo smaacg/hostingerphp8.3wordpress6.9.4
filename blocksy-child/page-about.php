@@ -3,7 +3,7 @@
  * Template Name: 關於本站
  * Template Post Type: page
  *
- * @package SmileACG
+ * @package weixiaoacg
  */
 get_header(); ?>
 

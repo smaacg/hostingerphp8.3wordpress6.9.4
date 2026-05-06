@@ -171,8 +171,8 @@ $hero_posters = [
 
         /* ── 封面圖：三層 fallback ── */
         $thumb = '';
-        if ( function_exists('smaacg_get_news_thumb') ) {
-            $thumb = smaacg_get_news_thumb( $nid, 'news-thumb' );
+        if ( function_exists('weixiaoacg_get_news_thumb') ) {
+            $thumb = weixiaoacg_get_news_thumb( $nid, 'news-thumb' );
         }
         if ( ! $thumb ) {
             $thumb = get_the_post_thumbnail_url( $nid, 'medium' );

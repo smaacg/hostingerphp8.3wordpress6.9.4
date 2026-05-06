@@ -74,12 +74,12 @@ $password_url = $account_url ? add_query_arg( 'um_tab', 'password', $account_url
 /**
  * 頭像：優先 Ultimate Member
  */
-$avatar_url = function_exists( 'smaacg_get_um_avatar_url' )
-    ? smaacg_get_um_avatar_url( $user_id, 190 )
+$avatar_url = function_exists( 'weixiaoacg_get_um_avatar_url' )
+    ? weixiaoacg_get_um_avatar_url( $user_id, 190 )
     : get_avatar_url( $user_id, [ 'size' => 190 ] );
 
-$avatar_preview_url = function_exists( 'smaacg_get_um_avatar_url' )
-    ? smaacg_get_um_avatar_url( $user_id, 120 )
+$avatar_preview_url = function_exists( 'weixiaoacg_get_um_avatar_url' )
+    ? weixiaoacg_get_um_avatar_url( $user_id, 120 )
     : get_avatar_url( $user_id, [ 'size' => 120 ] );
 
 /**
@@ -129,12 +129,12 @@ $role_candidates = array_unique( array_filter( array_map( 'strval', $role_candid
 
 $plan_label = '免費會員';
 foreach ( $role_candidates as $role_slug ) {
-    if ( in_array( $role_slug, [ 'vvip', 'smaacg_vvip' ], true ) ) {
+    if ( in_array( $role_slug, [ 'vvip', 'weixiaoacg_vvip' ], true ) ) {
         $plan_label = '👑 VVIP 會員';
         break;
     }
 
-    if ( in_array( $role_slug, [ 'vip', 'smaacg_vip', 'smaacg_pro' ], true ) ) {
+    if ( in_array( $role_slug, [ 'vip', 'weixiaoacg_vip', 'weixiaoacg_pro' ], true ) ) {
         $plan_label = '⭐ VIP 會員';
     }
 }

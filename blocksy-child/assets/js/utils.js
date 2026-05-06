@@ -12,8 +12,8 @@
      - getCurrentSeason()       當前季節
    ============================================================
    WP 化說明：
-     - getDisplayTitle → get_field('smaacg_title_zh') || $post->post_title
-     - getJaTitle      → get_field('smaacg_title_ja')
+     - getDisplayTitle → get_field('weixiaoacg_title_zh') || $post->post_title
+     - getJaTitle      → get_field('weixiaoacg_title_ja')
    ============================================================ */
 'use strict';
 

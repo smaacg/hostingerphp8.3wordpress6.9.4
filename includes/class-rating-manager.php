@@ -60,8 +60,8 @@ class Anime_Sync_Rating_Manager {
     private function register_rest_routes(): void {
         add_action( 'rest_api_init', function () {
 
-            // GET / POST  /wp-json/smileacg/v1/ratings/{anime_id}
-            register_rest_route( 'smileacg/v1', '/ratings/(?P<anime_id>\d+)', [
+            // GET / POST  /wp-json/weixiaoacg/v1/ratings/{anime_id}
+            register_rest_route( 'weixiaoacg/v1', '/ratings/(?P<anime_id>\d+)', [
                 [
                     'methods'             => 'GET',
                     'callback'            => [ $this, 'api_get_ratings' ],
@@ -106,8 +106,8 @@ class Anime_Sync_Rating_Manager {
                 ],
             ] );
 
-            // GET  /wp-json/smileacg/v1/ranking/site
-            register_rest_route( 'smileacg/v1', '/ranking/site', [
+            // GET  /wp-json/weixiaoacg/v1/ranking/site
+            register_rest_route( 'weixiaoacg/v1', '/ranking/site', [
                 'methods'             => 'GET',
                 'callback'            => [ $this, 'api_get_site_ranking' ],
                 'permission_callback' => '__return_true',
