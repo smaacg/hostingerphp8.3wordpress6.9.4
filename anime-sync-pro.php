@@ -2,12 +2,20 @@
 /**
  * Plugin Name: Anime Sync Pro
  * Description: 從 AniList、Bangumi 自動同步動畫資料。
- * Version:     1.0.8
+ * Version:     1.0.9
  * Author:      weixiaoacg
  * Requires PHP: 8.0
  * Text Domain: anime-sync-pro
  *
  * Changelog:
+ *   1.0.9 — Taxonomy seeder 內建化
+ *           - [新增] init priority 99 觸發 Anime_Sync_Installer::run_pending_seed()
+ *                   啟用 / 升級時自動建立 category / channel / genre /
+ *                   anime_format_tax / anime_season_tax 種子 term
+ *                   （取代舊的 setup-taxonomy.php，該檔案可從外掛根目錄刪除）
+ *           - [改進] 配合 class-installer.php 1.3.0：
+ *                   季度年份範圍動態計算（當年-3 ~ 當年+1，N=5），
+ *                   每次升級自動往後滑動，不再寫死 2000–2035
  *   1.0.8 — 主檔優化
  *           - [修正] 啟用時 flush_rewrite_rules() 時機過早（CPT 還沒註冊）
  *                   改用 anime_sync_flush_rewrite option 標記，由 init priority 99 處理
@@ -33,7 +41,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 // ============================================================
 // 1. 常數定義
 // ============================================================
-define( 'ANIME_SYNC_PRO_VERSION',  '1.0.8' );
+define( 'ANIME_SYNC_PRO_VERSION',  '1.0.9' );
 define( 'ANIME_SYNC_PRO_DIR',      plugin_dir_path( __FILE__ ) );
 define( 'ANIME_SYNC_PRO_URL',      plugin_dir_url( __FILE__ ) );
 define( 'ANIME_SYNC_PRO_BASENAME', plugin_basename( __FILE__ ) );
@@ -270,6 +278,8 @@ register_deactivation_hook( __FILE__, function () {
 //        6A. 不依賴 ACF 的元件（評分、使用者狀態、Editorial Routing）
 //        6B. 依賴 ACF 的元件（ACF Fields、Frontend、後台、Cron）
 //        這樣 ACF 暫時停用時，前端評分與追蹤系統仍能運作。
+// [新增] 6C. maybe_upgrade()：版本變動時自動補建漏失資料表 / 選項，
+//             並設置 seed 旗標（由第 7 段在 init 99 觸發）。
 // ============================================================
 add_action( 'plugins_loaded', function () {
 
@@ -295,6 +305,13 @@ add_action( 'plugins_loaded', function () {
 	// 6A-4. 追蹤狀態彙總 cron
 	if ( class_exists( 'Anime_Sync_User_Status_Cron' ) ) {
 		new Anime_Sync_User_Status_Cron();
+	}
+
+	// ----------------------------------------------------------
+	// 6C. 版本升級檢查（每次載入都跑，但只在版本不符時實際動作）
+	// ----------------------------------------------------------
+	if ( class_exists( 'Anime_Sync_Installer' ) ) {
+		( new Anime_Sync_Installer() )->maybe_upgrade();
 	}
 
 	// ----------------------------------------------------------
@@ -415,14 +432,25 @@ add_action( 'plugins_loaded', function () {
 } );
 
 // ============================================================
-// 7. Rewrite Rules 刷新
-//     啟用後或設定頁手動觸發時，在 init priority 99（CPT 已註冊完成）才 flush
+// 7. Init priority 99：rewrite flush + taxonomy seed
+//     兩個動作都需要在 CPT / taxonomy 註冊完成後（priority 10）才能跑，
+//     所以統一掛在 priority 99。
 // ============================================================
 add_action( 'init', function () {
+
+	// 7-1. Rewrite Rules 刷新
 	if ( get_option( 'anime_sync_flush_rewrite' ) ) {
 		flush_rewrite_rules();
 		delete_option( 'anime_sync_flush_rewrite' );
 	}
+
+	// 7-2. [新增] Taxonomy seed 觸發
+	//      由 Anime_Sync_Installer::activate() / maybe_upgrade() 設置 transient，
+	//      此處在 taxonomy 註冊完成後才實際執行 wp_insert_term()。
+	if ( class_exists( 'Anime_Sync_Installer' ) ) {
+		( new Anime_Sync_Installer() )->run_pending_seed();
+	}
+
 }, 99 );
 
 // ============================================================
