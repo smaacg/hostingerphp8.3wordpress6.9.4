@@ -2,6 +2,26 @@
 /**
  * 檔案名稱: includes/class-import-manager.php
  *
+ * @version 1.1.0
+ *
+ * Changelog:
+ *   1.1.0 — Taxonomy 匯入優化（配合 class-installer.php 1.3.0 seed 範圍縮減）
+ *           - [新增] save_taxonomies() genre 加入 AniList 19 項中英對照表
+ *                   AniList 回傳的 Action / Adventure / Comedy 等英文 genre
+ *                   會自動轉為「動作 / 冒險 / 喜劇」中文 term，
+ *                   命中 seed 預建的 27 項中文 genre（共通 18 項命中）。
+ *                   未命中對照表的 genre fallback 使用原文，避免匯入失敗。
+ *           - [新增] save_taxonomies() anime_season_tax 動態補父年份 term
+ *                   匯入超出 seed 範圍的年份（例如 2003 春番）時，
+ *                   先確保「2003」父 term 存在，再把「2003 春季」掛在其下，
+ *                   解決孤兒 term 與層級錯亂問題。
+ *           - [改進] save_taxonomies() anime_format_tax 改用中文對照表建立 term
+ *                   原本 ucfirst($format_slug) 會建出 Tv / Movie / Ova 英文 term，
+ *                   現改為 TV / 劇場版 / OVA / ONA / 特別篇 / 音樂MV / TV短篇，
+ *                   與 seed 預建的 anime_format_tax 一致。
+ *
+ *   原 ACD / ACK / ACL / 標題保留邏輯與雙重 sync 寫入維持不變。
+ *
  * ACD – 新增 analyze_series()：呼叫 api_handler->get_series_tree()，
  * 供 Tab 4 AJAX 分析系列使用。
  * 新增 assign_series_taxonomy()：建立或查找 anime_series_tax term，
@@ -15,10 +35,9 @@
  * ACL – import_single() enrich 排程改為依 post_id 尾數錯開時間，
  *        避免批量匯入時同時觸發大量 API 請求撞 rate limit。
  *
- * [修改] 新增：
- * - import_single() 更新時保留現有文章標題，不讓 API 覆寫人工編輯的標題
- * - fetch_themes_only()：公開包裝方法，供 class-cron-manager.php 呼叫 AnimeThemes API
- * - fetch_episodes_only()：公開包裝方法，供 class-cron-manager.php 呼叫 Bangumi 集數 API
+ * import_single() 更新時保留現有文章標題，不讓 API 覆寫人工編輯的標題
+ * fetch_themes_only()：公開包裝方法，供 class-cron-manager.php 呼叫 AnimeThemes API
+ * fetch_episodes_only()：公開包裝方法，供 class-cron-manager.php 呼叫 Bangumi 集數 API
  */
 
 if ( ! defined( 'ABSPATH' ) ) exit;
@@ -125,8 +144,8 @@ class Anime_Sync_Import_Manager {
 			$is_update   = (bool) $existing_id;
 		}
 
-		// [修改] 標題邏輯：
-		// - 首次匯入（!$is_update）：使用 API 回傳的中文標題或 Romaji，行為與原本相同。
+		// 標題邏輯：
+		// - 首次匯入（!$is_update）：使用 API 回傳的中文標題或 Romaji。
 		// - 更新（$is_update）：優先保留現有文章的 post_title（人工編輯過的標題），
 		//   避免每日排程覆寫人工修改。只有在現有標題為空時才 fallback 至 API 標題。
 		if ( $is_update ) {
@@ -287,19 +306,7 @@ class Anime_Sync_Import_Manager {
 	}
 
 	// =========================================================================
-	// [修改] PUBLIC – 主題曲 API 公開包裝方法
-	//
-	// 供 class-cron-manager.php 的 run_themes_episodes_update() 呼叫。
-	// 直接委派給 api_handler->fetch_animethemes()，
-	// 該方法在 class-api-handler.php 中需確保為 public 存取修飾詞。
-	//
-	// 回傳格式範例：
-	// [
-	//   'themes' => [
-	//     [ 'type' => 'OP', 'sequence' => '1', 'title' => '...', 'audio_url' => '...' ],
-	//     [ 'type' => 'ED', 'sequence' => '1', 'title' => '...', 'audio_url' => '...' ],
-	//   ]
-	// ]
+	// PUBLIC – 主題曲 API 公開包裝方法（供 class-cron-manager.php 呼叫）
 	// =========================================================================
 
 	public function fetch_themes_only( int $mal_id ): array {
@@ -310,17 +317,7 @@ class Anime_Sync_Import_Manager {
 	}
 
 	// =========================================================================
-	// [修改] PUBLIC – 集數列表 API 公開包裝方法
-	//
-	// 供 class-cron-manager.php 的 run_themes_episodes_update() 呼叫。
-	// 直接委派給 api_handler->fetch_bgm_episodes()，
-	// 該方法在 class-api-handler.php 中需確保為 public 存取修飾詞。
-	//
-	// 回傳格式範例：
-	// [
-	//   [ 'id' => 1001, 'ep' => 1, 'name' => '第一話', 'name_cn' => '...' ],
-	//   [ 'id' => 1002, 'ep' => 2, 'name' => '第二話', 'name_cn' => '...' ],
-	// ]
+	// PUBLIC – 集數列表 API 公開包裝方法（供 class-cron-manager.php 呼叫）
 	// =========================================================================
 
 	public function fetch_episodes_only( int $bangumi_id ): array {
@@ -596,26 +593,49 @@ class Anime_Sync_Import_Manager {
 
 	// =========================================================================
 	// PRIVATE – 儲存分類法
+	//
+	// [1.1.0 修改]
+	//   1. genre 加入 AniList 19 項中英對照表（命中對照取中文，否則 fallback 英文）
+	//   2. anime_season_tax 動態補父年份 term（解決孤兒 term 問題）
+	//   3. anime_format_tax 改用中文對照表建立 term（與 seed 一致）
 	// =========================================================================
 
 	private function save_taxonomies( int $post_id, array $data ): void {
 
+		// ───────────────────────────────────────────────────
+		// 1. genre — AniList 19 項中英對照
+		// ───────────────────────────────────────────────────
 		if ( ! empty( $data['anime_genres'] ) && is_array( $data['anime_genres'] ) ) {
+			$genre_map = $this->get_anilist_genre_map();
 			$genre_ids = [];
+
 			foreach ( $data['anime_genres'] as $genre_name ) {
 				$genre_name = trim( (string) $genre_name );
 				if ( $genre_name === '' ) continue;
-				$term = term_exists( $genre_name, 'genre' );
-				if ( ! $term ) $term = wp_insert_term( $genre_name, 'genre' );
+
+				// 命中對照表用中文，否則 fallback 原文（避免新 genre 出現時匯入失敗）
+				$zh_name = $genre_map[ $genre_name ] ?? $genre_name;
+
+				$term = term_exists( $zh_name, 'genre' );
+				if ( ! $term ) {
+					$term = wp_insert_term( $zh_name, 'genre' );
+				}
 				if ( ! is_wp_error( $term ) ) {
 					$genre_ids[] = is_array( $term ) ? (int) $term['term_id'] : (int) $term;
 				}
 			}
-			if ( ! empty( $genre_ids ) ) wp_set_post_terms( $post_id, $genre_ids, 'genre' );
+
+			if ( ! empty( $genre_ids ) ) {
+				wp_set_post_terms( $post_id, $genre_ids, 'genre' );
+			}
 		}
 
+		// ───────────────────────────────────────────────────
+		// 2. anime_season_tax — 動態補父年份 term
+		// ───────────────────────────────────────────────────
 		$season_year = (int) ( $data['anime_season_year'] ?? 0 );
 		$season      = strtoupper( $data['anime_season'] ?? '' );
+
 		if ( $season_year && $season ) {
 			$season_map = [
 				'SPRING' => '春季',
@@ -623,28 +643,88 @@ class Anime_Sync_Import_Manager {
 				'FALL'   => '秋季',
 				'WINTER' => '冬季',
 			];
+			$season_suffix_map = [
+				'SPRING' => 'spring',
+				'SUMMER' => 'summer',
+				'FALL'   => 'fall',
+				'WINTER' => 'winter',
+			];
+
 			$season_zh    = $season_map[ $season ] ?? ucfirst( strtolower( $season ) );
 			$season_label = "{$season_year} {$season_zh}";
+			$season_slug  = $season_suffix_map[ $season ] ?? sanitize_title( $season );
 
-			$term = term_exists( $season_label, 'anime_season_tax' );
-			if ( ! $term ) $term = wp_insert_term( $season_label, 'anime_season_tax' );
-			if ( ! is_wp_error( $term ) ) {
-				$tid = is_array( $term ) ? (int) $term['term_id'] : (int) $term;
-				wp_set_post_terms( $post_id, [ $tid ], 'anime_season_tax' );
+			// 2-1. 先確保父年份 term 存在
+			$year_term_id = $this->ensure_year_parent_term( $season_year );
+
+			// 2-2. 再建立 / 取得季度子 term，掛在父年份下
+			$child_slug = "{$season_year}-{$season_slug}";
+			$child_term = get_term_by( 'slug', $child_slug, 'anime_season_tax' );
+
+			if ( ! $child_term ) {
+				$insert_args = [ 'slug' => $child_slug ];
+				if ( $year_term_id > 0 ) {
+					$insert_args['parent'] = $year_term_id;
+				}
+				$result = wp_insert_term( $season_label, 'anime_season_tax', $insert_args );
+
+				// 處理 race condition：另一個請求剛好建立了同 slug
+				if ( is_wp_error( $result ) && $result->get_error_code() === 'term_exists' ) {
+					$existing_id = (int) ( $result->get_error_data() ?: 0 );
+					if ( $existing_id > 0 ) {
+						$child_term_id = $existing_id;
+					}
+				} elseif ( ! is_wp_error( $result ) ) {
+					$child_term_id = (int) $result['term_id'];
+				}
+			} else {
+				$child_term_id = (int) $child_term->term_id;
+
+				// 修補既有的孤兒 term：若父年份已建立但子 term 仍掛在頂層，補上 parent
+				if ( $year_term_id > 0 && (int) $child_term->parent === 0 ) {
+					wp_update_term( $child_term_id, 'anime_season_tax', [ 'parent' => $year_term_id ] );
+				}
+			}
+
+			if ( ! empty( $child_term_id ) ) {
+				wp_set_post_terms( $post_id, [ $child_term_id ], 'anime_season_tax' );
 			}
 		}
 
+		// ───────────────────────────────────────────────────
+		// 3. anime_format_tax — 中文對照
+		// ───────────────────────────────────────────────────
 		$format = $data['anime_format'] ?? '';
 		if ( $format !== '' ) {
-			$format_slug = strtolower( str_replace( '_', '-', $format ) );
-			$term = term_exists( $format_slug, 'anime_format_tax' );
-			if ( ! $term ) $term = wp_insert_term( ucfirst( $format_slug ), 'anime_format_tax', [ 'slug' => $format_slug ] );
-			if ( ! is_wp_error( $term ) ) {
-				$tid = is_array( $term ) ? (int) $term['term_id'] : (int) $term;
+			$format_zh_map = $this->get_anilist_format_map();
+			$format_key    = strtoupper( $format );
+			$format_slug   = strtolower( str_replace( '_', '-', $format ) );
+
+			// 命中對照取中文標題；未命中 fallback 用 ucfirst 英文（罕見格式）
+			$format_zh_name = $format_zh_map[ $format_key ]['name'] ?? ucfirst( strtolower( $format_key ) );
+			// slug 優先用對照表的（與 seed 一致），否則由 format 字串轉換
+			$format_zh_slug = $format_zh_map[ $format_key ]['slug'] ?? $format_slug;
+
+			$term = get_term_by( 'slug', $format_zh_slug, 'anime_format_tax' );
+			if ( ! $term ) {
+				$result = wp_insert_term( $format_zh_name, 'anime_format_tax', [ 'slug' => $format_zh_slug ] );
+				if ( ! is_wp_error( $result ) ) {
+					$tid = (int) $result['term_id'];
+				} elseif ( $result->get_error_code() === 'term_exists' ) {
+					$tid = (int) ( $result->get_error_data() ?: 0 );
+				}
+			} else {
+				$tid = (int) $term->term_id;
+			}
+
+			if ( ! empty( $tid ) ) {
 				wp_set_post_terms( $post_id, [ $tid ], 'anime_format_tax' );
 			}
 		}
 
+		// ───────────────────────────────────────────────────
+		// 4. 標籤 (post_tag)
+		// ───────────────────────────────────────────────────
 		if ( ! empty( $data['anime_tags'] ) && is_array( $data['anime_tags'] ) ) {
 			$tag_ids = [];
 			foreach ( $data['anime_tags'] as $tag_name ) {
@@ -657,6 +737,9 @@ class Anime_Sync_Import_Manager {
 			if ( ! empty( $tag_ids ) ) wp_set_post_terms( $post_id, $tag_ids, 'post_tag' );
 		}
 
+		// ───────────────────────────────────────────────────
+		// 5. 製作公司 (anime_studio_tax)
+		// ───────────────────────────────────────────────────
 		$studios_raw = $data['anime_studios'] ?? '';
 		if ( ! empty( $studios_raw ) ) {
 			$studio_names    = array_filter( array_map( 'trim', explode( ',', $studios_raw ) ) );
@@ -679,8 +762,86 @@ class Anime_Sync_Import_Manager {
 		}
 	}
 
+	/**
+	 * 確保 anime_season_tax 的父年份 term 存在。
+	 * 用於匯入超出 seed 範圍的舊年份（例如 2003）時自動補建。
+	 *
+	 * @return int term_id（0 表失敗）
+	 */
+	private function ensure_year_parent_term( int $year ): int {
+		if ( $year <= 0 ) return 0;
+
+		$slug = (string) $year;
+		$term = get_term_by( 'slug', $slug, 'anime_season_tax' );
+
+		if ( $term ) {
+			return (int) $term->term_id;
+		}
+
+		$result = wp_insert_term( (string) $year, 'anime_season_tax', [ 'slug' => $slug ] );
+
+		if ( is_wp_error( $result ) ) {
+			// race condition：另一個請求剛建好同 slug
+			if ( $result->get_error_code() === 'term_exists' ) {
+				$existing_id = (int) ( $result->get_error_data() ?: 0 );
+				return $existing_id;
+			}
+			return 0;
+		}
+
+		return (int) $result['term_id'];
+	}
+
+	/**
+	 * AniList 19 項 genre 中英對照表（含 Hentai）。
+	 * 對應 setup-taxonomy.php / class-installer.php seed 出的中文 genre slug。
+	 *
+	 * 來源：https://anilist.co/forum/thread/4824
+	 */
+	private function get_anilist_genre_map(): array {
+		return [
+			'Action'        => '動作',
+			'Adventure'     => '冒險',
+			'Comedy'        => '喜劇',
+			'Drama'         => '劇情',
+			'Ecchi'         => '輕色情',
+			'Fantasy'       => '奇幻',
+			'Hentai'        => '成人',         // seed 未含；fallback 自動建立
+			'Horror'        => '恐怖',
+			'Mahou Shoujo'  => '魔法少女',
+			'Mecha'         => '機甲',
+			'Music'         => '音樂',
+			'Mystery'       => '推理',
+			'Psychological' => '心理',
+			'Romance'       => '戀愛',
+			'Sci-Fi'        => '科幻',
+			'Slice of Life' => '日常',
+			'Sports'        => '運動',
+			'Supernatural'  => '超自然',
+			'Thriller'      => '驚悚',
+		];
+	}
+
+	/**
+	 * AniList 7 項 format 中英對照表，slug 與 seed 一致。
+	 *
+	 * 對應 anime_format_tax 預建 term：tv / tv-short / movie / ova / ona / special / music
+	 */
+	private function get_anilist_format_map(): array {
+		return [
+			'TV'         => [ 'name' => 'TV',     'slug' => 'tv'       ],
+			'TV_SHORT'   => [ 'name' => 'TV短篇', 'slug' => 'tv-short' ],
+			'MOVIE'      => [ 'name' => '劇場版', 'slug' => 'movie'    ],
+			'OVA'        => [ 'name' => 'OVA',    'slug' => 'ova'      ],
+			'ONA'        => [ 'name' => 'ONA',    'slug' => 'ona'      ],
+			'SPECIAL'    => [ 'name' => '特別篇', 'slug' => 'special'  ],
+			'MUSIC'      => [ 'name' => '音樂MV', 'slug' => 'music'    ],
+		];
+	}
+
 	// =========================================================================
 	// PRIVATE – 解析 externalLinks 自動寫入台灣串流平台欄位
+	// （目前未啟用，台灣平台改為人工維護）
 	// =========================================================================
 
 	private function map_streaming_to_tw_fields( int $post_id, string $external_links_json ): void {
