@@ -3,7 +3,15 @@
  * User Status Cron
  *
  * @package Anime_Sync_Pro
- * @version 1.0.0
+ * @version 1.1.0
+ *
+ * Changelog:
+ *   1.1.0 — Stats 重算優化
+ *     - [USC-H1] recalc_stats() 改 INSERT...ON DUPLICATE KEY UPDATE，
+ *               不再 TRUNCATE，避免重算期間 get_ranking() 撈到空表。
+ *     - [USC-H1] 新增孤兒列清理：刪除主表已沒紀錄但 stats 表還留著的 anime_id。
+ *     - [USC-M1] flush_ranking_cache() 改用 wp_cache_flush_group()，
+ *                避免 limit 不在白名單時 cache 殘留。
  */
 
 if ( ! defined( 'ABSPATH' ) ) exit;
@@ -47,11 +55,12 @@ class Anime_Sync_User_Status_Cron {
 
         $start_time = microtime( true );
 
-        $wpdb->query( "TRUNCATE TABLE {$stats_table}" );
-
+        // [USC-H1] 改用 INSERT ... ON DUPLICATE KEY UPDATE，
+        // 不再 TRUNCATE，避免重算期間排行榜撈到空表。
         $sql = "
             INSERT INTO {$stats_table}
-                (anime_id, want_count, watching_count, completed_count, dropped_count, favorited_count, total_count)
+                (anime_id, want_count, watching_count, completed_count,
+                 dropped_count, favorited_count, total_count)
             SELECT
                 anime_id,
                 SUM(CASE WHEN status = 0 THEN 1 ELSE 0 END) AS want_count,
@@ -62,9 +71,24 @@ class Anime_Sync_User_Status_Cron {
                 COUNT(*)                                    AS total_count
             FROM {$main_table}
             GROUP BY anime_id
+            ON DUPLICATE KEY UPDATE
+                want_count      = VALUES(want_count),
+                watching_count  = VALUES(watching_count),
+                completed_count = VALUES(completed_count),
+                dropped_count   = VALUES(dropped_count),
+                favorited_count = VALUES(favorited_count),
+                total_count     = VALUES(total_count)
         ";
 
         $rows_affected = $wpdb->query( $sql );
+
+        // [USC-H1] 清掉主表已沒紀錄但 stats 表還留著的 anime_id
+        // （該動畫被所有使用者移除後，stats 應同步歸零/刪除）
+        $wpdb->query( "
+            DELETE s FROM {$stats_table} s
+            LEFT JOIN {$main_table} m ON s.anime_id = m.anime_id
+            WHERE m.anime_id IS NULL
+        " );
 
         $duration = round( microtime( true ) - $start_time, 3 );
 
@@ -93,9 +117,22 @@ class Anime_Sync_User_Status_Cron {
         ] );
     }
 
+    /**
+     * [USC-M1] 清除排行榜快取
+     *
+     * 原本只列舉特定 limit 值，若 get_ranking() 用其他 limit 會殘留。
+     * 改用 wp_cache_flush_group() 一次清光整個 group，順便連個人狀態 cache
+     * 也清掉（個人 cache TTL 60 秒，每 15 分鐘清一次無感）。
+     */
     private function flush_ranking_cache(): void {
+        if ( function_exists( 'wp_cache_flush_group' ) ) {
+            wp_cache_flush_group( 'anime_user_status' );
+            return;
+        }
+
+        // WordPress < 6.1 fallback
         $types  = [ 'favorited', 'watching', 'completed', 'want', 'dropped', 'total' ];
-        $limits = [ 10, 20, 30, 50, 100 ];
+        $limits = [ 5, 10, 15, 20, 25, 30, 50, 100 ];
         foreach ( $types as $t ) {
             foreach ( $limits as $l ) {
                 wp_cache_delete( "us_rank_{$t}_{$l}", 'anime_user_status' );
