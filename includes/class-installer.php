@@ -3,20 +3,26 @@
  * Installer Class
  *
  * @package Anime_Sync_Pro
- * @version 1.2.0
+ * @version 1.3.0
  *
  * Changelog:
+ *   1.3.0 — Taxonomy seeder 整合（取代 setup-taxonomy.php）
+ *           - [新增] seed_taxonomy_terms() 整支內建 category / channel / genre /
+ *                   anime_format_tax / anime_season_tax 的種子建立邏輯
+ *           - [新增] activate() / maybe_upgrade() 設 transient
+ *                   'anime_sync_pending_seed'，由主檔 init priority 99 觸發 seed
+ *           - [新增] run_pending_seed() 公開方法，供主檔 init 階段呼叫
+ *           - [改進] 季度年份範圍動態計算：當年-3 ~ 當年+1（N=5），
+ *                   每次升級自動往後滑動，不再寫死 2000–2035
+ *           - [改進] 舊資料保護：若 weixiaoacg_taxonomy_v5_done 已存在，
+ *                   只補季度年份，不覆蓋使用者可能改過的 category/channel/genre
+ *           - [移除] setup-taxonomy.php 已停用，可從外掛根目錄刪除
  *   1.2.0 — 安裝器優化
  *           - [修正] activate() 移除多餘的 flush_rewrite_rules()
- *                   原本在 register_cpt_for_flush() 已設定 anime_sync_flush_rewrite option，
- *                   由主檔 init priority 99 在 CPT 註冊完成後再執行 flush，
- *                   activate 階段呼叫 flush 是無效的（CPT 尚未註冊）。
  *           - [修正] deactivate() 移除 flush_rewrite_rules()
- *                   停用時 CPT 已 unregister，WordPress 會自動處理 rewrite，無需手動 flush。
- *           - [改進] 新增 maybe_upgrade()：版本變動時自動執行升級邏輯
- *                   （補建漏失的資料表、補上新增的預設選項）
- *           - [改進] create_upload_dirs() 加入錯誤回傳與 logger 紀錄
- *           - [改進] set_default_options() 改用 ?? 方式，新版可隨意新增鍵
+ *           - [改進] 新增 maybe_upgrade()
+ *           - [改進] create_upload_dirs() 加入錯誤回傳
+ *           - [改進] set_default_options() 改用 ?? 方式
  *           - [新增] is_table_missing() 工具方法
  */
 
@@ -25,6 +31,14 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 class Anime_Sync_Installer {
+
+	/**
+	 * 季度 seed：往前 N 年 + 當年 + 當年+1 的範圍
+	 * end_year   = 當年 + 1
+	 * start_year = end_year - (SEASON_YEARS_RANGE - 1)
+	 * SEASON_YEARS_RANGE = 5 → 共建 5 個年份（例：2026 時建 2023~2027）
+	 */
+	private const SEASON_YEARS_RANGE = 5;
 
 	/**
 	 * 預設選項定義（升級時也會用到）
@@ -48,49 +62,29 @@ class Anime_Sync_Installer {
 	// 啟用 / 停用
 	// =========================================================================
 
-	/**
-	 * 插件啟用時執行
-	 *
-	 * [修正] 移除原本的 flush_rewrite_rules()。
-	 *        register_cpt_for_flush() 已設定 anime_sync_flush_rewrite option，
-	 *        會由主檔 init priority 99 在 CPT 註冊完成後執行 flush。
-	 */
 	public function activate(): void {
 		$this->create_tables();
 		$this->set_default_options();
 		$this->create_upload_dirs();
 		$this->register_cpt_for_flush();
 
+		// 設置 seed 旗標：activate 階段 taxonomy 還沒註冊，
+		// 由主檔 init priority 99 透過 run_pending_seed() 執行
+		set_transient( 'anime_sync_pending_seed', 1, HOUR_IN_SECONDS );
+
 		update_option( 'anime_sync_activated_at', current_time( 'mysql' ) );
 		update_option( 'anime_sync_version',      ANIME_SYNC_PRO_VERSION );
 	}
 
-	/**
-	 * 插件停用時執行
-	 *
-	 * [修正] 移除原本的 flush_rewrite_rules()。
-	 *        WordPress 在 CPT unregister 後會自動處理 rewrite cache，無需手動 flush。
-	 */
 	public function deactivate(): void {
 		delete_transient( 'anime_sync_pending_count' );
+		delete_transient( 'anime_sync_pending_seed' );
 	}
 
 	// =========================================================================
-	// 升級檢查（每次 plugins_loaded 時可呼叫，用於補建漏失的表/選項）
+	// 升級檢查
 	// =========================================================================
 
-	/**
-	 * 版本檢查與升級
-	 *
-	 * 用於以下情境：
-	 *   1. 已安裝外掛升級到新版本，需要新增資料表或選項
-	 *   2. 直接覆蓋外掛檔案（沒走啟用流程）時的補救
-	 *
-	 * 主檔可在 plugins_loaded hook 中呼叫：
-	 *   ( new Anime_Sync_Installer() )->maybe_upgrade();
-	 *
-	 * @return bool 是否執行了升級
-	 */
 	public function maybe_upgrade(): bool {
 		$current_version = get_option( 'anime_sync_version', '0.0.0' );
 
@@ -98,19 +92,16 @@ class Anime_Sync_Installer {
 			return false;
 		}
 
-		// 安全地補建缺失的資料表（CREATE TABLE IF NOT EXISTS 不會破壞既有資料）
 		$this->create_tables();
-
-		// 補上新版本新增的預設選項（既有選項不會被覆蓋）
 		$this->set_default_options();
 
-		// 標記新版本
-		update_option( 'anime_sync_version',         ANIME_SYNC_PRO_VERSION );
-		update_option( 'anime_sync_last_upgrade_at', current_time( 'mysql' ) );
-		update_option( 'anime_sync_last_upgrade_from', $current_version );
+		// 升級時也設 seed 旗標：每次版本變動會自動補建當年新季度
+		set_transient( 'anime_sync_pending_seed', 1, HOUR_IN_SECONDS );
 
-		// 觸發 rewrite 重整（以防新版有新的 rewrite 規則）
-		update_option( 'anime_sync_flush_rewrite', 1 );
+		update_option( 'anime_sync_version',           ANIME_SYNC_PRO_VERSION );
+		update_option( 'anime_sync_last_upgrade_at',   current_time( 'mysql' ) );
+		update_option( 'anime_sync_last_upgrade_from', $current_version );
+		update_option( 'anime_sync_flush_rewrite',     1 );
 
 		if ( class_exists( 'Anime_Sync_Error_Logger' ) ) {
 			Anime_Sync_Error_Logger::info(
@@ -122,15 +113,226 @@ class Anime_Sync_Installer {
 	}
 
 	// =========================================================================
-	// 資料表建立
+	// Seed 觸發（由主檔 init priority 99 呼叫）
 	// =========================================================================
 
 	/**
-	 * 建立資料庫資料表
+	 * 檢查並執行 pending seed
 	 *
-	 * 使用 CREATE TABLE IF NOT EXISTS + dbDelta，
-	 * 對既有資料表是安全的（只會新增缺失欄位/索引，不會刪除資料）。
+	 * 主檔應在 init priority 99（CPT 與 taxonomy 註冊完成後）呼叫：
+	 *   add_action( 'init', function () {
+	 *       ( new Anime_Sync_Installer() )->run_pending_seed();
+	 *   }, 99 );
 	 */
+	public function run_pending_seed(): void {
+		if ( ! get_transient( 'anime_sync_pending_seed' ) ) {
+			return;
+		}
+
+		// 防呆：taxonomy 沒註冊就不跑（避免 wp_insert_term 失敗）
+		if ( ! taxonomy_exists( 'channel' ) || ! taxonomy_exists( 'anime_season_tax' ) ) {
+			return;
+		}
+
+		$result = $this->seed_taxonomy_terms();
+
+		delete_transient( 'anime_sync_pending_seed' );
+
+		if ( class_exists( 'Anime_Sync_Error_Logger' ) ) {
+			Anime_Sync_Error_Logger::info(
+				'Taxonomy seed completed',
+				$result
+			);
+		}
+	}
+
+	// =========================================================================
+	// Taxonomy 種子（取代 setup-taxonomy.php）
+	// =========================================================================
+
+	/**
+	 * 建立所有 taxonomy 種子 term
+	 *
+	 * @return array{created:int, skipped:int, failed:int, errors:array<string>}
+	 */
+	public function seed_taxonomy_terms(): array {
+		$stats = [ 'created' => 0, 'skipped' => 0, 'failed' => 0, 'errors' => [] ];
+
+		$is_first_seed = ! get_option( 'weixiaoacg_taxonomy_v5_done' );
+
+		// ─────────────────────────────────────────────
+		// 首次 seed 才建：category / channel / genre / anime_format_tax
+		// （已建過則跳過，避免覆蓋使用者改過的中文名稱）
+		// ─────────────────────────────────────────────
+		if ( $is_first_seed ) {
+			// 1. 文章內容型 category
+			$editorial_categories = [
+				[ '公告', 'announcement' ],
+				[ '新聞', 'news'         ],
+				[ '評論', 'review'       ],
+				[ '專題', 'feature'      ],
+			];
+			foreach ( $editorial_categories as [ $name, $slug ] ) {
+				$this->upsert_term( $name, 'category', [ 'slug' => $slug ], $stats );
+			}
+
+			// 2. 文章頻道 channel
+			$channels = [
+				[ '動漫',    'anime'        ],
+				[ '漫畫',    'manga'        ],
+				[ '輕小說',  'novel'        ],
+				[ '遊戲',    'game'         ],
+				[ 'VTuber',  'vtuber'       ],
+				[ 'Cosplay', 'cosplay'      ],
+				[ 'AI工具',  'ai-tools'     ],
+				[ '聲優',    'voice-actor'  ],
+				[ '音樂',    'music'        ],
+				[ '周邊',    'merchandise'  ],
+				[ '活動',    'event'        ],
+				[ '業界',    'industry'     ],
+			];
+			foreach ( $channels as [ $name, $slug ] ) {
+				$this->upsert_term( $name, 'channel', [ 'slug' => $slug ], $stats );
+			}
+
+			// 3. genre
+			$genres = [
+				[ '動作',     'action'        ],
+				[ '冒險',     'adventure'     ],
+				[ '喜劇',     'comedy'        ],
+				[ '劇情',     'drama'         ],
+				[ '奇幻',     'fantasy'       ],
+				[ '恐怖',     'horror'        ],
+				[ '魔法少女', 'mahou-shoujo'  ],
+				[ '機甲',     'mecha'         ],
+				[ '音樂',     'music'         ],
+				[ '推理',     'mystery'       ],
+				[ '懸疑',     'suspense'      ],
+				[ '心理',     'psychological' ],
+				[ '科幻',     'sci-fi'        ],
+				[ '日常',     'slice-of-life' ],
+				[ '運動',     'sports'        ],
+				[ '超自然',   'supernatural'  ],
+				[ '驚悚',     'thriller'      ],
+				[ '異世界',   'isekai'        ],
+				[ '後宮',     'harem'         ],
+				[ '百合',     'yuri'          ],
+				[ '耽美',     'bl'            ],
+				[ '歷史',     'historical'    ],
+				[ '武俠',     'wuxia'         ],
+				[ '校園',     'school'        ],
+				[ '兒童',     'kids'          ],
+				[ '輕色情',   'ecchi'         ],
+				[ '戀愛',     'romance'       ],
+			];
+			foreach ( $genres as [ $name, $slug ] ) {
+				$this->upsert_term( $name, 'genre', [ 'slug' => $slug ], $stats );
+			}
+
+			// 4. anime_format_tax
+			$formats = [
+				[ 'TV',     'tv'       ],
+				[ 'TV短篇', 'tv-short' ],
+				[ '劇場版', 'movie'    ],
+				[ 'OVA',    'ova'      ],
+				[ 'ONA',    'ona'      ],
+				[ '特別篇', 'special'  ],
+				[ '音樂MV', 'music'    ],
+			];
+			foreach ( $formats as [ $name, $slug ] ) {
+				$this->upsert_term( $name, 'anime_format_tax', [ 'slug' => $slug ], $stats );
+			}
+		}
+
+		// ─────────────────────────────────────────────
+		// 5. anime_season_tax — 動態範圍（每次 seed 都跑，補新年份）
+		// ─────────────────────────────────────────────
+		$end_year   = (int) wp_date( 'Y' ) + 1;
+		$start_year = $end_year - ( self::SEASON_YEARS_RANGE - 1 );
+
+		$seasons = [
+			'winter' => '冬季',
+			'spring' => '春季',
+			'summer' => '夏季',
+			'fall'   => '秋季',
+		];
+
+		for ( $year = $start_year; $year <= $end_year; $year++ ) {
+			$parent_id = $this->upsert_term(
+				(string) $year,
+				'anime_season_tax',
+				[ 'slug' => (string) $year ],
+				$stats
+			);
+
+			if ( $parent_id <= 0 ) {
+				continue; // 父 term 建立失敗就跳過子 term
+			}
+
+			foreach ( $seasons as $suffix => $label ) {
+				$this->upsert_term(
+					"{$year} {$label}",
+					'anime_season_tax',
+					[
+						'slug'   => "{$year}-{$suffix}",
+						'parent' => $parent_id,
+					],
+					$stats
+				);
+			}
+		}
+
+		update_option( 'weixiaoacg_taxonomy_v5_done', current_time( 'mysql' ) );
+
+		return $stats;
+	}
+
+	/**
+	 * 內部 upsert：依 slug 找不到才建立，找到則跳過（不覆蓋名稱避免破壞使用者編輯）
+	 *
+	 * @return int term_id（0 表失敗）
+	 */
+	private function upsert_term( string $name, string $taxonomy, array $args, array &$stats ): int {
+		if ( ! taxonomy_exists( $taxonomy ) ) {
+			$stats['failed']++;
+			$stats['errors'][] = "taxonomy not exists: {$taxonomy}";
+			return 0;
+		}
+
+		$slug   = $args['slug'] ?? sanitize_title( $name );
+		$parent = isset( $args['parent'] ) ? (int) $args['parent'] : 0;
+
+		$existing = get_term_by( 'slug', $slug, $taxonomy );
+		if ( $existing && ! is_wp_error( $existing ) ) {
+			$stats['skipped']++;
+			return (int) $existing->term_id;
+		}
+
+		$result = wp_insert_term( $name, $taxonomy, [
+			'slug'   => $slug,
+			'parent' => $parent,
+		] );
+
+		if ( is_wp_error( $result ) ) {
+			// term_exists 是良性錯誤（可能與其他 taxonomy 重名）
+			if ( $result->get_error_code() === 'term_exists' ) {
+				$existing_id = (int) ( $result->get_error_data() ?: 0 );
+				$stats['skipped']++;
+				return $existing_id;
+			}
+			$stats['failed']++;
+			$stats['errors'][] = "{$taxonomy}/{$slug}: " . $result->get_error_message();
+			return 0;
+		}
+
+		$stats['created']++;
+		return (int) $result['term_id'];
+	}
+
+	// =========================================================================
+	// 資料表建立
+	// =========================================================================
+
 	private function create_tables(): void {
 		global $wpdb;
 
@@ -138,9 +340,6 @@ class Anime_Sync_Installer {
 
 		require_once ABSPATH . 'wp-admin/includes/upgrade.php';
 
-		// ────────────────────────────────────────────
-		// 表 1：審核佇列
-		// ────────────────────────────────────────────
 		$queue_table = $wpdb->prefix . 'anime_review_queue';
 		$queue_sql   = "CREATE TABLE IF NOT EXISTS {$queue_table} (
 			id          BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT,
@@ -159,9 +358,6 @@ class Anime_Sync_Installer {
 		) {$charset_collate};";
 		dbDelta( $queue_sql );
 
-		// ────────────────────────────────────────────
-		// 表 2：錯誤日誌
-		// ────────────────────────────────────────────
 		$logs_table = $wpdb->prefix . 'anime_sync_logs';
 		$logs_sql   = "CREATE TABLE IF NOT EXISTS {$logs_table} (
 			id         BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT,
@@ -175,9 +371,6 @@ class Anime_Sync_Installer {
 		) {$charset_collate};";
 		dbDelta( $logs_sql );
 
-		// ────────────────────────────────────────────
-		// 表 3：評分資料表
-		// ────────────────────────────────────────────
 		$ratings_table = $wpdb->prefix . 'anime_ratings';
 		$ratings_sql   = "CREATE TABLE IF NOT EXISTS {$ratings_table} (
 			id               BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT,
@@ -198,10 +391,6 @@ class Anime_Sync_Installer {
 		) {$charset_collate};";
 		dbDelta( $ratings_sql );
 
-		// ────────────────────────────────────────────
-		// 表 4：使用者追蹤狀態（取代 user_meta 'anime_user_data' JSON）
-		// 巴哈級規模設計：百萬會員、五千萬筆紀錄
-		// ────────────────────────────────────────────
 		$user_status_table = $wpdb->prefix . 'anime_user_status';
 		$user_status_sql   = "CREATE TABLE IF NOT EXISTS {$user_status_table} (
 			id            BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT,
@@ -227,10 +416,6 @@ class Anime_Sync_Installer {
 		) {$charset_collate};";
 		dbDelta( $user_status_sql );
 
-		// ────────────────────────────────────────────
-		// 表 5：使用者追蹤狀態彙總（排行榜預計算）
-		// 由 cron 每 15 分鐘重算
-		// ────────────────────────────────────────────
 		$us_stats_table = $wpdb->prefix . 'anime_user_status_stats';
 		$us_stats_sql   = "CREATE TABLE IF NOT EXISTS {$us_stats_table} (
 			anime_id        BIGINT(20) UNSIGNED NOT NULL,
@@ -249,11 +434,6 @@ class Anime_Sync_Installer {
 		dbDelta( $us_stats_sql );
 	}
 
-	/**
-	 * 工具方法：檢查資料表是否存在
-	 *
-	 * @param string $table_name_without_prefix 不含 wp_ 前綴的表名
-	 */
 	public function is_table_missing( string $table_name_without_prefix ): bool {
 		global $wpdb;
 		$full_name = $wpdb->prefix . $table_name_without_prefix;
@@ -267,12 +447,6 @@ class Anime_Sync_Installer {
 	// 預設選項
 	// =========================================================================
 
-	/**
-	 * 設定預設選項
-	 *
-	 * 使用 add_option() 而非 update_option()，
-	 * 既有選項不會被覆蓋（保留使用者調整過的設定）。
-	 */
 	private function set_default_options(): void {
 		foreach ( $this->get_default_options() as $key => $value ) {
 			if ( get_option( $key, '__not_set__' ) === '__not_set__' ) {
@@ -285,13 +459,6 @@ class Anime_Sync_Installer {
 	// 上傳目錄
 	// =========================================================================
 
-	/**
-	 * 建立上傳目錄與安全防護檔
-	 *
-	 * [改進] 加入錯誤紀錄，避免 silent fail
-	 *
-	 * @return array{created:int, failed:int, errors:array<string>}
-	 */
 	private function create_upload_dirs(): array {
 		$upload_dir = wp_upload_dir();
 
@@ -325,7 +492,6 @@ class Anime_Sync_Installer {
 				continue;
 			}
 
-			// 防護檔案：避免目錄列表外洩
 			$htaccess_path = $dir . '/.htaccess';
 			$index_path    = $dir . '/index.php';
 
@@ -357,12 +523,6 @@ class Anime_Sync_Installer {
 	// Rewrite 觸發旗標
 	// =========================================================================
 
-	/**
-	 * 設定 rewrite flush 旗標
-	 *
-	 * CPT 在主檔的 init hook 中註冊，
-	 * 此處只設定 option，由主檔 init priority 99 統一處理 flush。
-	 */
 	private function register_cpt_for_flush(): void {
 		update_option( 'anime_sync_flush_rewrite', 1 );
 	}
