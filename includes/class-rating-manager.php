@@ -244,11 +244,19 @@ class Anime_Sync_Rating_Manager {
             );
         }
 
-        if ( $result === false ) {
+                if ( $result === false ) {
+            // ── R-H1 修正：寫入失敗時回退 rate count，避免誤殺使用者配額 ──
+            $current = (int) get_transient( $rate_key );
+            if ( $current > 0 ) {
+                set_transient( $rate_key, $current - 1, self::RATE_LIMIT_PERIOD );
+            }
+            // ──────────────────────────────────────────────────────────
+
             // 寫入失敗：記錄錯誤並回傳 500
             if ( class_exists( 'Anime_Sync_Error_Logger' ) ) {
                 Anime_Sync_Error_Logger::error(
                     'Rating DB write failed',
+
                     [
                         'anime_id'  => $anime_id,
                         'user_id'   => $user_id,
