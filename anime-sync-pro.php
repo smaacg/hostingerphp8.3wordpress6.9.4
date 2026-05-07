@@ -2,12 +2,19 @@
 /**
  * Plugin Name: Anime Sync Pro
  * Description: 從 AniList、Bangumi 自動同步動畫資料。
- * Version:     1.0.9
+ * Version:     1.1.0
  * Author:      weixiaoacg
  * Requires PHP: 8.0
  * Text Domain: anime-sync-pro
  *
  * Changelog:
+ *   1.1.0 — 圖片尺寸最佳化 + image-handler 強化
+ *           - [新增] 第 3.5 段：關閉 WordPress 預設不需要的圖片尺寸
+ *                   （medium_large 768 / 1536 / 2048）
+ *                   動畫封面 460x651 用不到，避免媒體庫膨脹（省約 60% 空間）。
+ *                   可由常數 ANIME_SYNC_DISABLE_LARGE_SIZES 關閉。
+ *           - [配合] includes/class-image-handler.php 升至 1.1.0：
+ *                   resize 改為 atomic write、timeout 收斂、logger 統一。
  *   1.0.9 — Taxonomy seeder 內建化
  *           - [新增] init priority 99 觸發 Anime_Sync_Installer::run_pending_seed()
  *                   啟用 / 升級時自動建立 category / channel / genre /
@@ -41,7 +48,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 // ============================================================
 // 1. 常數定義
 // ============================================================
-define( 'ANIME_SYNC_PRO_VERSION',  '1.0.9' );
+define( 'ANIME_SYNC_PRO_VERSION',  '1.1.0' );
 define( 'ANIME_SYNC_PRO_DIR',      plugin_dir_path( __FILE__ ) );
 define( 'ANIME_SYNC_PRO_URL',      plugin_dir_url( __FILE__ ) );
 define( 'ANIME_SYNC_PRO_BASENAME', plugin_basename( __FILE__ ) );
@@ -114,10 +121,6 @@ add_action( 'init', function () {
 
 	// ----------------------------------------------------------
 	// Taxonomy: genre
-	// [修正] 原本註冊到 [ 'anime', 'manga', 'novel' ]，
-	//        但 manga/novel CPT 並未註冊，會造成 _doing_it_wrong 警告。
-	//        若日後新增 manga/novel CPT，可在那邊用
-	//        register_taxonomy_for_object_type() 動態加入。
 	// ----------------------------------------------------------
 	register_taxonomy( 'genre', [ 'anime' ], [
 		'labels' => [
@@ -218,11 +221,56 @@ add_action( 'init', function () {
 }, 10 );
 
 // ============================================================
+// 3.5. 圖片尺寸最佳化（針對動畫封面 460×651 不需要的大尺寸）
+//
+// WordPress 預設會為每張上傳圖產生 6 個副本：
+//   thumbnail (150) / medium (300) / medium_large (768) / large (1024)
+//   / 1536x1536 / 2048x2048
+//
+// 動畫封面原圖只有 460×651，後三個尺寸（768/1536/2048）完全用不到，
+// 只會浪費磁碟空間（每張多 ~500KB；1000 部累積約 500MB）。
+//
+// 若需停用此最佳化，在 wp-config.php 加：
+//   define( 'ANIME_SYNC_DISABLE_LARGE_SIZES', false );
+// ============================================================
+if ( ! defined( 'ANIME_SYNC_DISABLE_LARGE_SIZES' ) ) {
+	define( 'ANIME_SYNC_DISABLE_LARGE_SIZES', true );
+}
+
+if ( ANIME_SYNC_DISABLE_LARGE_SIZES ) {
+
+	// 1. 阻止這些 intermediate sizes 被產生
+	add_filter( 'intermediate_image_sizes_advanced', function ( array $sizes ): array {
+		unset(
+			$sizes['medium_large'],   // 768px
+			$sizes['1536x1536'],      // 1536px
+			$sizes['2048x2048']       // 2048px
+		);
+		return $sizes;
+	}, 10, 1 );
+
+	// 2. 從 srcset 候選清單移除（避免 <img srcset> 引用不存在的尺寸）
+	add_filter( 'wp_calculate_image_srcset', function ( $sources ) {
+		if ( ! is_array( $sources ) ) {
+			return $sources;
+		}
+		foreach ( [ 768, 1536, 2048 ] as $w ) {
+			if ( isset( $sources[ $w ] ) ) {
+				unset( $sources[ $w ] );
+			}
+		}
+		return $sources;
+	}, 10, 1 );
+
+	// 3. 從後台編輯器「插入圖片」尺寸下拉選單移除
+	add_filter( 'image_size_names_choose', function ( array $sizes ): array {
+		unset( $sizes['medium_large'], $sizes['1536x1536'], $sizes['2048x2048'] );
+		return $sizes;
+	}, 10, 1 );
+}
+
+// ============================================================
 // 4. 啟用 Hook
-// [修正] 移除原本的 flush_rewrite_rules() 直接呼叫。
-//        register_activation_hook 在 init 之前執行，CPT 尚未註冊，
-//        flush 出來的規則不包含 anime 的 rewrite，會導致前台 404。
-//        改用 option 標記，交給第 7 段（init priority 99）處理。
 // ============================================================
 register_activation_hook( __FILE__, function () {
 
@@ -248,7 +296,6 @@ register_activation_hook( __FILE__, function () {
 		Anime_Sync_Cron_Manager::activate();
 	}
 
-	// [修正] 不直接 flush，改設旗標讓 init hook 在 CPT 註冊完成後再 flush
 	update_option( 'anime_sync_flush_rewrite', 1 );
 } );
 
@@ -274,12 +321,6 @@ register_deactivation_hook( __FILE__, function () {
 
 // ============================================================
 // 6. 載入外掛核心（plugins_loaded）
-// [改進] 拆成兩段：
-//        6A. 不依賴 ACF 的元件（評分、使用者狀態、Editorial Routing）
-//        6B. 依賴 ACF 的元件（ACF Fields、Frontend、後台、Cron）
-//        這樣 ACF 暫時停用時，前端評分與追蹤系統仍能運作。
-// [新增] 6C. maybe_upgrade()：版本變動時自動補建漏失資料表 / 選項，
-//             並設置 seed 旗標（由第 7 段在 init 99 觸發）。
 // ============================================================
 add_action( 'plugins_loaded', function () {
 
@@ -287,28 +328,24 @@ add_action( 'plugins_loaded', function () {
 	// 6A. 不依賴 ACF 的元件
 	// ----------------------------------------------------------
 
-	// 6A-1. 文章內容路由（純 rewrite 規則，不需 ACF）
 	if ( class_exists( 'Anime_Sync_Editorial_Routing' ) ) {
 		new Anime_Sync_Editorial_Routing();
 	}
 
-	// 6A-2. 評分系統（自有資料表 anime_ratings，不需 ACF）
 	if ( class_exists( 'Anime_Sync_Rating_Manager' ) ) {
 		new Anime_Sync_Rating_Manager();
 	}
 
-	// 6A-3. 使用者追蹤狀態系統（自有資料表，不需 ACF）
 	if ( class_exists( 'Anime_Sync_User_Status_Manager' ) ) {
 		new Anime_Sync_User_Status_Manager();
 	}
 
-	// 6A-4. 追蹤狀態彙總 cron
 	if ( class_exists( 'Anime_Sync_User_Status_Cron' ) ) {
 		new Anime_Sync_User_Status_Cron();
 	}
 
 	// ----------------------------------------------------------
-	// 6C. 版本升級檢查（每次載入都跑，但只在版本不符時實際動作）
+	// 6C. 版本升級檢查
 	// ----------------------------------------------------------
 	if ( class_exists( 'Anime_Sync_Installer' ) ) {
 		( new Anime_Sync_Installer() )->maybe_upgrade();
@@ -321,26 +358,23 @@ add_action( 'plugins_loaded', function () {
 		if ( is_admin() ) {
 			add_action( 'admin_notices', function () {
 				echo '<div class="notice notice-warning"><p>';
-				echo '<strong>Anime Sync Pro</strong>：未偵測到 ';
+				echo '<strong>Anime Sync Pro</strong>:未偵測到 ';
 				echo '<a href="https://www.advancedcustomfields.com/" target="_blank" rel="noopener">Advanced Custom Fields</a>';
-				echo '，匯入 / 同步 / 後台管理功能將停用。前端評分與追蹤狀態系統仍可使用。';
+				echo ',匯入 / 同步 / 後台管理功能將停用。前端評分與追蹤狀態系統仍可使用。';
 				echo '</p></div>';
 			} );
 		}
 		return;
 	}
 
-	// 6B-1. 初始化 ACF 欄位組
 	if ( class_exists( 'Anime_Sync_ACF_Fields' ) ) {
 		new Anime_Sync_ACF_Fields();
 	}
 
-	// 6B-2. 初始化前台
 	if ( class_exists( 'Anime_Sync_Frontend' ) ) {
 		new Anime_Sync_Frontend();
 	}
 
-	// 6B-3. 後台 + Cron 環境
 	if ( is_admin() || ( defined( 'DOING_CRON' ) && DOING_CRON ) ) {
 
 		$rate_limiter = class_exists( 'Anime_Sync_Rate_Limiter' )
@@ -376,7 +410,7 @@ add_action( 'plugins_loaded', function () {
 		}
 
 		// ------------------------------------------------------
-		// [改進] enrich 補抓動作：加入錯誤處理與指數退避重試
+		// enrich 補抓動作:加入錯誤處理與指數退避重試
 		// ------------------------------------------------------
 		if ( $import_manager ) {
 			add_action(
@@ -390,12 +424,10 @@ add_action( 'plugins_loaded', function () {
 					$result = $import_manager->enrich_single( $post_id );
 
 					if ( ! is_wp_error( $result ) ) {
-						// 成功：清掉重試計數
 						delete_post_meta( $post_id, '_enrich_retry' );
 						return;
 					}
 
-					// 失敗：指數退避重試（1h → 4h → 16h）
 					$retry_count = (int) get_post_meta( $post_id, '_enrich_retry', true );
 					$max_retries = 3;
 
@@ -409,7 +441,6 @@ add_action( 'plugins_loaded', function () {
 							[ $post_id ]
 						);
 					} else {
-						// 超過重試次數，標記放棄
 						update_post_meta( $post_id, '_enrich_failed', current_time( 'mysql' ) );
 					}
 
@@ -433,20 +464,14 @@ add_action( 'plugins_loaded', function () {
 
 // ============================================================
 // 7. Init priority 99：rewrite flush + taxonomy seed
-//     兩個動作都需要在 CPT / taxonomy 註冊完成後（priority 10）才能跑，
-//     所以統一掛在 priority 99。
 // ============================================================
 add_action( 'init', function () {
 
-	// 7-1. Rewrite Rules 刷新
 	if ( get_option( 'anime_sync_flush_rewrite' ) ) {
 		flush_rewrite_rules();
 		delete_option( 'anime_sync_flush_rewrite' );
 	}
 
-	// 7-2. [新增] Taxonomy seed 觸發
-	//      由 Anime_Sync_Installer::activate() / maybe_upgrade() 設置 transient，
-	//      此處在 taxonomy 註冊完成後才實際執行 wp_insert_term()。
 	if ( class_exists( 'Anime_Sync_Installer' ) ) {
 		( new Anime_Sync_Installer() )->run_pending_seed();
 	}
@@ -455,12 +480,6 @@ add_action( 'init', function () {
 
 // ============================================================
 // 8. 同步 post_title → anime_title_chinese
-// [修正] 原本 priority 10 與 ACF 衝突，且會無條件覆寫 ACF 欄位。
-//        現在：
-//        - priority 改 20，跑在 ACF（priority 10）之後
-//        - 補上 wp_is_post_revision() 與 REST 自動草稿過濾
-//        - 只在「meta 為空」時才用 post_title 回填，
-//          不再覆寫使用者已透過 ACF 編輯的 anime_title_chinese
 // ============================================================
 add_action( 'save_post_anime', function ( int $post_id, WP_Post $post, bool $update ) {
 
@@ -476,7 +495,6 @@ add_action( 'save_post_anime', function ( int $post_id, WP_Post $post, bool $upd
 		return;
 	}
 
-	// auto-draft / inherit / trash 全部跳過
 	if ( in_array( $post->post_status, [ 'auto-draft', 'inherit', 'trash' ], true ) ) {
 		return;
 	}
@@ -488,8 +506,6 @@ add_action( 'save_post_anime', function ( int $post_id, WP_Post $post, bool $upd
 
 	$current_meta = get_post_meta( $post_id, 'anime_title_chinese', true );
 
-	// 只在 meta 為空（尚未填入中文標題）時才用 post_title 回填。
-	// 若 meta 已有值，代表使用者已透過 ACF 編輯過，不應被 post_title 覆寫。
 	if ( $current_meta === '' || $current_meta === null ) {
 		update_post_meta( $post_id, 'anime_title_chinese', $new_title );
 	}
