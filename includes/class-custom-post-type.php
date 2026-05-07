@@ -3,6 +3,16 @@
  * Custom Post Type — 後台列表欄位與更新訊息
  *
  * @package Anime_Sync_Pro
+ * @version 1.1.0
+ *
+ * Changelog:
+ *   1.1.0 — 後台欄位優化
+ *           - [修正] 「上次 API 同步時間」讀錯 meta key
+ *                   原本讀 anime_last_sync（從未被任何地方寫入），
+ *                   實際 import-manager 寫的是 anime_sync_time，
+ *                   修正後此欄才會真的顯示時間。
+ *           - [改進] 時間欄位排序加 meta_type=DATETIME，
+ *                   未來若寫入格式變動仍能正確排序。
  */
 
 if ( ! defined( 'ABSPATH' ) ) {
@@ -11,24 +21,18 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 class Anime_Sync_Custom_Post_Type {
 
-	/**
-	 * Constructor
-	 */
 	public function __construct() {
 		$post_type = 'anime';
 
-		add_filter( "manage_{$post_type}_posts_columns", [ $this, 'add_admin_columns' ] );
-		add_action( "manage_{$post_type}_posts_custom_column", [ $this, 'render_admin_columns' ], 10, 2 );
-		add_filter( "manage_edit-{$post_type}_sortable_columns", [ $this, 'sortable_columns' ] );
+		add_filter( "manage_{$post_type}_posts_columns",          [ $this, 'add_admin_columns' ] );
+		add_action( "manage_{$post_type}_posts_custom_column",    [ $this, 'render_admin_columns' ], 10, 2 );
+		add_filter( "manage_edit-{$post_type}_sortable_columns",  [ $this, 'sortable_columns' ] );
 
 		add_filter( 'post_updated_messages', [ $this, 'custom_messages' ] );
-		add_action( 'pre_get_posts', [ $this, 'handle_column_sorting' ] );
-		add_action( 'admin_head', [ $this, 'add_admin_styles' ] );
+		add_action( 'pre_get_posts',         [ $this, 'handle_column_sorting' ] );
+		add_action( 'admin_head',            [ $this, 'add_admin_styles' ] );
 	}
 
-	/**
-	 * 新增自訂欄位到後台列表
-	 */
 	public function add_admin_columns( array $columns ): array {
 		$new_columns = [];
 		foreach ( $columns as $key => $value ) {
@@ -40,19 +44,13 @@ class Anime_Sync_Custom_Post_Type {
 				$new_columns['anime_status_col'] = '狀態';
 				$new_columns['anime_score']      = '評分';
 				$new_columns['anime_season_col'] = '季度';
-
-				// 你要的兩欄
 				$new_columns['anime_sync']       = '上次 API 同步時間';
 				$new_columns['anime_updated']    = '資料最後更新時間';
 			}
 		}
-
 		return $new_columns;
 	}
 
-	/**
-	 * 渲染後台列表內容
-	 */
 	public function render_admin_columns( string $column, int $post_id ): void {
 		switch ( $column ) {
 
@@ -62,21 +60,19 @@ class Anime_Sync_Custom_Post_Type {
 					$cover_url = get_post_meta( $post_id, 'anime_cover_image', true )
 						?: get_post_meta( $post_id, 'anime_cover_url', true );
 				}
-
 				if ( $cover_url ) {
 					printf(
 						'<img src="%s" class="anime-admin-thumb" loading="lazy" alt="封面">',
 						esc_url( $cover_url )
 					);
 				} else {
-					echo '<div class="anime-admin-thumb" style="display:flex;align-items:center;justify-content:center;font-size:9px;color:#ccc;">NO IMG</div>';
+					echo '<div class="anime-admin-thumb anime-admin-thumb-empty">NO IMG</div>';
 				}
 				break;
 
 			case 'anime_anilist_id':
 				$id = get_post_meta( $post_id, 'anime_anilist_id', true )
 					?: get_post_meta( $post_id, 'anime_id_anilist', true );
-
 				if ( $id ) {
 					printf(
 						'<a href="https://anilist.co/anime/%s" target="_blank" rel="noopener noreferrer">#%s</a>',
@@ -91,13 +87,12 @@ class Anime_Sync_Custom_Post_Type {
 			case 'anime_status_col':
 				$status     = get_post_meta( $post_id, 'anime_status', true );
 				$status_map = [
-					'FINISHED'          => [ '已完結', '#2ecc71' ],
-					'RELEASING'         => [ '連載中', '#3498db' ],
-					'NOT_YET_RELEASED'  => [ '未播出', '#95a5a6' ],
-					'CANCELLED'         => [ '已取消', '#e74c3c' ],
-					'HIATUS'            => [ '休播中', '#f39c12' ],
+					'FINISHED'         => [ '已完結', '#2ecc71' ],
+					'RELEASING'        => [ '連載中', '#3498db' ],
+					'NOT_YET_RELEASED' => [ '未播出', '#95a5a6' ],
+					'CANCELLED'        => [ '已取消', '#e74c3c' ],
+					'HIATUS'           => [ '休播中', '#f39c12' ],
 				];
-
 				if ( $status && isset( $status_map[ $status ] ) ) {
 					printf(
 						'<span class="anime-status-badge" style="border-left: 3px solid %s;">%s</span>',
@@ -117,31 +112,27 @@ class Anime_Sync_Custom_Post_Type {
 				break;
 
 			case 'anime_season_col':
-				// Bug AW fix: normalize to uppercase before map lookup
 				$season = strtoupper( (string) get_post_meta( $post_id, 'anime_season', true ) );
 				$year   = get_post_meta( $post_id, 'anime_season_year', true );
-
 				$season_map = [
 					'WINTER' => '冬',
 					'SPRING' => '春',
 					'SUMMER' => '夏',
 					'FALL'   => '秋',
 				];
-
 				echo ( $year && $season )
 					? esc_html( $year . ' ' . ( $season_map[ $season ] ?? $season ) )
 					: '<span class="na">—</span>';
 				break;
 
-			// 1) 上次 API 同步時間：讀 anime_last_sync
+			// [修正 1.1.0] 改讀 anime_sync_time（import-manager 實際寫入的 key）
 			case 'anime_sync':
-				$sync = get_post_meta( $post_id, 'anime_last_sync', true );
+				$sync = get_post_meta( $post_id, 'anime_sync_time', true );
 				echo $sync
 					? esc_html( wp_date( 'Y-m-d H:i', strtotime( $sync ) ) )
 					: '<span class="na">—</span>';
 				break;
 
-			// 2) 資料最後更新時間：建議直接讀 _enriched_at（你 enrich 控制值本來就用它）
 			case 'anime_updated':
 				$updated = get_post_meta( $post_id, '_enriched_at', true );
 				echo $updated
@@ -155,11 +146,9 @@ class Anime_Sync_Custom_Post_Type {
 		$columns['anime_anilist_id'] = 'anime_anilist_id';
 		$columns['anime_score']      = 'anime_score_anilist';
 		$columns['anime_season_col'] = 'anime_season_year';
-
-		// 讓兩個時間欄位可排序（都用 meta value）
-		$columns['anime_sync']       = 'anime_last_sync';
+		// [修正 1.1.0] orderby key 與 render 對齊
+		$columns['anime_sync']       = 'anime_sync_time';
 		$columns['anime_updated']    = '_enriched_at';
-
 		return $columns;
 	}
 
@@ -172,10 +161,12 @@ class Anime_Sync_Custom_Post_Type {
 
 		if ( in_array( $orderby, [ 'anime_anilist_id', 'anime_score_anilist', 'anime_season_year' ], true ) ) {
 			$query->set( 'meta_key', $orderby );
-			$query->set( 'orderby', 'meta_value_num' );
-		} elseif ( in_array( $orderby, [ 'anime_last_sync', '_enriched_at' ], true ) ) {
-			$query->set( 'meta_key', $orderby );
-			$query->set( 'orderby', 'meta_value' );
+			$query->set( 'orderby',  'meta_value_num' );
+		} elseif ( in_array( $orderby, [ 'anime_sync_time', '_enriched_at' ], true ) ) {
+			// [改進 1.1.0] meta_type DATETIME 確保時間排序穩定
+			$query->set( 'meta_key',  $orderby );
+			$query->set( 'meta_type', 'DATETIME' );
+			$query->set( 'orderby',   'meta_value' );
 		}
 	}
 
@@ -185,6 +176,7 @@ class Anime_Sync_Custom_Post_Type {
 			echo '<style>
 				.column-anime_cover { width: 60px; }
 				.anime-admin-thumb { width: 45px; height: 63px; object-fit: cover; border-radius: 4px; border: 1px solid #ddd; display: block; background: #f8f9fa; }
+				.anime-admin-thumb-empty { display: flex; align-items: center; justify-content: center; font-size: 9px; color: #ccc; }
 				.anime-status-badge { padding-left: 8px; font-weight: 600; font-size: 12px; }
 				.na { color: #aaa; }
 				.column-anime_anilist_id, .column-anime_score { width: 100px; }
@@ -209,7 +201,6 @@ class Anime_Sync_Custom_Post_Type {
 			9  => '動漫已排程發布。',
 			10 => '動漫草稿已更新。',
 		];
-
 		return $messages;
 	}
 }
