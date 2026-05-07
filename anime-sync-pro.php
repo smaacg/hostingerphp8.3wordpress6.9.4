@@ -377,9 +377,8 @@ add_action( 'plugins_loaded', function () {
 
 	if ( is_admin() || ( defined( 'DOING_CRON' ) && DOING_CRON ) ) {
 
-		$rate_limiter = class_exists( 'Anime_Sync_Rate_Limiter' )
-			? new Anime_Sync_Rate_Limiter()
-			: null;
+$rate_limiter = class_exists('Anime_Sync_Rate_Limiter') ? Anime_Sync_Rate_Limiter::get_instance() : null;
+
 
 		$id_mapper = class_exists( 'Anime_Sync_ID_Mapper' )
 			? new Anime_Sync_ID_Mapper( $rate_limiter )
