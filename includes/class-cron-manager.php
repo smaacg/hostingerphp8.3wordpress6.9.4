@@ -51,7 +51,7 @@ class Anime_Sync_Cron_Manager {
     public function __construct( Anime_Sync_Import_Manager $import_manager ) {
         $this->import_manager = $import_manager;
         $this->logger         = new Anime_Sync_Error_Logger();
-        $this->rate_limiter   = new Anime_Sync_Rate_Limiter();
+        $this->rate_limiter = Anime_Sync_Rate_Limiter::get_instance();
 
         add_filter( 'cron_schedules', [ $this, 'add_custom_schedules' ] );
 
