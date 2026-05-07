@@ -2,17 +2,36 @@
 /**
  * 檔案名稱: includes/class-api-handler.php
  *
- * ACB – get_core_anime_data()：只打 AniList + Bangumi subject，目標 < 15 秒
- *       fetch_wikipedia_url() timeout 5s；fetch_animethemes() timeout 8s
- * ACD – get_series_tree()、fetch_anilist_popularity()、SERIES_RELATION_TYPES
- * ACE – expand_series_tree() 補入 relation_type 記錄
- *       fetch_anilist_popularity() query 補入 episodes 欄位
- *       find_existing_post() 確保正確實作
- * ACF – fetch_animethemes() include 加入 videos.audio，audio_url 存入 themes
- *       enrich_anime_data() Staff/Cast 改為 Bangumi 直接取代（不合併）
- *       get_full_anime_data() Staff/Cast 改為 Bangumi 優先取代
- * ACG – 新增 USER_AGENT 常數，統一所有 Bangumi / Jikan / AnimeThemes 請求
- *       新增 ajax_resync_bangumi()：強制覆蓋 Bangumi 資料至指定文章
+ * @version 1.1.0
+ *
+ * Changelog:
+ *   1.1.0 — Rate limiter 整合強化（搭配 class-rate-limiter.php 1.1.0）
+ *           - [變更] constructor 改用 Anime_Sync_Rate_Limiter::get_instance()
+ *                   配合 rate-limiter 1.1.0 的 singleton（constructor 已 private）
+ *           - [新增] private anilist_request() helper
+ *                   集中處理 wp_remote_post + 429 重試 + stats 記錄
+ *                   重試上限 3 次，每次依 Retry-After header 動態等待
+ *                   失敗會記入 anime_sync_api_stats option
+ *           - [變更] fetch_anilist_data / fetch_anilist_relations /
+ *                   fetch_anilist_node_data / fetch_anilist_popularity
+ *                   4 處 wp_remote_post 統一改為呼叫 anilist_request()
+ *                   原本寫死的 sleep(65) 改為讀 Retry-After
+ *           - [調整] timeout 從 20s 收斂至 15s（main / popularity），
+ *                   relations / node_data 維持 12s
+ *
+ *   ACB – get_core_anime_data()：只打 AniList + Bangumi subject，目標 < 15 秒
+ *         fetch_wikipedia_url() timeout 5s；fetch_animethemes() timeout 8s
+ *   ACD – get_series_tree()、fetch_anilist_popularity()、SERIES_RELATION_TYPES
+ *   ACE – expand_series_tree() 補入 relation_type 記錄
+ *         fetch_anilist_popularity() query 補入 episodes 欄位
+ *         find_existing_post() 確保正確實作
+ *   ACF – fetch_animethemes() include 加入 videos.audio，audio_url 存入 themes
+ *         enrich_anime_data() Staff/Cast 改為 Bangumi 直接取代（不合併）
+ *         get_full_anime_data() Staff/Cast 改為 Bangumi 優先取代
+ *   ACG – 新增 USER_AGENT 常數，統一所有 Bangumi / Jikan / AnimeThemes 請求
+ *         新增 ajax_resync_bangumi()：強制覆蓋 Bangumi 資料至指定文章
+ *
+ * @package Anime_Sync_Pro
  */
 
 if ( ! defined( 'ABSPATH' ) ) {
@@ -48,7 +67,8 @@ class Anime_Sync_API_Handler {
         ?Anime_Sync_Rate_Limiter $rate_limiter = null,
         ?Anime_Sync_ID_Mapper    $id_mapper    = null
     ) {
-        $this->rate_limiter = $rate_limiter ?? new Anime_Sync_Rate_Limiter();
+        // 1.1.0：rate-limiter constructor 已改 private，必須用 get_instance()
+        $this->rate_limiter = $rate_limiter ?? Anime_Sync_Rate_Limiter::get_instance();
         $this->id_mapper    = $id_mapper    ?? new Anime_Sync_ID_Mapper();
     }
 
@@ -609,34 +629,9 @@ public function get_series_tree( int $anilist_id ): array|WP_Error {
           }
         }';
 
-        $this->rate_limiter->wait_if_needed( 'anilist' );
-        $payload  = wp_json_encode( [ 'query' => $query, 'variables' => [ 'page' => $page ] ] );
-        $response = wp_remote_post( self::ANILIST_ENDPOINT, [
-            'timeout' => 20,
-            'headers' => [ 'Content-Type' => 'application/json', 'Accept' => 'application/json' ],
-            'body'    => $payload,
-        ] );
+        $decoded = $this->anilist_request( $query, [ 'page' => $page ], 15 );
+        if ( is_wp_error( $decoded ) ) return $decoded;
 
-        if ( is_wp_error( $response ) ) return $response;
-        $code = (int) wp_remote_retrieve_response_code( $response );
-
-        if ( $code === 429 ) {
-            $this->rate_limiter->handle_rate_limit_error( $response, 'anilist' );
-            sleep( 65 );
-            $response = wp_remote_post( self::ANILIST_ENDPOINT, [
-                'timeout' => 20,
-                'headers' => [ 'Content-Type' => 'application/json', 'Accept' => 'application/json' ],
-                'body'    => $payload,
-            ] );
-            if ( is_wp_error( $response ) ) return $response;
-            $code = (int) wp_remote_retrieve_response_code( $response );
-        }
-
-        if ( $code !== 200 ) {
-            return new WP_Error( 'anilist_http_error', "AniList popularity query returned HTTP {$code}." );
-        }
-
-        $decoded  = json_decode( wp_remote_retrieve_body( $response ), true );
         $page_obj = $decoded['data']['Page'] ?? null;
         if ( ! $page_obj ) {
             return new WP_Error( 'anilist_no_page', 'AniList popularity: no Page in response.' );
@@ -879,35 +874,10 @@ update_post_meta( $post_id, 'anime_last_updated', current_time( 'mysql' ) );
           }
         }';
 
-        $this->rate_limiter->wait_if_needed( 'anilist' );
-        $payload  = wp_json_encode( [ 'query' => $query, 'variables' => [ 'id' => $anilist_id ] ] );
-        $response = wp_remote_post( self::ANILIST_ENDPOINT, [
-            'timeout' => 15,
-            'headers' => [ 'Content-Type' => 'application/json', 'Accept' => 'application/json' ],
-            'body'    => $payload,
-        ] );
+        $decoded = $this->anilist_request( $query, [ 'id' => $anilist_id ], 12 );
+        if ( is_wp_error( $decoded ) ) return $decoded;
 
-        if ( is_wp_error( $response ) ) return $response;
-        $code = (int) wp_remote_retrieve_response_code( $response );
-
-        if ( $code === 429 ) {
-            $this->rate_limiter->handle_rate_limit_error( $response, 'anilist' );
-            sleep( 65 );
-            $response = wp_remote_post( self::ANILIST_ENDPOINT, [
-                'timeout' => 15,
-                'headers' => [ 'Content-Type' => 'application/json', 'Accept' => 'application/json' ],
-                'body'    => $payload,
-            ] );
-            if ( is_wp_error( $response ) ) return $response;
-            $code = (int) wp_remote_retrieve_response_code( $response );
-        }
-
-        if ( $code !== 200 ) {
-            return new WP_Error( 'anilist_http_error', "fetch_anilist_relations: HTTP {$code} for ID {$anilist_id}." );
-        }
-
-        $decoded = json_decode( wp_remote_retrieve_body( $response ), true );
-        $edges   = $decoded['data']['Media']['relations']['edges'] ?? [];
+        $edges = $decoded['data']['Media']['relations']['edges'] ?? [];
 
         $result = [];
         foreach ( $edges as $edge ) {
@@ -944,35 +914,10 @@ update_post_meta( $post_id, 'anime_last_updated', current_time( 'mysql' ) );
           }
         }';
 
-        $this->rate_limiter->wait_if_needed( 'anilist' );
-        $payload  = wp_json_encode( [ 'query' => $query, 'variables' => [ 'id' => $anilist_id ] ] );
-        $response = wp_remote_post( self::ANILIST_ENDPOINT, [
-            'timeout' => 15,
-            'headers' => [ 'Content-Type' => 'application/json', 'Accept' => 'application/json' ],
-            'body'    => $payload,
-        ] );
+        $decoded = $this->anilist_request( $query, [ 'id' => $anilist_id ], 12 );
+        if ( is_wp_error( $decoded ) ) return $decoded;
 
-        if ( is_wp_error( $response ) ) return $response;
-        $code = (int) wp_remote_retrieve_response_code( $response );
-
-        if ( $code === 429 ) {
-            $this->rate_limiter->handle_rate_limit_error( $response, 'anilist' );
-            sleep( 65 );
-            $response = wp_remote_post( self::ANILIST_ENDPOINT, [
-                'timeout' => 15,
-                'headers' => [ 'Content-Type' => 'application/json', 'Accept' => 'application/json' ],
-                'body'    => $payload,
-            ] );
-            if ( is_wp_error( $response ) ) return $response;
-            $code = (int) wp_remote_retrieve_response_code( $response );
-        }
-
-        if ( $code !== 200 ) {
-            return new WP_Error( 'anilist_http_error', "fetch_anilist_node_data: HTTP {$code} for ID {$anilist_id}." );
-        }
-
-        $decoded = json_decode( wp_remote_retrieve_body( $response ), true );
-        $media   = $decoded['data']['Media'] ?? null;
+        $media = $decoded['data']['Media'] ?? null;
         if ( ! $media ) {
             return new WP_Error( 'anilist_no_media', "fetch_anilist_node_data: no Media for ID {$anilist_id}." );
         }
@@ -1096,34 +1041,9 @@ update_post_meta( $post_id, 'anime_last_updated', current_time( 'mysql' ) );
           }
         }';
 
-        $this->rate_limiter->wait_if_needed( 'anilist' );
-        $payload  = wp_json_encode( [ 'query' => $query, 'variables' => [ 'id' => $anilist_id ] ] );
-        $response = wp_remote_post( self::ANILIST_ENDPOINT, [
-            'timeout' => 20,
-            'headers' => [ 'Content-Type' => 'application/json', 'Accept' => 'application/json' ],
-            'body'    => $payload,
-        ] );
+        $decoded = $this->anilist_request( $query, [ 'id' => $anilist_id ], 15 );
+        if ( is_wp_error( $decoded ) ) return $decoded;
 
-        if ( is_wp_error( $response ) ) return $response;
-        $code = (int) wp_remote_retrieve_response_code( $response );
-
-        if ( $code === 429 ) {
-            $this->rate_limiter->handle_rate_limit_error( $response, 'anilist' );
-            sleep( 65 );
-            $response = wp_remote_post( self::ANILIST_ENDPOINT, [
-                'timeout' => 20,
-                'headers' => [ 'Content-Type' => 'application/json', 'Accept' => 'application/json' ],
-                'body'    => $payload,
-            ] );
-            if ( is_wp_error( $response ) ) return $response;
-            $code = (int) wp_remote_retrieve_response_code( $response );
-        }
-
-        if ( $code !== 200 ) {
-            return new WP_Error( 'anilist_http_error', "AniList returned HTTP {$code} for ID {$anilist_id}." );
-        }
-
-        $decoded = json_decode( wp_remote_retrieve_body( $response ), true );
         if ( empty( $decoded['data']['Media'] ) ) {
             return new WP_Error( 'anilist_empty', "AniList returned no Media for ID {$anilist_id}." );
         }
@@ -1871,5 +1791,87 @@ private function fetch_mb_artist( string $name ): array {
 
     public function clean_synopsis_public( string $text ): string {
         return $this->clean_synopsis( $text );
+    }
+
+    // =========================================================================
+    // PRIVATE – AniList 請求 helper（1.1.0 新增）
+    //
+    // 集中處理 wp_remote_post + 429 重試 + stats 記錄。
+    // 重試上限 3 次，每次依 Retry-After header 動態等待。
+    // 失敗會記入 anime_sync_api_stats option，可由
+    //   wp option get anime_sync_api_stats --format=json
+    // 查看。
+    // =========================================================================
+    private function anilist_request( string $query, array $variables, int $timeout = 15 ): array|WP_Error {
+
+        $payload = wp_json_encode( [
+            'query'     => $query,
+            'variables' => $variables,
+        ] );
+
+        $args = [
+            'timeout' => $timeout,
+            'headers' => [
+                'Content-Type' => 'application/json',
+                'Accept'       => 'application/json',
+            ],
+            'body'    => $payload,
+        ];
+
+        $max_attempts = 3;
+        $attempt      = 0;
+        $last_error   = null;
+
+        while ( $attempt < $max_attempts ) {
+            $attempt++;
+
+            $this->rate_limiter->wait_if_needed( 'anilist' );
+            $response = wp_remote_post( self::ANILIST_ENDPOINT, $args );
+
+            // 網路錯誤：短暫等待後重試
+            if ( is_wp_error( $response ) ) {
+                $last_error = $response;
+                $this->rate_limiter->record_stat( 'anilist', 'failed' );
+                if ( $attempt < $max_attempts ) {
+                    sleep( 5 );
+                    $this->rate_limiter->record_stat( 'anilist', 'retry' );
+                    continue;
+                }
+                return $last_error;
+            }
+
+            $code = (int) wp_remote_retrieve_response_code( $response );
+
+            // 200 OK：解碼並回傳
+            if ( $code === 200 ) {
+                $decoded = json_decode( wp_remote_retrieve_body( $response ), true );
+                if ( ! is_array( $decoded ) ) {
+                    $this->rate_limiter->record_stat( 'anilist', 'failed' );
+                    return new WP_Error( 'anilist_decode_error', 'AniList response JSON decode failed.' );
+                }
+                $this->rate_limiter->record_stat( 'anilist', 'success' );
+                return $decoded;
+            }
+
+            // 429 Rate Limited：依 Retry-After 等待後重試
+            if ( $code === 429 ) {
+                $this->rate_limiter->record_stat( 'anilist', 'rate_limited' );
+                if ( $attempt < $max_attempts ) {
+                    $wait = $this->rate_limiter->handle_rate_limit_error( $response, 'anilist' );
+                    sleep( $wait );
+                    $this->rate_limiter->record_stat( 'anilist', 'retry' );
+                    continue;
+                }
+                $this->rate_limiter->record_stat( 'anilist', 'failed' );
+                return new WP_Error( 'anilist_rate_limited', 'AniList rate limit exceeded after 3 attempts.' );
+            }
+
+            // 其他 HTTP 錯誤：直接失敗（不重試）
+            $this->rate_limiter->record_stat( 'anilist', 'failed' );
+            return new WP_Error( 'anilist_http_error', "AniList returned HTTP {$code}." );
+        }
+
+        // 理論上不會到這裡
+        return $last_error ?: new WP_Error( 'anilist_unknown', 'AniList request failed.' );
     }
 }
