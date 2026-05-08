@@ -1,11 +1,18 @@
 <?php
 /**
- * Editorial Routing v3
+ * Editorial Routing v3.1
  *
  * 文章內容層專用：
  * - 註冊 channel taxonomy（綁定 post）
  * - 提供 /news/anime/post-slug/、/review/manga/post-slug/、/feature/game/post-slug/
  * - 提供 /announcement/post-slug/ 獨立公告路由（無 channel）
+ *
+ * v3.1 變更：
+ * - [改進] channel taxonomy 改為 hierarchical = true
+ *          編輯畫面從「tag 輸入框」改為「category 勾選清單」，
+ *          解決使用者必須手動輸入頻道名稱的 UX 問題。
+ *          rewrite / permalink / query 行為完全不受影響
+ *          （permalink 由本 class 自行 filter，與 hierarchical 無關）。
  *
  * v3 變更：
  * - [修正] rewrite 規則 6 限定為 announcement 專用，
@@ -81,8 +88,13 @@ class Anime_Sync_Editorial_Routing {
 	/**
 	 * 註冊文章頻道 taxonomy
 	 *
-	 * query_var=channel 已會自動把 channel 加進 query_vars 白名單，
-	 * 因此不再額外掛 query_vars filter。
+	 * [v3.1] hierarchical 改為 true：
+	 *   - 編輯文章時右側欄會顯示為勾選清單（與「分類」相同 UI），
+	 *     不再是必須手動輸入的 tag 樣式輸入框。
+	 *   - 不影響 permalink / rewrite，因為 permalink 由 filter_post_permalink() 自行組裝，
+	 *     rewrite 由 add_rewrite_rules() 自行定義，皆與 hierarchical 無關。
+	 *   - query_var=channel 已會自動把 channel 加進 query_vars 白名單，
+	 *     因此不再額外掛 query_vars filter。
 	 */
 	public function register_channel_taxonomy(): void {
 		register_taxonomy( 'channel', [ 'post' ], [
@@ -92,6 +104,8 @@ class Anime_Sync_Editorial_Routing {
 				'search_items'               => '搜尋頻道',
 				'popular_items'              => '常用頻道',
 				'all_items'                  => '所有頻道',
+				'parent_item'                => '上層頻道',
+				'parent_item_colon'          => '上層頻道：',
 				'edit_item'                  => '編輯頻道',
 				'update_item'                => '更新頻道',
 				'add_new_item'               => '新增頻道',
@@ -105,7 +119,7 @@ class Anime_Sync_Editorial_Routing {
 			'show_ui'            => true,
 			'show_admin_column'  => true,
 			'show_in_rest'       => true,
-			'hierarchical'       => false,
+			'hierarchical'       => true,
 			'query_var'          => 'channel',
 			'rewrite'            => false,
 			'show_in_nav_menus'  => true,
