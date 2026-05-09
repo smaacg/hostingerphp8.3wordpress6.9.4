@@ -1028,3 +1028,262 @@ add_action( 'wp_enqueue_scripts', function () {
         wp_enqueue_style( 'smacg-columns', $base_url . 'columns.css', [ 'smacg-news' ], $ver_columns );
     }
 }, 20 );
+/* =============================================================
+ *  混合制 URL 策略 — Gemini 2.0 Flash 版
+ *  v1.0.0 — 2026-05-08
+ *
+ *  策略：
+ *    - 公告 (announcement) → 數字 ID slug
+ *    - 新聞 (news)         → 數字 ID slug
+ *    - 評論 (review)       → Gemini 英文 slug
+ *    - 專題 (feature)      → Gemini 英文 slug
+ *
+ *  作用範圍：僅限 post type = 'post'
+ *  動漫 CPT 等其他類型完全不受影響
+ *
+ *  成本：Gemini 2.0 Flash 免費版（每天 1500 次請求免費）
+ * ============================================================= */
+
+/**
+ * 走數字 ID 的內容類型清單（category slug）
+ */
+function weixiaoacg_id_slug_categories(): array {
+	return [ 'announcement', 'news' ];
+}
+
+/**
+ * 走 Gemini 英文 slug 的內容類型清單（category slug）
+ */
+function weixiaoacg_llm_slug_categories(): array {
+	return [ 'review', 'feature' ];
+}
+
+/* -------------------------------------------------------------
+ * 第一階段：wp_insert_post_data — 處理 LLM slug 翻譯
+ * （ID slug 無法在這階段處理，因為新文章還沒有 ID）
+ * ----------------------------------------------------------- */
+add_filter( 'wp_insert_post_data', 'weixiaoacg_handle_slug_strategy', 10, 2 );
+function weixiaoacg_handle_slug_strategy( array $data, array $postarr ): array {
+	if ( ( $data['post_type'] ?? 'post' ) !== 'post' ) {
+		return $data;
+	}
+	if ( ( $data['post_status'] ?? '' ) === 'auto-draft' ) {
+		return $data;
+	}
+	if ( empty( $data['post_title'] ) ) {
+		return $data;
+	}
+
+	$category_slug = weixiaoacg_get_primary_category_slug_from_input( $postarr );
+
+	// 評論 / 專題 → Gemini 翻譯
+	if ( in_array( $category_slug, weixiaoacg_llm_slug_categories(), true ) ) {
+		$current_slug = $postarr['post_name'] ?? '';
+
+		// 已有純 ASCII slug → 尊重作者手填
+		if ( $current_slug !== '' && ! preg_match( '/[^\x00-\x7F]/', $current_slug ) ) {
+			return $data;
+		}
+
+		$english_slug = weixiaoacg_generate_slug_via_gemini( $data['post_title'] );
+		if ( $english_slug !== '' ) {
+			$data['post_name'] = $english_slug;
+		}
+	}
+
+	return $data;
+}
+
+/* -------------------------------------------------------------
+ * 第二階段：save_post — 處理 ID slug
+ * ----------------------------------------------------------- */
+add_action( 'save_post_post', 'weixiaoacg_apply_id_slug_strategy', 99, 3 );
+function weixiaoacg_apply_id_slug_strategy( int $post_id, WP_Post $post, bool $update ): void {
+	if ( wp_is_post_revision( $post_id ) || wp_is_post_autosave( $post_id ) ) {
+		return;
+	}
+	if ( $post->post_status === 'auto-draft' ) {
+		return;
+	}
+
+	$category_slug = weixiaoacg_get_primary_category_slug_from_post( $post_id );
+
+	if ( ! in_array( $category_slug, weixiaoacg_id_slug_categories(), true ) ) {
+		return;
+	}
+
+	if ( ctype_digit( $post->post_name ) && (int) $post->post_name === $post_id ) {
+		return;
+	}
+
+	remove_action( 'save_post_post', __FUNCTION__, 99 );
+	wp_update_post( [
+		'ID'        => $post_id,
+		'post_name' => (string) $post_id,
+	] );
+	add_action( 'save_post_post', __FUNCTION__, 99, 3 );
+}
+
+/* -------------------------------------------------------------
+ * 取得主分類 slug —— 從編輯畫面送出的資料判斷
+ * ----------------------------------------------------------- */
+function weixiaoacg_get_primary_category_slug_from_input( array $postarr ): string {
+	$category_ids = $postarr['post_category'] ?? [];
+
+	if ( empty( $category_ids ) && isset( $postarr['tax_input']['category'] ) ) {
+		$category_ids = (array) $postarr['tax_input']['category'];
+	}
+
+	if ( empty( $category_ids ) ) {
+		return '';
+	}
+
+	foreach ( (array) $category_ids as $cat_id ) {
+		$cat_id = (int) $cat_id;
+		if ( $cat_id <= 0 ) {
+			continue;
+		}
+		$term = get_term( $cat_id, 'category' );
+		if ( $term && ! is_wp_error( $term ) && isset( $term->slug ) ) {
+			$slug = (string) $term->slug;
+			if ( in_array( $slug, [ 'announcement', 'news', 'review', 'feature' ], true ) ) {
+				return $slug;
+			}
+		}
+	}
+
+	return '';
+}
+
+/* -------------------------------------------------------------
+ * 取得主分類 slug —— 從已儲存的文章判斷
+ * ----------------------------------------------------------- */
+function weixiaoacg_get_primary_category_slug_from_post( int $post_id ): string {
+	$terms = get_the_category( $post_id );
+	if ( empty( $terms ) ) {
+		return '';
+	}
+	foreach ( $terms as $term ) {
+		if ( isset( $term->slug ) && in_array( $term->slug, [ 'announcement', 'news', 'review', 'feature' ], true ) ) {
+			return (string) $term->slug;
+		}
+	}
+	return '';
+}
+
+/* -------------------------------------------------------------
+ * Gemini 2.0 Flash 呼叫
+ * ----------------------------------------------------------- */
+function weixiaoacg_generate_slug_via_gemini( string $title ): string {
+	$cache_key = 'weixiaoacg_slug_' . md5( $title );
+	$cached    = get_transient( $cache_key );
+	if ( $cached !== false ) {
+		return (string) $cached;
+	}
+
+	if ( ! defined( 'WEIXIAOACG_GEMINI_API_KEY' ) || WEIXIAOACG_GEMINI_API_KEY === '' ) {
+		return '';
+	}
+
+	$system_prompt = '你是 ACG 內容網站的 URL slug 產生器（評論 / 專題用，需要高品質 SEO slug）。'
+		. '收到中文／日文文章標題後，產出英文 URL slug。'
+		. '規則：'
+		. '(1) 全小寫 a-z 0-9 連字號；'
+		. '(2) 長度 5-60 字元；'
+		. '(3) 作品名優先使用官方英文名或廣為流通的羅馬拼音縮寫'
+		. '（葬送的芙莉蓮→frieren、我推的孩子→oshi-no-ko、咒術迴戰→jujutsu-kaisen、'
+		. 'SPY×FAMILY→spy-family、鏈鋸人→chainsaw-man、進擊的巨人→aot）；'
+		. '(4) 評論類加上 -review 字尾、專題類加上主題關鍵字；'
+		. '(5) 省略助詞與停用詞（the / of / and / a / 第 / 季 / 集）；'
+		. '(6) 數字保留阿拉伯數字（第二季→s2、第18話→ep18、2026 春→spring-2026）；'
+		. '(7) AI 工具相關文章：ChatGPT→chatgpt、Claude→claude、Midjourney→midjourney、Sora→sora；'
+		. '(8) 只回傳純 slug，不要任何解釋、引號、句點、換行。';
+
+	$endpoint = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key='
+		. urlencode( WEIXIAOACG_GEMINI_API_KEY );
+
+	$body = [
+		'systemInstruction' => [
+			'parts' => [ [ 'text' => $system_prompt ] ],
+		],
+		'contents' => [
+			[
+				'role'  => 'user',
+				'parts' => [ [ 'text' => $title ] ],
+			],
+		],
+		'generationConfig' => [
+			'temperature'     => 0.3,
+			'maxOutputTokens' => 60,
+		],
+	];
+
+	$response = wp_remote_post( $endpoint, [
+		'headers' => [
+			'Content-Type' => 'application/json',
+		],
+		'body'    => wp_json_encode( $body ),
+		'timeout' => 15,
+	] );
+
+	if ( is_wp_error( $response ) || wp_remote_retrieve_response_code( $response ) !== 200 ) {
+		if ( class_exists( 'Anime_Sync_Error_Logger' ) ) {
+			Anime_Sync_Error_Logger::warning( 'Gemini slug request failed', [
+				'title' => $title,
+				'error' => is_wp_error( $response ) ? $response->get_error_message() : wp_remote_retrieve_body( $response ),
+			] );
+		}
+		return '';
+	}
+
+	$json = json_decode( wp_remote_retrieve_body( $response ), true );
+	$raw  = $json['candidates'][0]['content']['parts'][0]['text'] ?? '';
+	$slug = sanitize_title( trim( $raw ) );
+
+	if ( $slug === '' || strlen( $slug ) < 3 || strlen( $slug ) > 60 ) {
+		return '';
+	}
+
+	set_transient( $cache_key, $slug, MONTH_IN_SECONDS );
+	return $slug;
+}
+
+/* -------------------------------------------------------------
+ * Fallback：避免中文 URL 流出
+ * 評論 / 專題 Gemini 失敗時也用 post_id 兜底
+ * ----------------------------------------------------------- */
+add_filter( 'wp_unique_post_slug', 'weixiaoacg_slug_fallback_to_id', 10, 4 );
+function weixiaoacg_slug_fallback_to_id( string $slug, int $post_id, string $post_status, string $post_type ): string {
+	if ( $post_type !== 'post' ) {
+		return $slug;
+	}
+	if ( preg_match( '/[^\x00-\x7F]/', $slug ) ) {
+		return (string) $post_id;
+	}
+	return $slug;
+}
+
+/* -------------------------------------------------------------
+ * 編輯畫面提示：評論 / 專題 slug 異常時提醒
+ * ----------------------------------------------------------- */
+add_action( 'edit_form_after_title', 'weixiaoacg_slug_warning_notice' );
+function weixiaoacg_slug_warning_notice( WP_Post $post ): void {
+	if ( $post->post_type !== 'post' || $post->post_status === 'auto-draft' ) {
+		return;
+	}
+
+	$category_slug = weixiaoacg_get_primary_category_slug_from_post( $post->ID );
+
+	if ( ! in_array( $category_slug, weixiaoacg_llm_slug_categories(), true ) ) {
+		return;
+	}
+
+	if ( ctype_digit( $post->post_name ) ) {
+		echo '<div class="notice notice-warning inline" style="margin:10px 0;padding:10px;">';
+		echo '⚠️ 此' . esc_html( $category_slug === 'review' ? '評論' : '專題' );
+		echo '文章 slug 為數字 ID（' . esc_html( $post->post_name ) . '），';
+		echo 'Gemini API 可能暫時故障。請於右側「永久連結」改為英文 slug，';
+		echo '或重新儲存讓系統再試一次。';
+		echo '</div>';
+	}
+}
