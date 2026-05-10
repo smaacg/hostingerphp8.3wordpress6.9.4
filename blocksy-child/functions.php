@@ -950,7 +950,6 @@ add_filter( 'wp_insert_post_data', function ( array $data, array $postarr ): arr
     if ( $en !== '' ) $data['post_name'] = $en;
     return $data;
 }, 10, 2 );
-
 /** 第二階段：發佈後處理 ID slug（announcement / news） */
 add_action( 'save_post_post', function ( int $post_id, WP_Post $post ): void {
     if ( wp_is_post_revision( $post_id ) || wp_is_post_autosave( $post_id ) ) return;
@@ -958,10 +957,14 @@ add_action( 'save_post_post', function ( int $post_id, WP_Post $post ): void {
 
     $cat = weixiaoacg_get_post_cat_slug( [], $post_id );
     if ( ! in_array( $cat, WEIXIAOACG_ID_CATS, true ) ) return;
-    if ( ctype_digit( $post->post_name ) && (int) $post->post_name === $post_id ) return;
+
+    $target = (string) $post_id;
+    if ( $post->post_name === $target ) return;
 
     remove_action( 'save_post_post', __FUNCTION__, 99 );
-    wp_update_post( [ 'ID' => $post_id, 'post_name' => (string) $post_id ] );
+    global $wpdb;
+    $wpdb->update( $wpdb->posts, [ 'post_name' => $target ], [ 'ID' => $post_id ] );
+    clean_post_cache( $post_id );
     add_action( 'save_post_post', __FUNCTION__, 99, 2 );
 }, 99, 2 );
 
