@@ -248,11 +248,12 @@ add_action( 'wp_enqueue_scripts', function() {
         if (file_exists($p)) wp_enqueue_script('weixiaoacg-main', weixiaoacg_THEME_URL.'/assets/js/main.js', ['weixiaoacg-api'], filemtime($p), true);
     }
 
-    if (is_singular('anime')) {
-        foreach ([
-            'weixiaoacg-anime-js' => 'anime.js',
-            'smacg-anime-status'  => 'anime-status.js',
-        ] as $h=>$f) {
+if (is_singular('anime')) {
+    foreach ([
+        'weixiaoacg-anime-js' => 'anime.js',
+        'smacg-anime-status'  => 'anime-status.js',
+        'smacg-anime-rating'  => 'anime-rating.js',
+    ] as $h=>$f) {
             $p = weixiaoacg_THEME_DIR.'/assets/js/'.$f;
             if (file_exists($p)) wp_enqueue_script($h, weixiaoacg_THEME_URL.'/assets/js/'.$f, ['weixiaoacg-api'], filemtime($p), true);
         }
