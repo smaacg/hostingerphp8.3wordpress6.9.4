@@ -1,7 +1,9 @@
 /* ============================================================
    微笑動漫 — 動漫追蹤 + 評分 UI 腳本
    路徑：/blocksy-child/assets/js/anime-status.js
-   版本：15.1 — P0 cutover，統一追番 API 到 weixiaoacg/v1
+   版本：15.2 — 新增「想看 (want)」狀態，4+1 按鈕設計
+                想看 / 追番中 / 已看完 / 棄番 為互斥狀態
+                收藏 為獨立可疊加狀態
    ============================================================ */
 'use strict';
 
@@ -19,6 +21,9 @@ document.addEventListener('DOMContentLoaded', function () {
     const loggedIn = cfg.loggedIn === true || cfg.loggedIn === '1' || cfg.loggedIn === 1;
     const apiBase  = cfg.apiUrl  || '/wp-json/weixiaoacg/v1/';
     const nonce    = cfg.nonce   || '';
+
+    /* 允許的狀態值（與後端 Anime_Sync_User_Status_Manager 對應） */
+    const VALID_STATUS = ['want', 'watching', 'completed', 'dropped'];
 
     /* ── 未登入彈出 Modal ── */
     function requireLogin() {
@@ -43,7 +48,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
     /* ── 本地狀態 ── */
     let state = {
-        status:       bar.dataset.status      || null,
+        status:       VALID_STATUS.includes(bar.dataset.status) ? bar.dataset.status : null,
         progress:     parseInt(bar.dataset.progress, 10) || 0,
         favorited:    bar.dataset.favorited   === '1',
         fullcleared:  bar.dataset.fullcleared === '1',
@@ -85,6 +90,22 @@ document.addEventListener('DOMContentLoaded', function () {
         });
     }
 
+    /* ── 統一 Toast（取代 alert）── */
+    function showTip(msg) {
+        if (typeof window.smacgShowToast === 'function') {
+            window.smacgShowToast(msg);
+            return;
+        }
+        if (pointToast) {
+            pointToast.textContent = msg;
+            pointToast.classList.remove('show');
+            void pointToast.offsetWidth;
+            pointToast.classList.add('show');
+            setTimeout(function () { pointToast.classList.remove('show'); }, 1900);
+        } else {
+            alert(msg);
+        }
+    }
 
     /* ── 積分 Toast ── */
     function showPointToast(points) {
@@ -159,39 +180,38 @@ document.addEventListener('DOMContentLoaded', function () {
     renderFav(state.favorited);
     renderClear(state.fullcleared);
 
-      /* ── 狀態按鈕 ── */
+    /* ── 狀態按鈕（4 顆互斥：want / watching / completed / dropped）── */
     statusBtns.forEach(function (btn) {
         btn.addEventListener('click', function () {
             if (!loggedIn) { requireLogin(); return; }
 
-            // 🚫 未播出時擋掉「追番中 / 已看完」
-            if (btn.disabled) {
+            const value = btn.dataset.value;
+
+            // 🚫 未播出時的擋鎖規則：
+            //   - 允許「想看 (want)」、「棄番 (dropped)」
+            //   - 擋掉「追番中 (watching)」、「已看完 (completed)」
+            //   舊版以 btn.disabled 為唯一依據；保留相容，但若是 want/dropped 應放行
+            if (btn.disabled && value !== 'want' && value !== 'dropped') {
                 const tip = btn.getAttribute('title') || '尚未播出，無法操作';
-                if (typeof window.smacgShowToast === 'function') {
-                    window.smacgShowToast(tip);
-                } else if (pointToast) {
-                    pointToast.textContent = tip;
-                    pointToast.classList.remove('show');
-                    void pointToast.offsetWidth;
-                    pointToast.classList.add('show');
-                    setTimeout(function () { pointToast.classList.remove('show'); }, 1900);
-                } else {
-                    alert(tip);
-                }
+                showTip(tip);
                 return;
             }
 
-            const value     = btn.dataset.value;
+            // 防呆：未在白名單的 value 直接忽略
+            if (!VALID_STATUS.includes(value)) return;
+
             const newVal    = state.status === value ? 'none' : value;
             const oldStatus = state.status;
             state.status = newVal === 'none' ? null : newVal;
             renderStatus(state.status);
             btn.classList.add('is-loading');
+
             callApi('status', newVal)
                 .then(function (res) {
                     if (res.success) {
                         state.status = res.entry.status;
                         renderStatus(state.status);
+                        // 已看完 → 自動補滿進度 + confetti
                         if (res.entry.status === 'completed' && totalEp > 0) {
                             state.progress    = totalEp;
                             state.fullcleared = true;
@@ -243,7 +263,7 @@ document.addEventListener('DOMContentLoaded', function () {
         });
     });
 
-    /* ── 收藏按鈕 ── */
+    /* ── 收藏按鈕（獨立疊加狀態）── */
     if (favBtn) {
         favBtn.addEventListener('click', function () {
             if (!loggedIn) { requireLogin(); return; }
@@ -354,7 +374,6 @@ document.addEventListener('DOMContentLoaded', function () {
     /* ── Slider 初始化（支援動態載入評分覆蓋 LiteSpeed 快取） ── */
     const sliderKeys = ['story', 'music', 'animation', 'voice'];
 
-    /* 套用評分到滑桿 UI（可重複呼叫，給 fetch 完成後使用） */
     function applyRatingToSliders(rating) {
         rating = rating || {};
         sliderKeys.forEach(function (key) {
@@ -369,10 +388,8 @@ document.addEventListener('DOMContentLoaded', function () {
         });
     }
 
-    /* 初次渲染：用 PHP 注入的預設值（通常是 5） */
     applyRatingToSliders(window.SmacgUserRating || {});
 
-    /* 綁定拖動事件（只綁一次） */
     sliderKeys.forEach(function (key) {
         const slider = document.getElementById('slider-' + key);
         const valEl  = document.getElementById('slider-' + key + '-val');
@@ -382,11 +399,9 @@ document.addEventListener('DOMContentLoaded', function () {
         });
     });
 
-    /* 監聽動態載入的真實評分 → 覆蓋滑桿 */
     document.addEventListener('smacg:userRatingReady', function (e) {
         applyRatingToSliders(e.detail || window.SmacgUserRating || {});
     });
-
 
     /* ── 送出 ── */
     ratingForm.addEventListener('submit', function (e) {
@@ -423,7 +438,6 @@ document.addEventListener('DOMContentLoaded', function () {
                     submitBtn.style.background = 'var(--asd-score-al, #02a9ff)';
                 }
                 const d = data.data || {};
-                /* 更新頁面顯示 */
                 if (d.avg) {
                     document.querySelectorAll('.wacg-score-main, .wacg-hero-score').forEach(function (el) {
                         el.textContent = parseFloat(d.avg).toFixed(1);
