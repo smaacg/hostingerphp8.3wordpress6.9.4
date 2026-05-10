@@ -1130,3 +1130,22 @@ add_action('wp_enqueue_scripts', function () {
         '2.0.0'
     );
 }, 20);
+/* ==========================================================
+ *  UM 公開頁面暫時關閉
+ *  - /user/{username}/ → 登入者轉到自家會員中心 /member/
+ *                       未登入者轉首頁
+ *  - /members/ → 一律轉首頁
+ *  日後做完自訂公開檔案模板再移除此段
+ * ========================================================== */
+add_action('template_redirect', function () {
+    if (!function_exists('um_is_core_page')) return;
+
+    if (um_is_core_page('user')) {
+        wp_safe_redirect(is_user_logged_in() ? home_url('/member/') : home_url('/'));
+        exit;
+    }
+    if (um_is_core_page('members')) {
+        wp_safe_redirect(home_url('/'));
+        exit;
+    }
+}, 1);  // priority 1 比 UM 自身早執行
