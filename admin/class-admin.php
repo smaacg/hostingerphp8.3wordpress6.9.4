@@ -4,11 +4,15 @@
  * Plugin Admin Class - 管理員後台邏輯（AJAX + 資產載入）
  *
  * @package Anime_Sync_Pro
- * @version 1.2.0
+ * @version 1.3.0
  *
  * Changelog:
+ *  - 1.3.0 (2026-05-10):
+ *      • 新增 handle_ajax_clear_log_files() — 處理 uploads/anime-sync-pro/logs/*.log 檔案刪除。
+ *      • 註冊新 AJAX action: anime_sync_clear_log_files（與 DB 日誌清除完全分離）。
+ *      • clear_log_files 含安全路徑檢查，避免越權刪檔。
  *  - 1.2.0 (2026-05-10):
- *      • 建構子加入 import_manager 防呆，避免主檔載入順序錯誤導致 fatal。
+ *      • 建構子加入 import_manager 防呆。
  *      • handle_ajax_clear_logs() 改為預設清 30 天前（最少 1 天），不再 TRUNCATE 全部。
  *      • 所有依賴 import_manager 的 AJAX handler 加入空值檢查。
  *      • 版本常數判讀改為 ANIME_SYNC_PRO_VERSION 優先。
@@ -53,6 +57,7 @@ class Anime_Sync_Admin {
         add_action( 'wp_ajax_anime_sync_clear_cache',        [ $this, 'handle_ajax_clear_cache'        ] );
         add_action( 'wp_ajax_anime_sync_clear_logs',         [ $this, 'handle_ajax_clear_logs'         ] );
         add_action( 'wp_ajax_anime_clear_old_logs',          [ $this, 'handle_ajax_clear_logs'         ] );
+        add_action( 'wp_ajax_anime_sync_clear_log_files',    [ $this, 'handle_ajax_clear_log_files'    ] ); // ✅ 1.3.0 新增
         add_action( 'wp_ajax_anime_sync_bulk_action',        [ $this, 'handle_ajax_bulk_action'        ] );
         add_action( 'wp_ajax_anime_sync_save_bangumi_id',    [ $this, 'handle_ajax_save_bangumi_id'    ] );
         add_action( 'wp_ajax_anime_sync_enrich_single',      [ $this, 'handle_ajax_enrich_single'      ] );
@@ -650,7 +655,7 @@ class Anime_Sync_Admin {
     }
 
     // =========================================================================
-    // AJAX: Clear Logs（修正版：只清 N 天前，預設 30 天）
+    // AJAX: Clear DB Logs（清 wp_anime_sync_logs 資料表，預設 30 天前）
     // =========================================================================
 
     public function handle_ajax_clear_logs(): void {
@@ -671,6 +676,92 @@ class Anime_Sync_Admin {
             'count'   => $count,
             'days'    => $days,
             'message' => sprintf( '已清除 %d 筆 %d 天前的日誌', $count, $days ),
+        ] );
+    }
+
+    // =========================================================================
+    // AJAX: Clear Log Files（✅ 1.3.0 新增：清檔案系統 uploads/anime-sync-pro/logs/*.log）
+    // =========================================================================
+
+    public function handle_ajax_clear_log_files(): void {
+        check_ajax_referer( 'anime_sync_admin_nonce', 'nonce' );
+        if ( ! current_user_can( 'manage_options' ) ) {
+            wp_send_json_error( '權限不足' );
+        }
+
+        $upload_dir = wp_upload_dir();
+        if ( ! empty( $upload_dir['error'] ) ) {
+            wp_send_json_error( 'WordPress uploads 目錄不可用：' . $upload_dir['error'] );
+        }
+
+        $base_dir = trailingslashit( $upload_dir['basedir'] );
+        $log_dir  = $base_dir . 'anime-sync-pro/logs/';
+
+        // ✅ 安全檢查：log_dir 必須在 uploads/ 之內，防止路徑越權
+        $real_base = realpath( $base_dir );
+        $real_log  = realpath( $log_dir );
+
+        if ( ! $real_log || ! $real_base || strpos( $real_log, $real_base ) !== 0 ) {
+            wp_send_json_success( [
+                'count'      => 0,
+                'total_size' => 0,
+                'message'    => 'Log 目錄不存在或路徑無效，無檔案可刪除。',
+            ] );
+        }
+
+        if ( ! is_dir( $real_log ) ) {
+            wp_send_json_success( [
+                'count'      => 0,
+                'total_size' => 0,
+                'message'    => 'Log 目錄不存在，無檔案可刪除。',
+            ] );
+        }
+
+        $files = glob( trailingslashit( $real_log ) . '*.log' ) ?: [];
+
+        $deleted    = 0;
+        $failed     = 0;
+        $total_size = 0;
+        $errors     = [];
+
+        foreach ( $files as $file ) {
+            if ( ! is_file( $file ) ) continue;
+
+            // 再次確認此檔案實體位置在 log_dir 內
+            $real_file = realpath( $file );
+            if ( ! $real_file || strpos( $real_file, $real_log ) !== 0 ) {
+                $failed++;
+                continue;
+            }
+
+            $size = (int) filesize( $real_file );
+
+            if ( @unlink( $real_file ) ) {
+                $deleted    += 1;
+                $total_size += $size;
+            } else {
+                $failed++;
+                $errors[] = basename( $real_file );
+            }
+        }
+
+        $this->log_error( '手動清除 Log 檔案', [
+            'deleted'    => $deleted,
+            'failed'     => $failed,
+            'total_size' => $total_size,
+            'errors'     => $errors,
+        ] );
+
+        wp_send_json_success( [
+            'count'      => $deleted,
+            'failed'     => $failed,
+            'total_size' => $total_size,
+            'message'    => sprintf(
+                '已刪除 %d 個 .log 檔案（釋放 %s）%s',
+                $deleted,
+                size_format( $total_size ),
+                $failed > 0 ? sprintf( '；失敗 %d 個', $failed ) : ''
+            ),
         ] );
     }
 
@@ -957,6 +1048,7 @@ class Anime_Sync_Admin {
                 'update_map'         => 'anime_sync_update_map',
                 'clear_cache'        => 'anime_sync_clear_cache',
                 'clear_logs'         => 'anime_sync_clear_logs',
+                'clear_log_files'    => 'anime_sync_clear_log_files', // ✅ 1.3.0
                 'scan_series_gaps'   => 'anime_sync_scan_series_gaps',
                 'convert_post'       => 'anime_sync_convert_post',
             ],
