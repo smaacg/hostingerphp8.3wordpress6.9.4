@@ -1029,3 +1029,104 @@ add_action( 'edit_form_after_title', function ( WP_Post $post ): void {
     echo 'Gemini 可能暫時失敗。請到右側「永久連結」改為英文 slug，或重新更新讓系統再試。';
     echo '</div>';
 } );
+
+/* ==========================================================
+ *  Member Center v2.0 - AJAX endpoints
+ *  載入「我的清單／評分」更多項目；前端 nonce 由 wp_localize_script 注入
+ * ========================================================== */
+add_action('wp_ajax_smacg_member_loadmore', function () {
+    check_ajax_referer('smacg_member_nonce', 'nonce');
+
+    $uid    = get_current_user_id();
+    if (!$uid) wp_send_json_error(['msg' => '請先登入'], 401);
+
+    $type   = sanitize_key($_POST['type']   ?? '');   // watchlist | ratings
+    $offset = max(0, (int) ($_POST['offset'] ?? 0));
+    $limit  = min(50, max(1, (int) ($_POST['limit'] ?? 20)));
+    $filter = sanitize_key($_POST['filter'] ?? 'all');
+    $sort   = sanitize_key($_POST['sort']   ?? 'updated');
+    $search = sanitize_text_field($_POST['search'] ?? '');
+
+    require_once get_stylesheet_directory() . '/inc/member-stats.php';
+    require_once get_stylesheet_directory() . '/inc/member-render.php';
+
+    if ($type === 'watchlist') {
+        $items = smacg_build_watchlist($uid);
+        if ($filter !== 'all') $items = array_filter($items, fn($w) => $w['status'] === $filter);
+        if ($search !== '') {
+            $q = mb_strtolower($search);
+            $items = array_filter($items, fn($w) => str_contains(mb_strtolower(get_the_title($w['post_id'])), $q));
+        }
+        $items = smacg_sort_watchlist(array_values($items), $sort);
+
+    } elseif ($type === 'ratings') {
+        $items = smacg_get_user_ratings($uid);
+        if ($search !== '') {
+            $q = mb_strtolower($search);
+            $items = array_filter($items, fn($r) => str_contains(mb_strtolower(get_the_title($r['anime_id'])), $q));
+        }
+        usort($items, function ($a, $b) use ($sort) {
+            return match ($sort) {
+                'score-desc' => (float)$b['overall_score'] <=> (float)$a['overall_score'],
+                'score-asc'  => (float)$a['overall_score'] <=> (float)$b['overall_score'],
+                default      => strcmp($b['updated_at'] ?? '', $a['updated_at'] ?? ''),
+            };
+        });
+    } else {
+        wp_send_json_error(['msg' => '參數錯誤'], 400);
+    }
+
+    $items = array_values($items);
+    $slice = array_slice($items, $offset, $limit);
+
+    ob_start();
+    foreach ($slice as $row) {
+        if ($type === 'watchlist') {
+            smacg_render_anime_card($row['post_id'], $row);
+        } else {
+            smacg_render_anime_card((int)$row['anime_id'], ['user_score' => (float)$row['overall_score']]);
+        }
+    }
+    wp_send_json_success([
+        'html'      => ob_get_clean(),
+        'loaded'    => $offset + count($slice),
+        'total'     => count($items),
+        'has_more'  => ($offset + count($slice)) < count($items),
+    ]);
+});
+
+/* watchlist 排序 helper */
+function smacg_sort_watchlist(array $list, $sort) {
+    usort($list, function ($a, $b) use ($sort) {
+        return match ($sort) {
+            'title'    => strcmp(get_the_title($a['post_id']), get_the_title($b['post_id'])),
+            'progress' => (int)$b['progress'] <=> (int)$a['progress'],
+            'year'     => (int) get_post_meta($b['post_id'], 'anime_season_year', true)
+                       <=> (int) get_post_meta($a['post_id'], 'anime_season_year', true),
+            default    => strcmp($b['updated'] ?? '', $a['updated'] ?? ''),
+        };
+    });
+    return $list;
+}
+
+/* 注入 nonce 與 AJAX url 給前端 JS（page-member 模板才注入） */
+add_action('wp_enqueue_scripts', function () {
+    if (!is_page_template('page-member.php')) return;
+    wp_enqueue_script(
+        'smacg-member',
+        get_stylesheet_directory_uri() . '/assets/js/member.js',
+        ['jquery'],
+        '2.0.0',
+        true
+    );
+    wp_localize_script('smacg-member', 'smacgMember', [
+        'ajax'  => admin_url('admin-ajax.php'),
+        'nonce' => wp_create_nonce('smacg_member_nonce'),
+    ]);
+    wp_enqueue_style(
+        'smacg-member-css',
+        get_stylesheet_directory_uri() . '/assets/css/member.css',
+        [],
+        '2.0.0'
+    );
+}, 20);
