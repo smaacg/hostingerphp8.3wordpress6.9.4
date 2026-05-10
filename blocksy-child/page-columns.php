@@ -2,14 +2,13 @@
 /**
  * Template Name: 專欄頁面
  * 用途：顯示 review（評論）+ feature（專題）混合內容
- * @version 2.0.0  2026-05-10 修正巢狀 <a> 跑版問題
+ * @version 2.1.0  2026-05-10 加入圖片 fallback + 深色主題美化
  */
 
 if ( ! defined( 'ABSPATH' ) ) exit;
 
 get_header();
 
-// ── 抓最新評論 6 篇 ──
 $review_query = new WP_Query([
     'post_type'      => 'post',
     'posts_per_page' => 6,
@@ -18,7 +17,6 @@ $review_query = new WP_Query([
     'no_found_rows'  => true,
 ]);
 
-// ── 抓最新專題 6 篇 ──
 $feature_query = new WP_Query([
     'post_type'      => 'post',
     'posts_per_page' => 6,
@@ -28,31 +26,53 @@ $feature_query = new WP_Query([
 ]);
 
 /**
- * 渲染單張卡片（共用）
- * 重點：避免巢狀 <a>，分類標籤獨立於主連結之外
+ * 取得卡片用的封面圖 URL（多層 fallback）
+ */
+function asd_get_card_thumb_url( $post_id ) {
+    // 1. 特色圖片
+    if ( has_post_thumbnail( $post_id ) ) {
+        $url = get_the_post_thumbnail_url( $post_id, 'medium_large' );
+        if ( $url ) return $url;
+    }
+    // 2. anime_cover_image meta（若文章與 anime CPT 關聯）
+    $cover = get_post_meta( $post_id, 'anime_cover_image', true );
+    if ( $cover ) return $cover;
+
+    // 3. 文章內第一張圖
+    $content = get_post_field( 'post_content', $post_id );
+    if ( $content && preg_match( '/<img[^>]+src=["\']([^"\']+)["\']/i', $content, $m ) ) {
+        return $m[1];
+    }
+    // 4. 無圖
+    return '';
+}
+
+/**
+ * 渲染單張卡片
  */
 function asd_render_column_card() {
-    $post_id     = get_the_ID();
-    $permalink   = get_permalink();
-    $title       = get_the_title();
-    $date        = get_the_date();
-    $excerpt     = wp_trim_words( get_the_excerpt(), 30, '…' );
-    $thumb_html  = has_post_thumbnail()
-        ? get_the_post_thumbnail( $post_id, 'medium', [ 'loading' => 'lazy', 'alt' => esc_attr( $title ) ] )
-        : '<div class="card-thumb-placeholder" aria-hidden="true">🎬</div>';
+    $post_id   = get_the_ID();
+    $permalink = get_permalink();
+    $title     = get_the_title();
+    $date      = get_the_date();
+    $excerpt   = wp_trim_words( get_the_excerpt(), 30, '…' );
+    $thumb_url = asd_get_card_thumb_url( $post_id );
 
-    // 取得 channel 分類字串（不直接 echo，避免巢狀 a）
     $channels = get_the_term_list( $post_id, 'channel', '', ' · ', '' );
-    if ( is_wp_error( $channels ) ) {
-        $channels = '';
-    }
+    if ( is_wp_error( $channels ) ) $channels = '';
     ?>
     <article class="column-card">
-        <?php /* 圖片區：獨立 <a>，可點 */ ?>
         <a href="<?php echo esc_url( $permalink ); ?>" class="card-thumb-link" aria-label="<?php echo esc_attr( $title ); ?>">
-            <div class="card-thumb">
-                <?php echo $thumb_html; ?>
-            </div>
+            <?php if ( $thumb_url ) : ?>
+                <img src="<?php echo esc_url( $thumb_url ); ?>"
+                     alt="<?php echo esc_attr( $title ); ?>"
+                     class="card-thumb-img"
+                     loading="lazy" />
+            <?php else : ?>
+                <div class="card-thumb-placeholder" aria-hidden="true">
+                    <span class="placeholder-icon">🎬</span>
+                </div>
+            <?php endif; ?>
         </a>
 
         <div class="card-info">
@@ -65,7 +85,7 @@ function asd_render_column_card() {
             </h3>
 
             <div class="card-meta">
-                <span class="date"><?php echo esc_html( $date ); ?></span>
+                <span class="date">📅 <?php echo esc_html( $date ); ?></span>
             </div>
 
             <?php if ( $excerpt ) : ?>
@@ -79,14 +99,13 @@ function asd_render_column_card() {
 
 <div class="columns-page">
     <header class="columns-page-header">
-        <h1 class="page-title">🔍 專欄</h1>
+        <h1 class="page-title"><span class="title-icon">🔍</span>專欄</h1>
         <p class="page-desc">深度評論與精選專題，帶你看見動漫世界的不同角度</p>
     </header>
 
-    <!-- ── 評論區塊 ── -->
     <section class="columns-section review-section">
         <header class="section-header">
-            <h2>📝 評論</h2>
+            <h2 class="section-title"><span class="section-icon">📝</span>評論</h2>
             <a href="<?php echo esc_url( home_url( '/review/' ) ); ?>" class="more-link">查看全部 →</a>
         </header>
 
@@ -101,10 +120,9 @@ function asd_render_column_card() {
         <?php endif; ?>
     </section>
 
-    <!-- ── 專題區塊 ── -->
     <section class="columns-section feature-section">
         <header class="section-header">
-            <h2>📚 專題</h2>
+            <h2 class="section-title"><span class="section-icon">📚</span>專題</h2>
             <a href="<?php echo esc_url( home_url( '/feature/' ) ); ?>" class="more-link">查看全部 →</a>
         </header>
 
