@@ -1,399 +1,17 @@
 /* ============================================================
-   微笑動漫 — 動漫追蹤 UI 腳本
-   路徑：/blocksy-child/assets/js/anime-status.js
+   微笑動漫 — 動漫評分滑桿 + 送出
+   路徑：/blocksy-child/assets/js/anime-rating.js
+   版本：1.0 — 從 anime-status.js 拆出，只負責評分區塊
+   說明：追蹤條請看 anime-status.js，這裡不要重複綁 .smacg-track-bar
    ============================================================ */
 'use strict';
 
 document.addEventListener('DOMContentLoaded', function () {
 
-    const cfg  = window.SmacgConfig || {};
-    const bar  = document.querySelector('.smacg-track-bar');
-    if (!bar) return;
-
-    const postId   = parseInt(bar.dataset.postId, 10);
-    const totalEp  = parseInt(bar.dataset.episodes, 10) || 0;
-    const loggedIn = cfg.loggedIn === true || cfg.loggedIn === '1' || cfg.loggedIn === 1;
-    const apiBase  = cfg.apiUrl  || '/wp-json/smacg/v1/';
-    const nonce    = cfg.nonce   || '';
-
-    /* ── 未登入：彈出登入 Modal（絕對不跳頁）── */
-    function requireLogin() {
-        if (typeof window.smacgOpenLoginModal === 'function') {
-            window.smacgOpenLoginModal();
-            return;
-        }
-        const modal = document.getElementById('login-modal');
-        if (modal) {
-            const loginTab    = modal.querySelector('.lm-tab[data-tab="login"]');
-            const registerTab = modal.querySelector('.lm-tab[data-tab="register"]');
-            const loginPanel  = document.getElementById('lm-panel-login');
-            const regPanel    = document.getElementById('lm-panel-register');
-            if (loginTab)    loginTab.classList.add('active');
-            if (registerTab) registerTab.classList.remove('active');
-            if (loginPanel)  loginPanel.hidden = false;
-            if (regPanel)    regPanel.hidden    = true;
-            document.body.style.overflow = 'hidden';
-            setTimeout(function () { modal.classList.add('lm-open'); }, 10);
-        }
-    }
-
-    /* ── 本地狀態 ── */
-    let state = {
-        status:      bar.dataset.status      || null,
-        progress:    parseInt(bar.dataset.progress, 10) || 0,
-        favorited:   bar.dataset.favorited   === '1',
-        fullcleared: bar.dataset.fullcleared === '1',
-        _prevCleared: bar.dataset.fullcleared === '1',
-    };
-
-    /* ── 元素參考 ── */
-    const statusBtns  = bar.querySelectorAll('.smacg-status-btn');
-    const progCurrent = bar.querySelector('.smacg-prog-current');
-    const progBar     = bar.querySelector('.smacg-prog-bar');
-    const progBtns    = bar.querySelectorAll('.smacg-prog-btn');
-    const favBtn      = bar.querySelector('.smacg-fav-btn');
-    const clearBtn    = bar.querySelector('.smacg-clear-btn');
-    const shareBtn    = bar.querySelector('.smacg-share-btn');
-    const pointToast  = bar.querySelector('.smacg-point-toast');
-
-    const shareModal = document.getElementById('smacg-share-modal');
-    const shareClose = document.getElementById('smacg-share-close');
-    const copyBtn    = document.getElementById('smacg-copy-link');
-
-    /* ── 工具：呼叫 API ── */
-    function callApi(action, value) {
-        if (!loggedIn) {
-            requireLogin();
-            return Promise.reject('not_logged_in');
-        }
-        return fetch(apiBase + 'anime-update', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-WP-Nonce': nonce,
-            },
-            body: JSON.stringify({
-                post_id: postId,
-                action:  action,
-                value:   value,
-            }),
-        }).then(function (res) {
-            if (!res.ok) throw new Error('API error ' + res.status);
-            return res.json();
-        });
-    }
-
-    /* ── 工具：積分 Toast ── */
-    function showPointToast(points) {
-        if (!points || points <= 0 || !pointToast) return;
-        pointToast.textContent = '+' + points + ' ✨';
-        pointToast.classList.remove('show');
-        void pointToast.offsetWidth;
-        pointToast.classList.add('show');
-        setTimeout(function () { pointToast.classList.remove('show'); }, 1900);
-    }
-
-    /* ── 工具：彩紙 ── */
-    function launchConfetti() {
-        const wrap = document.createElement('div');
-        wrap.className = 'smacg-confetti-wrap';
-        document.body.appendChild(wrap);
-        const colors = ['#63a8ff','#8f6bff','#ff6bae','#ffd60a','#34c759','#ff9500'];
-        for (let i = 0; i < 60; i++) {
-            const piece = document.createElement('div');
-            piece.className = 'smacg-confetti-piece';
-            piece.style.left       = Math.random() * 100 + 'vw';
-            piece.style.background = colors[Math.floor(Math.random() * colors.length)];
-            const dur   = 1.2 + Math.random() * 1.4;
-            const delay = Math.random() * 0.6;
-            piece.style.animationDuration = dur + 's';
-            piece.style.animationDelay    = delay + 's';
-            piece.style.width  = (6 + Math.random() * 6) + 'px';
-            piece.style.height = (6 + Math.random() * 6) + 'px';
-            wrap.appendChild(piece);
-        }
-        setTimeout(function () { wrap.remove(); }, 2800);
-    }
-
-    /* ── render：狀態 ── */
-    function renderStatus(newStatus) {
-        statusBtns.forEach(function (btn) {
-            btn.classList.toggle('is-active', btn.dataset.value === newStatus);
-        });
-    }
-
-    /* ── render：進度 ── */
-    function renderProgress(prog) {
-        if (progCurrent) progCurrent.textContent = prog;
-        if (progBar && totalEp > 0) {
-            const pct = Math.min(100, Math.round((prog / totalEp) * 100));
-            progBar.style.width = pct + '%';
-            const pctEl = bar.querySelector('.smacg-prog-pct');
-            if (pctEl) pctEl.textContent = pct + '%';
-        }
-        const labelEl = bar.querySelector('.smacg-prog-label');
-        if (labelEl) {
-            if (state.fullcleared)  labelEl.textContent = '🎉 已全破！';
-            else if (prog > 0)      labelEl.textContent = '📺 觀看中';
-            else                    labelEl.innerHTML   = '&nbsp;';
-        }
-    }
-
-    /* ── render：收藏 ── */
-    function renderFav(fav) {
-        if (!favBtn) return;
-        favBtn.classList.toggle('is-active', fav);
-        const icon = favBtn.querySelector('i');
-        if (icon) icon.className = fav ? 'fa-solid fa-heart' : 'fa-regular fa-heart';
-        favBtn.title = fav ? '取消收藏' : '收藏';
-    }
-
-    /* ── render：全破 ── */
-    function renderClear(cleared) {
-        if (!clearBtn) return;
-        clearBtn.classList.toggle('is-active', cleared);
-        clearBtn.title = cleared ? '已全破' : '標記全破';
-    }
-
-    /* ── 初始渲染 ── */
-    renderStatus(state.status);
-    renderProgress(state.progress);
-    renderFav(state.favorited);
-    renderClear(state.fullcleared);
-
-    /* ── 狀態按鈕 ── */
-    statusBtns.forEach(function (btn) {
-        btn.addEventListener('click', function () {
-            if (!loggedIn) { requireLogin(); return; }
-
-            const value     = btn.dataset.value;
-            const newVal    = state.status === value ? 'none' : value;
-            const oldStatus = state.status;
-
-            state.status = newVal === 'none' ? null : newVal;
-            renderStatus(state.status);
-            btn.classList.add('is-loading');
-
-            callApi('status', newVal)
-                .then(function (res) {
-                    if (res.success) {
-                        state.status = res.entry.status;
-                        renderStatus(state.status);
-
-                        /* 點「已看完」→ 自動補滿進度 */
-                        if (res.entry.status === 'completed' && totalEp > 0) {
-                            state.progress = totalEp;
-                            state.fullcleared = true;
-                            renderProgress(totalEp);
-                            renderClear(true);
-                            if (!state._prevCleared) launchConfetti();
-                            state._prevCleared = true;
-                        } else {
-                            /* 後端可能也更新了 progress，同步回來 */
-                            if (typeof res.entry.progress !== 'undefined') {
-                                state.progress = res.entry.progress;
-                                renderProgress(state.progress);
-                            }
-                        }
-
-                        showPointToast(res.points_earned);
-                    }
-                })
-                .catch(function () {
-                    state.status = oldStatus;
-                    renderStatus(state.status);
-                })
-                .finally(function () {
-                    btn.classList.remove('is-loading');
-                });
-        });
-    });
-
-    /* ── 進度按鈕 ── */
-    progBtns.forEach(function (btn) {
-        btn.addEventListener('click', function () {
-            if (!loggedIn) { requireLogin(); return; }
-
-            const delta   = parseInt(btn.dataset.value, 10);
-            const oldProg = state.progress;
-            const newProg = Math.max(0, Math.min(totalEp || Infinity, oldProg + delta));
-            if (newProg === oldProg) return;
-
-            state.progress = newProg;
-            renderProgress(newProg);
-            btn.classList.add('is-loading');
-
-            callApi('progress', delta)
-                .then(function (res) {
-                    if (res.success) {
-                        state.progress    = res.entry.progress;
-                        state.fullcleared = res.entry.fullcleared;
-                        state.status      = res.entry.status;
-                        renderProgress(state.progress);
-                        renderStatus(state.status);
-
-                        /* 進度加到滿 → 彩紙 */
-                        if (res.entry.fullcleared && !state._prevCleared) {
-                            renderClear(true);
-                            launchConfetti();
-                        }
-                        state._prevCleared = res.entry.fullcleared;
-                        showPointToast(res.points_earned);
-                    }
-                })
-                .catch(function () {
-                    state.progress = oldProg;
-                    renderProgress(oldProg);
-                })
-                .finally(function () {
-                    btn.classList.remove('is-loading');
-                });
-        });
-    });
-
-    /* ── 收藏按鈕 ── */
-    if (favBtn) {
-        favBtn.addEventListener('click', function () {
-            if (!loggedIn) { requireLogin(); return; }
-
-            const oldFav    = state.favorited;
-            state.favorited = !oldFav;
-            renderFav(state.favorited);
-            favBtn.classList.add('is-loading');
-
-            callApi('favorite', null)
-                .then(function (res) {
-                    if (res.success) {
-                        state.favorited = res.entry.favorited;
-                        renderFav(state.favorited);
-                        showPointToast(res.points_earned);
-                    }
-                })
-                .catch(function () {
-                    state.favorited = oldFav;
-                    renderFav(oldFav);
-                })
-                .finally(function () {
-                    favBtn.classList.remove('is-loading');
-                });
-        });
-    }
-
-    /* ── 全破按鈕 ── */
-    if (clearBtn) {
-        clearBtn.addEventListener('click', function () {
-            if (!loggedIn) { requireLogin(); return; }
-            if (state.fullcleared) return;
-
-            clearBtn.classList.add('is-loading');
-
-            callApi('fullclear', null)
-                .then(function (res) {
-                    if (res.success) {
-                        state.fullcleared  = res.entry.fullcleared;
-                        state.progress     = res.entry.progress ?? totalEp;
-                        state.status       = res.entry.status;
-
-                        renderClear(state.fullcleared);
-                        renderProgress(state.progress);
-                        renderStatus(state.status);
-
-                        /* 全破彩紙 */
-                        if (state.fullcleared && !state._prevCleared) {
-                            launchConfetti();
-                        }
-                        state._prevCleared = state.fullcleared;
-                        showPointToast(res.points_earned);
-                    }
-                })
-                .finally(function () {
-                    clearBtn.classList.remove('is-loading');
-                });
-        });
-    }
-
-    /* ── 分享按鈕 ── */
-    if (shareBtn && shareModal) {
-        shareBtn.addEventListener('click', function () {
-            const title = shareBtn.dataset.title || document.title;
-            const url   = shareBtn.dataset.url   || location.href;
-
-            if (navigator.share) {
-                navigator.share({ title: title, url: url }).catch(function () {});
-                return;
-            }
-            shareModal.classList.add('is-open');
-        });
-
-        if (shareClose) {
-            shareClose.addEventListener('click', function () {
-                shareModal.classList.remove('is-open');
-            });
-        }
-
-        shareModal.addEventListener('click', function (e) {
-            if (e.target === shareModal) shareModal.classList.remove('is-open');
-        });
-
-        document.addEventListener('keydown', function (e) {
-            if (e.key === 'Escape') shareModal.classList.remove('is-open');
-        });
-    }
-
-    /* ── 複製連結 ── */
-    if (copyBtn) {
-        copyBtn.addEventListener('click', function () {
-            const url = cfg.permalink || location.href;
-            if (navigator.clipboard) {
-                navigator.clipboard.writeText(url).then(function () {
-                    copyBtn.textContent = '✅ 已複製！';
-                    setTimeout(function () { copyBtn.textContent = '📋 複製連結'; }, 2000);
-                });
-            } else {
-                const ta = document.createElement('textarea');
-                ta.value = url;
-                ta.style.position = 'fixed';
-                ta.style.opacity  = '0';
-                document.body.appendChild(ta);
-                ta.select();
-                document.execCommand('copy');
-                ta.remove();
-                copyBtn.textContent = '✅ 已複製！';
-                setTimeout(function () { copyBtn.textContent = '📋 複製連結'; }, 2000);
-            }
-        });
-    }
-
-    /* ── 閱讀積分（3 秒後觸發）── */
-    if (loggedIn && cfg.ajaxUrl && cfg.ajaxNonce) {
-        setTimeout(function () {
-            fetch(cfg.ajaxUrl, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                body: new URLSearchParams({
-                    action:  'smacg_read_article',
-                    nonce:   cfg.ajaxNonce,
-                    post_id: postId,
-                }),
-            }).catch(function () {});
-        }, 3000);
-    }
-
-});
-
-/* ============================================================
-   評分滑桿 + 送出
-   ============================================================ */
-(function () {
     /* ── Slider 即時顯示 ── */
-    const sliders = document.querySelectorAll('.wacg-slider');
-    sliders.forEach(function (slider) {
+    document.querySelectorAll('.wacg-slider').forEach(function (slider) {
         const valEl = document.getElementById(slider.id + '-val');
-
-        /* 初始化顯示 */
         if (valEl) valEl.textContent = parseFloat(slider.value).toFixed(1);
-
-        /* 拖動時即時更新 */
         slider.addEventListener('input', function () {
             if (valEl) valEl.textContent = parseFloat(this.value).toFixed(1);
         });
@@ -402,7 +20,6 @@ document.addEventListener('DOMContentLoaded', function () {
     /* ── 送出評分 ── */
     const ratingForm = document.getElementById('wacg-rating-form');
     const submitBtn  = document.getElementById('wacg-submit-btn');
-
     if (!ratingForm) return;
 
     ratingForm.addEventListener('submit', function (e) {
@@ -414,7 +31,8 @@ document.addEventListener('DOMContentLoaded', function () {
         const nonce  = cfg.nonce  || '';
 
         if (!postId) {
-            alert('找不到動畫 ID');
+            alert('找不到動畫 ID（SmacgConfig 未注入）');
+            console.error('SmacgConfig:', cfg);
             return;
         }
         if (!cfg.loggedIn) {
@@ -422,7 +40,6 @@ document.addEventListener('DOMContentLoaded', function () {
             return;
         }
 
-        /* 讀取四個 slider 的值 */
         const story     = parseFloat(document.getElementById('slider-story')?.value     || 5);
         const music     = parseFloat(document.getElementById('slider-music')?.value     || 5);
         const animation = parseFloat(document.getElementById('slider-animation')?.value || 5);
@@ -435,6 +52,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
         fetch(apiUrl + 'ratings/' + postId, {
             method: 'POST',
+            credentials: 'same-origin',
             headers: {
                 'Content-Type': 'application/json',
                 'X-WP-Nonce':   nonce,
@@ -448,33 +66,40 @@ document.addEventListener('DOMContentLoaded', function () {
         })
         .then(function (res) { return res.json(); })
         .then(function (data) {
+            console.log('評分回應:', data);
             if (data.success) {
                 if (submitBtn) {
-                    submitBtn.textContent = '✅ ' + (data.message || '評分完成！');
+                    submitBtn.textContent      = '✅ ' + (data.message || '評分完成！');
                     submitBtn.style.background = 'var(--asd-score-al, #02a9ff)';
                 }
-
-                /* 更新頁面上的顯示數值 — 用 data.stats（新 API） */
                 const stats = data.stats || {};
-                const score = stats.score;
-                if (score) {
+                if (stats.score) {
                     document.querySelectorAll('.wacg-score-main, .wacg-hero-score').forEach(function (el) {
-                        el.textContent = parseFloat(score).toFixed(1);
+                        el.textContent = parseFloat(stats.score).toFixed(1);
                     });
                 }
-                if (stats.avg_story)     { const el = document.querySelector('.wacg-cat-story');     if (el) el.textContent = parseFloat(stats.avg_story).toFixed(1); }
-                if (stats.avg_music)     { const el = document.querySelector('.wacg-cat-music');     if (el) el.textContent = parseFloat(stats.avg_music).toFixed(1); }
-                if (stats.avg_animation) { const el = document.querySelector('.wacg-cat-animation'); if (el) el.textContent = parseFloat(stats.avg_animation).toFixed(1); }
-                if (stats.avg_voice)     { const el = document.querySelector('.wacg-cat-voice');     if (el) el.textContent = parseFloat(stats.avg_voice).toFixed(1); }
-                if (stats.vote_count)    { const el = document.querySelector('.wacg-vote-count');    if (el) el.textContent = stats.vote_count; }
+                const map = {
+                    avg_story:     '.wacg-cat-story',
+                    avg_music:     '.wacg-cat-music',
+                    avg_animation: '.wacg-cat-animation',
+                    avg_voice:     '.wacg-cat-voice',
+                };
+                Object.keys(map).forEach(function (k) {
+                    if (stats[k] != null) {
+                        const el = document.querySelector(map[k]);
+                        if (el) el.textContent = parseFloat(stats[k]).toFixed(1);
+                    }
+                });
+                if (stats.vote_count) {
+                    const el = document.querySelector('.wacg-vote-count');
+                    if (el) el.textContent = stats.vote_count;
+                }
             } else {
-                /* WP_Error 回應 */
-                const msg = data.message || '評分失敗';
                 if (submitBtn) {
                     submitBtn.disabled    = false;
                     submitBtn.textContent = '送出評分';
                 }
-                alert(msg);
+                alert((data.message || '評分失敗') + (data.code ? '\n錯誤代碼：' + data.code : ''));
             }
         })
         .catch(function (err) {
@@ -483,8 +108,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 submitBtn.disabled    = false;
                 submitBtn.textContent = '送出評分';
             }
-            alert('評分送出失敗，請稍後再試');
+            alert('評分送出失敗,請稍後再試');
         });
     });
-
-})();
+});
