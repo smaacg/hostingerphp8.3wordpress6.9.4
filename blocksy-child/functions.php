@@ -3,23 +3,25 @@
  * 微笑動漫 Child Theme — functions.php
  *
  * @package weixiaoacg
- * @version 1.5.1
+ * @version 1.6.0
  *
+ * v1.6.0 變更（2026-05-10）:
+ * - [重構] Gemini slug 邏輯精簡為單一 helper，修 Gutenberg 草稿時序問題
+ * - [強] 分類抓不到但 slug 含中文時強制送 Gemini，避免中文 URL 流出
+ * - [清] 移除冗餘的 wrapper 函式，hook 改用匿名函式
  * v1.5.1 變更（2026-05-08）:
- * - [修] 補上 child theme 根 style.css 的 enqueue（修首頁白底背景問題）
- * - [清] 移除無人引用的 weixiaoacg_PLUGIN_URL 常數
- * - [強] REST API callback 對 get_field 加 function_exists 保護
- * - [強] anime-single.css 用 wp_style_is 防止與 plugin 端重複註冊
+ * - 補上 child theme 根 style.css 的 enqueue
+ * - REST API callback 對 get_field 加保護
+ * - anime-single.css 防重複註冊
  */
 defined( 'ABSPATH' ) || exit;
 
 /* ============================================================
    常數
    ============================================================ */
-define( 'weixiaoacg_VERSION',   '1.5.1' );
+define( 'weixiaoacg_VERSION',   '1.6.0' );
 define( 'weixiaoacg_THEME_URL', get_stylesheet_directory_uri() );
 define( 'weixiaoacg_THEME_DIR', get_stylesheet_directory() );
-// ★ 修 v1.5.1: 移除 weixiaoacg_PLUGIN_URL，原本指向不存在的 weixiaoacg-core 外掛，無人引用
 
 define( 'SMACG_POINT_FAVORITE',  5  );
 define( 'SMACG_POINT_WANT',      1  );
@@ -30,6 +32,9 @@ define( 'SMACG_POINT_EPISODE',   1  );
 define( 'SMACG_POINT_READ',      2  );
 define( 'SMACG_POINT_COMMENT',   3  );
 define( 'SMACG_POINT_LOGIN',     1  );
+
+const WEIXIAOACG_ID_CATS  = [ 'announcement', 'news' ];
+const WEIXIAOACG_LLM_CATS = [ 'review', 'feature' ];
 
 /* ============================================================
    主題設定
@@ -83,19 +88,17 @@ add_filter( 'wp_nav_menu_objects', function($items,$args) {
     return $items;
 }, 10, 2 );
 
-/* 防止 LiteSpeed / CDN 快取 UM 用戶個人頁 + 自訂會員頁 */
+/* 防快取：UM 用戶頁 + 自訂會員頁 */
 add_action('template_redirect', function() {
-    $is_um_page = function_exists('um_is_core_page') && um_is_core_page('user');
-    $is_member  = is_page_template('page-member.php');
-
-    if ($is_um_page || $is_member) {
+    $is_um  = function_exists('um_is_core_page') && um_is_core_page('user');
+    $is_mem = is_page_template('page-member.php');
+    if ($is_um || $is_mem) {
         header('Cache-Control: no-cache, no-store, must-revalidate, max-age=0');
         header('Pragma: no-cache');
         header('X-LiteSpeed-Cache-Control: no-cache');
         header('Surrogate-Control: no-store');
     }
 }, 1);
-
 
 /* ============================================================
    自訂 Nav Walker
@@ -136,7 +139,7 @@ add_action( 'get_header', function() {
 }, 1 );
 
 /* ============================================================
-   jQuery → 3.6.4
+   jQuery 3.6.4
    ============================================================ */
 add_action( 'wp_enqueue_scripts', function() {
     wp_deregister_script('jquery');
@@ -148,125 +151,68 @@ add_action( 'wp_enqueue_scripts', function() {
 }, 1 );
 
 /* ============================================================
-   Font Awesome — 提到最前面，優先級 5
+   Font Awesome
    ============================================================ */
 add_action( 'wp_enqueue_scripts', function() {
-    if ( wp_style_is( 'weixiaoacg-fa6', 'registered' ) ) return; // ★ 修 v1.5.1: 防 plugin 端重複註冊
-    wp_enqueue_style(
-        'weixiaoacg-fa6',
-        'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css',
-        [],
-        '6.5.0'
-    );
+    if ( wp_style_is( 'weixiaoacg-fa6', 'registered' ) ) return;
+    wp_enqueue_style('weixiaoacg-fa6','https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css',[],'6.5.0');
 }, 5 );
 
 /* ============================================================
    樣式載入
    ============================================================ */
 add_action( 'wp_enqueue_scripts', function() {
+    wp_enqueue_style('blocksy-parent', get_template_directory_uri().'/style.css', ['weixiaoacg-fa6'], wp_get_theme('blocksy')->get('Version'));
+    wp_enqueue_style('weixiaoacg-child-style', get_stylesheet_uri(), ['blocksy-parent'], weixiaoacg_VERSION);
+    wp_enqueue_style('weixiaoacg-fonts','https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@300;400;500;700&family=Inter:wght@300;400;500;600;700;800&display=swap',[],null);
 
-    /* ── 基礎樣式：Blocksy 母主題 ── */
-    wp_enqueue_style(
-        'blocksy-parent',
-        get_template_directory_uri().'/style.css',
-        ['weixiaoacg-fa6'],
-        wp_get_theme('blocksy')->get('Version')
-    );
-
-    /* ── ★ 修 v1.5.1: Child theme 根 style.css（強制深色背景覆寫） ── */
-    wp_enqueue_style(
-        'weixiaoacg-child-style',
-        get_stylesheet_uri(),
-        ['blocksy-parent'],
-        weixiaoacg_VERSION
-    );
-
-    /* ── Google Fonts ── */
-    wp_enqueue_style(
-        'weixiaoacg-fonts',
-        'https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@300;400;500;700&family=Inter:wght@300;400;500;600;700;800&display=swap',
-        [],
-        null
-    );
-
-    /* ── 共用樣式：glass + 主 style ── */
     foreach ([
-        'weixiaoacg-glass' => ['glass.css', ['weixiaoacg-child-style']],   // ★ 修: dep 換成 child-style
-        'weixiaoacg-style' => ['style.css',  ['weixiaoacg-glass']],
+        'weixiaoacg-glass' => ['glass.css', ['weixiaoacg-child-style']],
+        'weixiaoacg-style' => ['style.css', ['weixiaoacg-glass']],
     ] as $h => [$f,$dep]) {
         $p = weixiaoacg_THEME_DIR.'/assets/css/'.$f;
         if (file_exists($p)) wp_enqueue_style($h, weixiaoacg_THEME_URL.'/assets/css/'.$f, $dep, filemtime($p));
     }
 
-    /* ── 條件式頁面樣式 ── */
     $is_um_user = function_exists('um_is_core_page') && (um_is_core_page('user') || get_query_var('um_user'));
     $cond = [];
-    if ( is_page('news')   || is_page_template('page-news.php') )       $cond['weixiaoacg-news']       = 'news.css';
-    if ( is_page('season') || is_page_template('page-season.php') )     $cond['weixiaoacg-season']     = 'season.css';
-    if ( is_page_template('page-ranking.php') )                          $cond['weixiaoacg-ranking']    = 'ranking.css';
-    if ( is_page_template('page-anime-list.php') )                       $cond['weixiaoacg-anime-list'] = 'anime-list.css';
-    if ( is_page_template('page-music.php') )                            $cond['weixiaoacg-music']      = 'music.css';
-    if ( is_page_template('page-cosplay.php') )                          $cond['weixiaoacg-cosplay']    = 'cosplay.css';
-    if ( is_search() )                                                   $cond['weixiaoacg-search']     = 'search.css';
-    if ( is_404() )                                                      $cond['weixiaoacg-404']        = '404.css';
+    if ( is_page('news')   || is_page_template('page-news.php') )    $cond['weixiaoacg-news']       = 'news.css';
+    if ( is_page('season') || is_page_template('page-season.php') )  $cond['weixiaoacg-season']     = 'season.css';
+    if ( is_page_template('page-ranking.php') )                       $cond['weixiaoacg-ranking']    = 'ranking.css';
+    if ( is_page_template('page-anime-list.php') )                    $cond['weixiaoacg-anime-list'] = 'anime-list.css';
+    if ( is_page_template('page-music.php') )                         $cond['weixiaoacg-music']      = 'music.css';
+    if ( is_page_template('page-cosplay.php') )                       $cond['weixiaoacg-cosplay']    = 'cosplay.css';
+    if ( is_search() )                                                $cond['weixiaoacg-search']     = 'search.css';
+    if ( is_404() )                                                   $cond['weixiaoacg-404']        = '404.css';
     if ( is_page(['about','contact','disclaimer','sources','privacy','terms','join']) || is_page_template('page-join.php') )
-                                                                         $cond['weixiaoacg-static']     = 'static.css';
-    if ( is_page_template('page-member.php') || $is_um_user )           $cond['weixiaoacg-member']     = 'member.css';
+                                                                      $cond['weixiaoacg-static']     = 'static.css';
+    if ( is_page_template('page-member.php') || $is_um_user )         $cond['weixiaoacg-member']     = 'member.css';
 
-    $is_account_page = is_page(1527) || is_page('account') ||
-                       (function_exists('um_is_core_page') && um_is_core_page('account')) ||
-                       (isset($_SERVER['REQUEST_URI']) && strpos($_SERVER['REQUEST_URI'], '/account') !== false);
-    if ( $is_account_page ) $cond['weixiaoacg-account'] = 'account.css';
+    $is_account = is_page(1527) || is_page('account') ||
+                  (function_exists('um_is_core_page') && um_is_core_page('account')) ||
+                  (isset($_SERVER['REQUEST_URI']) && strpos($_SERVER['REQUEST_URI'], '/account') !== false);
+    if ( $is_account ) $cond['weixiaoacg-account'] = 'account.css';
 
     foreach ($cond as $h => $f) {
         $p = weixiaoacg_THEME_DIR.'/assets/css/'.$f;
         if (file_exists($p)) wp_enqueue_style($h, weixiaoacg_THEME_URL.'/assets/css/'.$f, ['weixiaoacg-style'], filemtime($p));
     }
 
-    /* ── Anime Single 頁面樣式 ── */
     if ( is_singular('anime') ) {
-
-        // 1) Plugin 主樣式 anime-single.css （★ 修 v1.5.1: 防重複註冊）
         if ( ! wp_style_is( 'weixiaoacg-anime', 'registered' ) ) {
             $anime_css = WP_PLUGIN_DIR.'/anime-sync-pro/public/assets/css/anime-single.css';
-            if (file_exists($anime_css)) {
-                wp_enqueue_style(
-                    'weixiaoacg-anime',
-                    plugins_url('anime-sync-pro/public/assets/css/anime-single.css'),
-                    ['weixiaoacg-style','weixiaoacg-fa6'],
-                    filemtime($anime_css)
-                );
-            }
+            if (file_exists($anime_css))
+                wp_enqueue_style('weixiaoacg-anime', plugins_url('anime-sync-pro/public/assets/css/anime-single.css'), ['weixiaoacg-style','weixiaoacg-fa6'], filemtime($anime_css));
         }
-
-        // 2) 追蹤列獨立樣式 track-bar.css
-        $tb_css = weixiaoacg_THEME_DIR.'/assets/css/track-bar.css';
-        if (file_exists($tb_css)) {
-            wp_enqueue_style(
-                'smacg-track-bar',
-                weixiaoacg_THEME_URL.'/assets/css/track-bar.css',
-                ['weixiaoacg-anime'],
-                filemtime($tb_css)
-            );
-        }
-
-        // 3) anime-status.css
-        $p = weixiaoacg_THEME_DIR.'/assets/css/anime-status.css';
-        if (file_exists($p)) {
-            wp_enqueue_style(
-                'smacg-anime-status',
-                weixiaoacg_THEME_URL.'/assets/css/anime-status.css',
-                ['smacg-track-bar'],
-                filemtime($p)
-            );
-        }
+        $tb = weixiaoacg_THEME_DIR.'/assets/css/track-bar.css';
+        if (file_exists($tb)) wp_enqueue_style('smacg-track-bar', weixiaoacg_THEME_URL.'/assets/css/track-bar.css', ['weixiaoacg-anime'], filemtime($tb));
+        $as = weixiaoacg_THEME_DIR.'/assets/css/anime-status.css';
+        if (file_exists($as)) wp_enqueue_style('smacg-anime-status', weixiaoacg_THEME_URL.'/assets/css/anime-status.css', ['smacg-track-bar'], filemtime($as));
     }
 
-    /* ── 後台同步樣式（前台用，向下相容用） ── */
     $p = weixiaoacg_THEME_DIR.'/assets/css/admin-sync.css';
-    if (file_exists($p) && filesize($p) > 0) // ★ 修: 檔案大小>0 才載，避免空檔多一個請求
+    if (file_exists($p) && filesize($p) > 0)
         wp_enqueue_style('weixiaoacg-admin-sync', weixiaoacg_THEME_URL.'/assets/css/admin-sync.css', ['weixiaoacg-style'], filemtime($p));
-
 }, 10 );
 
 add_action( 'admin_enqueue_scripts', function() {
@@ -275,10 +221,8 @@ add_action( 'admin_enqueue_scripts', function() {
         wp_enqueue_style('weixiaoacg-admin', weixiaoacg_THEME_URL.'/assets/css/admin-sync.css', [], filemtime($p));
 } );
 
-/* ============================================================
-   LiteSpeed / 快取外掛排除 Font Awesome
-   ============================================================ */
-add_filter('litespeed_optm_css_minify', function($content) { return $content; }, 10);
+/* LiteSpeed 排除 Font Awesome */
+add_filter('litespeed_optm_css_minify', fn($c)=>$c, 10);
 add_filter('litespeed_optimize_css_excludes', function($excludes) {
     $excludes[] = 'cdnjs.cloudflare.com/ajax/libs/font-awesome';
     $excludes[] = 'fontawesome';
@@ -289,12 +233,11 @@ add_filter('litespeed_optimize_css_excludes', function($excludes) {
    JS 載入
    ============================================================ */
 add_action( 'wp_enqueue_scripts', function() {
-
     foreach ([
         'weixiaoacg-api'           => ['api.js',           []],
         'weixiaoacg-utils'         => ['utils.js',         ['weixiaoacg-api']],
         'weixiaoacg-page-template' => ['page-template.js', ['weixiaoacg-utils']],
-        'weixiaoacg-nav'           => ['nav.js',            ['weixiaoacg-utils']],
+        'weixiaoacg-nav'           => ['nav.js',           ['weixiaoacg-utils']],
     ] as $h => [$f,$dep]) {
         $p = weixiaoacg_THEME_DIR.'/assets/js/'.$f;
         if (file_exists($p)) wp_enqueue_script($h, weixiaoacg_THEME_URL.'/assets/js/'.$f, $dep, filemtime($p), true);
@@ -343,8 +286,8 @@ add_action( 'wp_enqueue_scripts', function() {
         'rest_url'     => rest_url('weixiaoacg/v1/'),
         'rest_nonce'   => wp_create_nonce('wp_rest'),
     ]);
-
 }, 10 );
+
 /* ============================================================
    輔助函式
    ============================================================ */
@@ -364,9 +307,9 @@ function weixiaoacg_get_user_points(int $uid=0): int {
 }
 
 if (!function_exists('weixiaoacg_get_news_thumb')) {
-    function weixiaoacg_get_news_thumb(int $post_id,string $size='news-thumb'): string {
-        if ($url=get_the_post_thumbnail_url($post_id,$size)) return $url;
-        $c = get_post($post_id)->post_content??'';
+    function weixiaoacg_get_news_thumb(int $post_id, string $size='news-thumb'): string {
+        if ($url = get_the_post_thumbnail_url($post_id,$size)) return $url;
+        $c = get_post($post_id)->post_content ?? '';
         if (preg_match('/<img[^>]+src=["\']([^"\']+)["\']/',$c,$m)) return $m[1];
         return function_exists('get_field') ? (get_field('weixiaoacg_cover_url',$post_id)?:'') : '';
     }
@@ -375,10 +318,6 @@ if (!function_exists('weixiaoacg_get_news_thumb')) {
 if (!function_exists('weixiaoacg_get_anilist'))  { function weixiaoacg_get_anilist($id)     { return null; } }
 if (!function_exists('weixiaoacg_get_bangumi'))  { function weixiaoacg_get_bangumi($id,$t=2){ return null; } }
 
-/**
- * ★ 修 v1.5.1: ACF 安全包裝
- * 避免 ACF 暫時停用 / 載入順序問題時整站 fatal
- */
 if (!function_exists('weixiaoacg_acf')) {
     function weixiaoacg_acf(string $key, $post_id = false, $default = '') {
         if (!function_exists('get_field')) return $default;
@@ -421,30 +360,16 @@ add_action('widgets_init', function() {
 /* ============================================================
    Ultimate Member 整合
    ============================================================ */
-
-/* ① 強制載入 UM JS */
 add_action('wp_enqueue_scripts', function() {
     if (!function_exists('um_is_core_page')) return;
     $is_um = um_is_core_page('user') || get_query_var('um_user') || um_is_core_page('account');
-    $is_member_tpl = is_page_template('page-member.php');
-    if ($is_um || $is_member_tpl) {
-        wp_enqueue_script('um_scripts');
-        wp_enqueue_script('um_profile');
-        wp_enqueue_script('um_account');
-        wp_enqueue_script('um_crop');
-        wp_enqueue_script('um_modal');
-        wp_enqueue_script('um_fileupload');
-        wp_enqueue_style('um_styles');
-        wp_enqueue_style('um_profile');
-        wp_enqueue_style('um_account');
-        wp_enqueue_style('um_crop');
-        wp_enqueue_style('um_misc');
-        wp_enqueue_style('um_modal');
-        wp_enqueue_style('um_fileupload');
+    $is_mt = is_page_template('page-member.php');
+    if ($is_um || $is_mt) {
+        foreach (['um_scripts','um_profile','um_account','um_crop','um_modal','um_fileupload'] as $s) wp_enqueue_script($s);
+        foreach (['um_styles','um_profile','um_account','um_crop','um_misc','um_modal','um_fileupload'] as $s) wp_enqueue_style($s);
     }
 }, 20);
 
-/* ② 自訂會員頁模板 */
 add_filter('template_include', function($tpl) {
     if (!function_exists('um_is_core_page')) return $tpl;
     if (um_is_core_page('user') || get_query_var('um_user')) {
@@ -454,7 +379,6 @@ add_filter('template_include', function($tpl) {
     return $tpl;
 }, 99);
 
-/* ③ 停用 UM 前端樣式（個人資料頁） */
 add_action('wp_enqueue_scripts', function() {
     if (!function_exists('um_is_core_page')) return;
     if ((um_is_core_page('user') || get_query_var('um_user')) && !um_is_core_page('account')) {
@@ -464,17 +388,15 @@ add_action('wp_enqueue_scripts', function() {
     }
 }, 99);
 
-/* ④ 隱藏 UM 後台警告 */
 add_action('admin_notices', function() {
     $s = get_current_screen();
     if ($s && (strpos($s->id,'um_')!==false || strpos($s->id,'ultimate-member')!==false || $s->id==='toplevel_page_um-options'))
         remove_all_actions('admin_notices');
 }, 1);
 
-/* ⑤ 停用 UM 登入 nonce 驗證 */
 add_filter( 'um_login_allow_nonce_verification', '__return_false' );
 
-/* ⑥ UM 全站中文化 */
+/* UM 中文化字典 */
 add_filter('gettext', function($t,$o,$d) {
     if ($d !== 'ultimate-member') return $t;
     static $map = [
@@ -578,7 +500,7 @@ add_filter('gettext_with_context', function($t,$o,$ctx,$d) {
     return $m[$o] ?? $t;
 }, 10, 4);
 
-/* ⑦ UM JS 端錯誤訊息中文化 */
+/* UM JS 端錯誤訊息中文化 */
 add_action('wp_footer', function() { ?>
     <script>
     document.addEventListener('DOMContentLoaded', function() {
@@ -622,7 +544,7 @@ add_action('wp_footer', function() { ?>
     </script>
 <?php }, 999);
 
-/* ⑧ 每日登入積分 */
+/* 每日登入積分 */
 add_action('um_user_login', function($uid) {
     $uid = (int)$uid; if (!$uid) return;
     $today = date('Y-m-d');
@@ -687,8 +609,6 @@ add_action('wp_ajax_smacg_read_article', function() {
 
 /* ============================================================
    REST API
-   ★ 修 v1.5.1: 所有 get_field 呼叫改用 weixiaoacg_acf() 包裝，
-   ACF 暫時停用時不再 fatal
    ============================================================ */
 add_action('rest_api_init', function() {
 
@@ -822,7 +742,7 @@ add_action('wp_ajax_weixiaoacg_submit_rating', function() {
     $pid = (int)($_POST['post_id']??0); $score = (float)($_POST['score']??0); $uid = get_current_user_id();
     if (!$pid || !$uid) wp_send_json_error(['msg'=>'請先登入']);
     if ($score < 1 || $score > 10) wp_send_json_error(['msg'=>'評分範圍 1–10']);
-    if (function_exists('yasr_save_visitor_vote')) { wp_send_json_success(['msg'=>'評分成功','yasr'=>yasr_save_visitor_vote($pid,$score)]); }
+    if (function_exists('yasr_save_visitor_vote')) wp_send_json_success(['msg'=>'評分成功','yasr'=>yasr_save_visitor_vote($pid,$score)]);
     update_user_meta($uid,"weixiaoacg_rating_{$pid}",$score);
     wp_send_json_success(['msg'=>'評分成功']);
 });
@@ -841,32 +761,6 @@ add_action('wp_ajax_nopriv_weixiaoacg_ajax_login', function() {
     is_wp_error($user) ? wp_send_json_error(['msg'=>'帳號或密碼錯誤，請再試一次']) : wp_send_json_success(['msg'=>'登入成功','redirect'=>home_url('/')]);
 });
 
-/* ============================================================
-   全站外部連結中轉
-   ============================================================ */
-add_action('wp_footer','weixiao_external_link_redirect_js',99);
-function weixiao_external_link_redirect_js(): void {
-    $host = parse_url(home_url(),PHP_URL_HOST);
-    $go   = home_url('/go/'); ?>
-    <script>
-    (function(){
-        var H=<?php echo json_encode($host); ?>,G=<?php echo json_encode($go); ?>;
-        function ext(a){try{var h=a.getAttribute('href')||'';if(!h||/^(#|mailto:|tel:|javascript:)/i.test(h)||h.startsWith(G)||a.hasAttribute('data-go-confirm'))return false;return new URL(h,location.origin).hostname!==H;}catch(e){return false;}}
-        document.addEventListener('click',function(e){var a=e.target.closest('a');if(!a||!ext(a))return;e.preventDefault();e.stopPropagation();window.open(G+'?url='+encodeURIComponent(a.href),'_blank','noopener,noreferrer');},true);
-    })();
-    </script><?php
-}
-
-/* 登入後跳轉 */
-add_action( 'um_on_login_before_redirect', function( $user_id ) {
-    um_fetch_user( $user_id );
-    if ( um_user( 'after_login' ) === 'redirect_profile' ) {
-        wp_safe_redirect( home_url( '/' ) );
-        exit;
-    }
-}, 5 );
-
-/* AJAX 註冊 handler */
 add_action('wp_ajax_nopriv_weixiaoacg_ajax_register', function() {
     check_ajax_referer('weixiaoacg_nonce', 'nonce');
     $username = sanitize_user($_POST['user_login'] ?? '');
@@ -881,15 +775,55 @@ add_action('wp_ajax_nopriv_weixiaoacg_ajax_register', function() {
     if (is_wp_error($user_id)) wp_send_json_error(['msg' => $user_id->get_error_message()]);
     if (function_exists('um_fetch_user')) {
         update_user_meta($user_id, 'account_status', 'approved');
-        $user = new WP_User($user_id);
-        $user->set_role('subscriber');
+        (new WP_User($user_id))->set_role('subscriber');
     }
     wp_set_current_user($user_id);
     wp_set_auth_cookie($user_id, false, is_ssl());
     wp_send_json_success(['msg' => '註冊成功！', 'redirect' => home_url('/')]);
 });
 
-/* 帳號更新後跳回個人頁面 */
+add_action('wp_ajax_smacg_get_my_rating', function() {
+    $post_id = isset($_REQUEST['post_id']) ? absint($_REQUEST['post_id']) : 0;
+    if ($post_id <= 0) wp_send_json_error(['msg' => 'invalid post_id'], 400);
+    $uid = get_current_user_id();
+    if (!$uid) wp_send_json_error(['msg' => 'not logged in'], 401);
+    $detail = get_user_meta($uid, "smacg_rating_detail_{$post_id}", true);
+    if (!is_array($detail)) wp_send_json_success(['rated' => false]);
+    wp_send_json_success([
+        'rated'     => true,
+        'story'     => (float) ($detail['story']     ?? 5),
+        'music'     => (float) ($detail['music']     ?? 5),
+        'animation' => (float) ($detail['animation'] ?? 5),
+        'voice'     => (float) ($detail['voice']     ?? 5),
+        'avg'       => (float) ($detail['avg']       ?? 5),
+    ]);
+});
+
+/* ============================================================
+   全站外部連結中轉
+   ============================================================ */
+add_action('wp_footer', function() {
+    $host = parse_url(home_url(),PHP_URL_HOST);
+    $go   = home_url('/go/'); ?>
+    <script>
+    (function(){
+        var H=<?php echo json_encode($host); ?>,G=<?php echo json_encode($go); ?>;
+        function ext(a){try{var h=a.getAttribute('href')||'';if(!h||/^(#|mailto:|tel:|javascript:)/i.test(h)||h.startsWith(G)||a.hasAttribute('data-go-confirm'))return false;return new URL(h,location.origin).hostname!==H;}catch(e){return false;}}
+        document.addEventListener('click',function(e){var a=e.target.closest('a');if(!a||!ext(a))return;e.preventDefault();e.stopPropagation();window.open(G+'?url='+encodeURIComponent(a.href),'_blank','noopener,noreferrer');},true);
+    })();
+    </script><?php
+}, 99);
+
+/* UM 登入後跳轉 */
+add_action( 'um_on_login_before_redirect', function( $user_id ) {
+    um_fetch_user( $user_id );
+    if ( um_user( 'after_login' ) === 'redirect_profile' ) {
+        wp_safe_redirect( home_url( '/' ) );
+        exit;
+    }
+}, 5 );
+
+/* UM 帳號更新後跳回個人頁 */
 add_action( 'um_after_user_account_updated', function( $user_id, $args ) {
     if ( ! empty( $_POST['um_account_tab'] ) && $_POST['um_account_tab'] === 'general' ) {
         um_fetch_user( $user_id );
@@ -898,11 +832,9 @@ add_action( 'um_after_user_account_updated', function( $user_id, $args ) {
     }
 }, 10, 2 );
 
-/* /account/ 頁面強制 editing 模式 */
+/* /account/ 強制 editing 模式 */
 add_action( 'um_account_page_load', function() {
-    if ( function_exists( 'UM' ) ) {
-        UM()->fields()->editing = true;
-    }
+    if ( function_exists( 'UM' ) ) UM()->fields()->editing = true;
 }, 1 );
 
 /* 會員頁頭像上傳 */
@@ -920,57 +852,35 @@ add_action('wp_footer', function() {
         var nonce     = <?php echo json_encode($nonce); ?>;
         var timestamp = <?php echo (int)$timestamp; ?>;
         var ajaxUrl   = <?php echo json_encode(admin_url('admin-ajax.php')); ?>;
-
         document.addEventListener('DOMContentLoaded', function() {
             var imgWrap   = document.querySelector('.mc-avatar-img-wrap');
             var fileInput = document.getElementById('mc-avatar-file-input');
             if (!imgWrap || !fileInput) return;
-
             imgWrap.addEventListener('click', function() { fileInput.click(); });
-
             fileInput.addEventListener('change', function() {
                 var file = fileInput.files[0]; if (!file) return;
                 var overlay = document.getElementById('mc-avatar-overlay');
                 if (overlay) overlay.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i>';
-
-                var formData = new FormData();
-                formData.append('action', 'um_imageupload');
-                formData.append('key', 'profile_photo');
-                formData.append('user_id', userId);
-                formData.append('_wpnonce', nonce);
-                formData.append('timestamp', timestamp);
-                formData.append('set_id', '1520');
-                formData.append('set_mode', 'profile');
-                formData.append('type', 'image');
-                formData.append('max_size', '999999999');
-                formData.append('allowed_types', 'jpg,jpeg,png,gif,webp');
-                formData.append('file', file);
-
-                fetch(ajaxUrl, { method: 'POST', body: formData, credentials: 'same-origin' })
-                .then(function(r){ return r.json(); })
+                var fd = new FormData();
+                fd.append('action','um_imageupload'); fd.append('key','profile_photo');
+                fd.append('user_id',userId); fd.append('_wpnonce',nonce); fd.append('timestamp',timestamp);
+                fd.append('set_id','1520'); fd.append('set_mode','profile');
+                fd.append('type','image'); fd.append('max_size','999999999');
+                fd.append('allowed_types','jpg,jpeg,png,gif,webp'); fd.append('file',file);
+                fetch(ajaxUrl, {method:'POST',body:fd,credentials:'same-origin'})
+                .then(function(r){return r.json();})
                 .then(function(data){
                     if (data.success) {
-                        var imgUrl = data.data && data.data.url ? data.data.url : null;
-                        if (imgUrl) {
-                            var avatarImg = document.getElementById('mc-avatar-img');
-                            if (avatarImg) avatarImg.src = imgUrl + '?t=' + Date.now();
-                        }
+                        var u = data.data && data.data.url ? data.data.url : null;
+                        if (u) { var img = document.getElementById('mc-avatar-img'); if (img) img.src = u + '?t=' + Date.now(); }
                         if (overlay) overlay.innerHTML = '<i class="fa-solid fa-check"></i>';
-                        setTimeout(function(){
-                            if (overlay) overlay.innerHTML = '<i class="fa-solid fa-camera"></i>';
-                            location.reload();
-                        }, 1000);
+                        setTimeout(function(){ if (overlay) overlay.innerHTML = '<i class="fa-solid fa-camera"></i>'; location.reload(); }, 1000);
                     } else {
-                        var msg = (data.data && data.data.error) ? data.data.error : '上傳失敗';
-                        alert(msg);
+                        alert((data.data && data.data.error) ? data.data.error : '上傳失敗');
                         if (overlay) overlay.innerHTML = '<i class="fa-solid fa-camera"></i>';
                     }
                 })
-                .catch(function(err){
-                    console.error('Upload error:', err);
-                    alert('上傳時發生錯誤，請稍後再試');
-                    if (overlay) overlay.innerHTML = '<i class="fa-solid fa-camera"></i>';
-                });
+                .catch(function(){ alert('上傳時發生錯誤，請稍後再試'); if (overlay) overlay.innerHTML = '<i class="fa-solid fa-camera"></i>'; });
                 fileInput.value = '';
             });
         });
@@ -979,311 +889,139 @@ add_action('wp_footer', function() {
     <?php
 }, 998);
 
-
 /* ============================================================
-   取得當前使用者對某動畫的評分（給前端 fetch 用）
+   自訂模板專用 CSS
    ============================================================ */
-add_action('wp_ajax_smacg_get_my_rating', function() {
-    $post_id = isset($_REQUEST['post_id']) ? absint($_REQUEST['post_id']) : 0;
-    if ($post_id <= 0) wp_send_json_error(['msg' => 'invalid post_id'], 400);
-    $uid = get_current_user_id();
-    if (!$uid) wp_send_json_error(['msg' => 'not logged in'], 401);
-
-    $detail = get_user_meta($uid, "smacg_rating_detail_{$post_id}", true);
-    if (!is_array($detail)) wp_send_json_success(['rated' => false]);
-
-    wp_send_json_success([
-        'rated'     => true,
-        'story'     => (float) ($detail['story']     ?? 5),
-        'music'     => (float) ($detail['music']     ?? 5),
-        'animation' => (float) ($detail['animation'] ?? 5),
-        'voice'     => (float) ($detail['voice']     ?? 5),
-        'avg'       => (float) ($detail['avg']       ?? 5),
-    ]);
-});
-
-
-/**
- * 載入自訂模板專用 CSS
- */
 add_action( 'wp_enqueue_scripts', function () {
     $base_url = get_stylesheet_directory_uri() . '/assets/css/';
     $base_dir = get_stylesheet_directory()     . '/assets/css/';
+    $ver = fn($f) => file_exists($base_dir.$f) ? filemtime($base_dir.$f) : '1.0';
 
-    $ver_news    = file_exists( $base_dir . 'news.css' )    ? filemtime( $base_dir . 'news.css' )    : '1.0';
-    $ver_single  = file_exists( $base_dir . 'single.css' )  ? filemtime( $base_dir . 'single.css' )  : '1.0';
-    $ver_columns = file_exists( $base_dir . 'columns.css' ) ? filemtime( $base_dir . 'columns.css' ) : '1.0';
-
-    if ( is_category() || is_tax( 'channel' ) ) {
-        wp_enqueue_style( 'smacg-news', $base_url . 'news.css', [], $ver_news );
-    }
+    if ( is_category() || is_tax( 'channel' ) )
+        wp_enqueue_style( 'smacg-news', $base_url . 'news.css', [], $ver('news.css') );
 
     if ( is_singular( 'post' ) ) {
-        wp_enqueue_style( 'smacg-news',   $base_url . 'news.css',   [],            $ver_news );
-        wp_enqueue_style( 'smacg-single', $base_url . 'single.css', [ 'smacg-news' ], $ver_single );
+        wp_enqueue_style( 'smacg-news',   $base_url . 'news.css',   [],            $ver('news.css') );
+        wp_enqueue_style( 'smacg-single', $base_url . 'single.css', ['smacg-news'], $ver('single.css') );
     }
 
     if ( is_page_template( 'page-columns.php' ) ) {
-        wp_enqueue_style( 'smacg-news',    $base_url . 'news.css',    [],              $ver_news );
-        wp_enqueue_style( 'smacg-columns', $base_url . 'columns.css', [ 'smacg-news' ], $ver_columns );
+        wp_enqueue_style( 'smacg-news',    $base_url . 'news.css',    [],              $ver('news.css') );
+        wp_enqueue_style( 'smacg-columns', $base_url . 'columns.css', ['smacg-news'], $ver('columns.css') );
     }
 }, 20 );
+
 /* =============================================================
- *  混合制 URL 策略 — Gemini 2.0 Flash 版
- *  v1.0.0 — 2026-05-08
- *
- *  策略：
- *    - 公告 (announcement) → 數字 ID slug
- *    - 新聞 (news)         → 數字 ID slug
- *    - 評論 (review)       → Gemini 英文 slug
- *    - 專題 (feature)      → Gemini 英文 slug
- *
- *  作用範圍：僅限 post type = 'post'
- *  動漫 CPT 等其他類型完全不受影響
- *
- *  成本：Gemini 2.0 Flash 免費版（每天 1500 次請求免費）
+ *  混合制 URL 策略 — Gemini 2.0 Flash 版  v1.1.0
+ *  - announcement / news → 數字 ID slug
+ *  - review / feature   → Gemini 英文 slug
+ *  作用範圍：post type = 'post'，動漫 CPT 不受影響
  * ============================================================= */
 
-/**
- * 走數字 ID 的內容類型清單（category slug）
- */
-function weixiaoacg_id_slug_categories(): array {
-	return [ 'announcement', 'news' ];
+/** 取得文章主分類 slug（僅匹配本系統四種類型） */
+function weixiaoacg_get_post_cat_slug( array $postarr = [], int $post_id = 0 ): string {
+    $ids = $postarr['post_category'] ?? ( $postarr['tax_input']['category'] ?? [] );
+    if ( empty( $ids ) && $post_id > 0 ) $ids = wp_get_post_categories( $post_id );
+    $allowed = [ ...WEIXIAOACG_ID_CATS, ...WEIXIAOACG_LLM_CATS ];
+    foreach ( (array) $ids as $id ) {
+        $term = get_term( (int) $id, 'category' );
+        if ( $term && ! is_wp_error( $term ) && in_array( $term->slug, $allowed, true ) )
+            return $term->slug;
+    }
+    return '';
 }
 
-/**
- * 走 Gemini 英文 slug 的內容類型清單（category slug）
- */
-function weixiaoacg_llm_slug_categories(): array {
-	return [ 'review', 'feature' ];
+/** 第一階段：插入文章前處理 LLM slug */
+add_filter( 'wp_insert_post_data', function ( array $data, array $postarr ): array {
+    if ( ( $data['post_type'] ?? 'post' ) !== 'post' ) return $data;
+    if ( ( $data['post_status'] ?? '' ) === 'auto-draft' ) return $data;
+    if ( empty( $data['post_title'] ) ) return $data;
+
+    $cat     = weixiaoacg_get_post_cat_slug( $postarr, (int) ( $postarr['ID'] ?? 0 ) );
+    $slug    = $postarr['post_name'] ?? '';
+    $has_cjk = $slug !== '' && preg_match( '/[^\x00-\x7F]/', $slug );
+
+    // 評論/專題分類，或抓不到分類但 slug 含中文 → 一律送 Gemini
+    $need_llm = in_array( $cat, WEIXIAOACG_LLM_CATS, true ) || ( $cat === '' && $has_cjk );
+    if ( ! $need_llm ) return $data;
+    if ( $slug !== '' && ! $has_cjk ) return $data; // 已是純 ASCII，尊重作者
+
+    $en = weixiaoacg_gemini_slug( $data['post_title'] );
+    if ( $en !== '' ) $data['post_name'] = $en;
+    return $data;
+}, 10, 2 );
+
+/** 第二階段：發佈後處理 ID slug（announcement / news） */
+add_action( 'save_post_post', function ( int $post_id, WP_Post $post ): void {
+    if ( wp_is_post_revision( $post_id ) || wp_is_post_autosave( $post_id ) ) return;
+    if ( $post->post_status === 'auto-draft' ) return;
+
+    $cat = weixiaoacg_get_post_cat_slug( [], $post_id );
+    if ( ! in_array( $cat, WEIXIAOACG_ID_CATS, true ) ) return;
+    if ( ctype_digit( $post->post_name ) && (int) $post->post_name === $post_id ) return;
+
+    remove_action( 'save_post_post', __FUNCTION__, 99 );
+    wp_update_post( [ 'ID' => $post_id, 'post_name' => (string) $post_id ] );
+    add_action( 'save_post_post', __FUNCTION__, 99, 2 );
+}, 99, 2 );
+
+/** 兜底：仍含中文時改用 post_id */
+add_filter( 'wp_unique_post_slug', function ( string $slug, int $post_id, string $status, string $type ): string {
+    if ( $type !== 'post' ) return $slug;
+    return preg_match( '/[^\x00-\x7F]/', $slug ) ? (string) $post_id : $slug;
+}, 10, 4 );
+
+/** 呼叫 Gemini 2.0 Flash 產生英文 slug */
+function weixiaoacg_gemini_slug( string $title ): string {
+    if ( ! defined( 'WEIXIAOACG_GEMINI_API_KEY' ) || WEIXIAOACG_GEMINI_API_KEY === '' ) return '';
+
+    $cache_key = 'wxacg_slug_' . md5( $title );
+    if ( ( $cached = get_transient( $cache_key ) ) !== false ) return (string) $cached;
+
+    $prompt = '你是 ACG 網站的 URL slug 產生器。輸入中文/日文標題，產出英文 slug。'
+        . '規則：(1)全小寫 a-z 0-9 連字號；(2)長度 5-60；'
+        . '(3)作品用官方英文或羅馬拼音（葬送的芙莉蓮→frieren、咒術迴戰→jujutsu-kaisen、'
+        . '我推的孩子→oshi-no-ko、SPY×FAMILY→spy-family、鏈鋸人→chainsaw-man）；'
+        . '(4)評論加 -review 字尾；(5)省略 the/of/and/第/季/集；'
+        . '(6)第二季→s2、第18話→ep18、2026春→spring-2026；'
+        . '(7)只回傳純 slug，不要解釋、引號、句點、換行。';
+
+    $res = wp_remote_post(
+        'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key='
+            . urlencode( WEIXIAOACG_GEMINI_API_KEY ),
+        [
+            'headers' => [ 'Content-Type' => 'application/json' ],
+            'body'    => wp_json_encode( [
+                'systemInstruction' => [ 'parts' => [ [ 'text' => $prompt ] ] ],
+                'contents'          => [ [ 'role' => 'user', 'parts' => [ [ 'text' => $title ] ] ] ],
+                'generationConfig'  => [ 'temperature' => 0.3, 'maxOutputTokens' => 60 ],
+            ] ),
+            'timeout' => 15,
+        ]
+    );
+
+    if ( is_wp_error( $res ) || wp_remote_retrieve_response_code( $res ) !== 200 ) {
+        error_log( '[Gemini slug] failed: ' . ( is_wp_error( $res ) ? $res->get_error_message() : wp_remote_retrieve_body( $res ) ) );
+        return '';
+    }
+
+    $json = json_decode( wp_remote_retrieve_body( $res ), true );
+    $slug = sanitize_title( trim( $json['candidates'][0]['content']['parts'][0]['text'] ?? '' ) );
+
+    if ( $slug === '' || strlen( $slug ) < 3 || strlen( $slug ) > 60 ) return '';
+
+    set_transient( $cache_key, $slug, MONTH_IN_SECONDS );
+    return $slug;
 }
 
-/* -------------------------------------------------------------
- * 第一階段：wp_insert_post_data — 處理 LLM slug 翻譯
- * （ID slug 無法在這階段處理，因為新文章還沒有 ID）
- * ----------------------------------------------------------- */
-add_filter( 'wp_insert_post_data', 'weixiaoacg_handle_slug_strategy', 10, 2 );
-function weixiaoacg_handle_slug_strategy( array $data, array $postarr ): array {
-	if ( ( $data['post_type'] ?? 'post' ) !== 'post' ) {
-		return $data;
-	}
-	if ( ( $data['post_status'] ?? '' ) === 'auto-draft' ) {
-		return $data;
-	}
-	if ( empty( $data['post_title'] ) ) {
-		return $data;
-	}
-
-	$category_slug = weixiaoacg_get_primary_category_slug_from_input( $postarr );
-
-	// 評論 / 專題 → Gemini 翻譯
-	if ( in_array( $category_slug, weixiaoacg_llm_slug_categories(), true ) ) {
-		$current_slug = $postarr['post_name'] ?? '';
-
-		// 已有純 ASCII slug → 尊重作者手填
-		if ( $current_slug !== '' && ! preg_match( '/[^\x00-\x7F]/', $current_slug ) ) {
-			return $data;
-		}
-
-		$english_slug = weixiaoacg_generate_slug_via_gemini( $data['post_title'] );
-		if ( $english_slug !== '' ) {
-			$data['post_name'] = $english_slug;
-		}
-	}
-
-	return $data;
-}
-
-/* -------------------------------------------------------------
- * 第二階段：save_post — 處理 ID slug
- * ----------------------------------------------------------- */
-add_action( 'save_post_post', 'weixiaoacg_apply_id_slug_strategy', 99, 3 );
-function weixiaoacg_apply_id_slug_strategy( int $post_id, WP_Post $post, bool $update ): void {
-	if ( wp_is_post_revision( $post_id ) || wp_is_post_autosave( $post_id ) ) {
-		return;
-	}
-	if ( $post->post_status === 'auto-draft' ) {
-		return;
-	}
-
-	$category_slug = weixiaoacg_get_primary_category_slug_from_post( $post_id );
-
-	if ( ! in_array( $category_slug, weixiaoacg_id_slug_categories(), true ) ) {
-		return;
-	}
-
-	if ( ctype_digit( $post->post_name ) && (int) $post->post_name === $post_id ) {
-		return;
-	}
-
-	remove_action( 'save_post_post', __FUNCTION__, 99 );
-	wp_update_post( [
-		'ID'        => $post_id,
-		'post_name' => (string) $post_id,
-	] );
-	add_action( 'save_post_post', __FUNCTION__, 99, 3 );
-}
-
-/* -------------------------------------------------------------
- * 取得主分類 slug —— 從編輯畫面送出的資料判斷
- * ----------------------------------------------------------- */
-function weixiaoacg_get_primary_category_slug_from_input( array $postarr ): string {
-	$category_ids = $postarr['post_category'] ?? [];
-
-	if ( empty( $category_ids ) && isset( $postarr['tax_input']['category'] ) ) {
-		$category_ids = (array) $postarr['tax_input']['category'];
-	}
-
-	if ( empty( $category_ids ) ) {
-		return '';
-	}
-
-	foreach ( (array) $category_ids as $cat_id ) {
-		$cat_id = (int) $cat_id;
-		if ( $cat_id <= 0 ) {
-			continue;
-		}
-		$term = get_term( $cat_id, 'category' );
-		if ( $term && ! is_wp_error( $term ) && isset( $term->slug ) ) {
-			$slug = (string) $term->slug;
-			if ( in_array( $slug, [ 'announcement', 'news', 'review', 'feature' ], true ) ) {
-				return $slug;
-			}
-		}
-	}
-
-	return '';
-}
-
-/* -------------------------------------------------------------
- * 取得主分類 slug —— 從已儲存的文章判斷
- * ----------------------------------------------------------- */
-function weixiaoacg_get_primary_category_slug_from_post( int $post_id ): string {
-	$terms = get_the_category( $post_id );
-	if ( empty( $terms ) ) {
-		return '';
-	}
-	foreach ( $terms as $term ) {
-		if ( isset( $term->slug ) && in_array( $term->slug, [ 'announcement', 'news', 'review', 'feature' ], true ) ) {
-			return (string) $term->slug;
-		}
-	}
-	return '';
-}
-
-/* -------------------------------------------------------------
- * Gemini 2.0 Flash 呼叫
- * ----------------------------------------------------------- */
-function weixiaoacg_generate_slug_via_gemini( string $title ): string {
-	$cache_key = 'weixiaoacg_slug_' . md5( $title );
-	$cached    = get_transient( $cache_key );
-	if ( $cached !== false ) {
-		return (string) $cached;
-	}
-
-	if ( ! defined( 'WEIXIAOACG_GEMINI_API_KEY' ) || WEIXIAOACG_GEMINI_API_KEY === '' ) {
-		return '';
-	}
-
-	$system_prompt = '你是 ACG 內容網站的 URL slug 產生器（評論 / 專題用，需要高品質 SEO slug）。'
-		. '收到中文／日文文章標題後，產出英文 URL slug。'
-		. '規則：'
-		. '(1) 全小寫 a-z 0-9 連字號；'
-		. '(2) 長度 5-60 字元；'
-		. '(3) 作品名優先使用官方英文名或廣為流通的羅馬拼音縮寫'
-		. '（葬送的芙莉蓮→frieren、我推的孩子→oshi-no-ko、咒術迴戰→jujutsu-kaisen、'
-		. 'SPY×FAMILY→spy-family、鏈鋸人→chainsaw-man、進擊的巨人→aot）；'
-		. '(4) 評論類加上 -review 字尾、專題類加上主題關鍵字；'
-		. '(5) 省略助詞與停用詞（the / of / and / a / 第 / 季 / 集）；'
-		. '(6) 數字保留阿拉伯數字（第二季→s2、第18話→ep18、2026 春→spring-2026）；'
-		. '(7) AI 工具相關文章：ChatGPT→chatgpt、Claude→claude、Midjourney→midjourney、Sora→sora；'
-		. '(8) 只回傳純 slug，不要任何解釋、引號、句點、換行。';
-
-	$endpoint = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key='
-		. urlencode( WEIXIAOACG_GEMINI_API_KEY );
-
-	$body = [
-		'systemInstruction' => [
-			'parts' => [ [ 'text' => $system_prompt ] ],
-		],
-		'contents' => [
-			[
-				'role'  => 'user',
-				'parts' => [ [ 'text' => $title ] ],
-			],
-		],
-		'generationConfig' => [
-			'temperature'     => 0.3,
-			'maxOutputTokens' => 60,
-		],
-	];
-
-	$response = wp_remote_post( $endpoint, [
-		'headers' => [
-			'Content-Type' => 'application/json',
-		],
-		'body'    => wp_json_encode( $body ),
-		'timeout' => 15,
-	] );
-
-	if ( is_wp_error( $response ) || wp_remote_retrieve_response_code( $response ) !== 200 ) {
-		if ( class_exists( 'Anime_Sync_Error_Logger' ) ) {
-			Anime_Sync_Error_Logger::warning( 'Gemini slug request failed', [
-				'title' => $title,
-				'error' => is_wp_error( $response ) ? $response->get_error_message() : wp_remote_retrieve_body( $response ),
-			] );
-		}
-		return '';
-	}
-
-	$json = json_decode( wp_remote_retrieve_body( $response ), true );
-	$raw  = $json['candidates'][0]['content']['parts'][0]['text'] ?? '';
-	$slug = sanitize_title( trim( $raw ) );
-
-	if ( $slug === '' || strlen( $slug ) < 3 || strlen( $slug ) > 60 ) {
-		return '';
-	}
-
-	set_transient( $cache_key, $slug, MONTH_IN_SECONDS );
-	return $slug;
-}
-
-/* -------------------------------------------------------------
- * Fallback：避免中文 URL 流出
- * 評論 / 專題 Gemini 失敗時也用 post_id 兜底
- * ----------------------------------------------------------- */
-add_filter( 'wp_unique_post_slug', 'weixiaoacg_slug_fallback_to_id', 10, 4 );
-function weixiaoacg_slug_fallback_to_id( string $slug, int $post_id, string $post_status, string $post_type ): string {
-	if ( $post_type !== 'post' ) {
-		return $slug;
-	}
-	if ( preg_match( '/[^\x00-\x7F]/', $slug ) ) {
-		return (string) $post_id;
-	}
-	return $slug;
-}
-
-/* -------------------------------------------------------------
- * 編輯畫面提示：評論 / 專題 slug 異常時提醒
- * ----------------------------------------------------------- */
-add_action( 'edit_form_after_title', 'weixiaoacg_slug_warning_notice' );
-function weixiaoacg_slug_warning_notice( WP_Post $post ): void {
-	if ( $post->post_type !== 'post' || $post->post_status === 'auto-draft' ) {
-		return;
-	}
-
-	$category_slug = weixiaoacg_get_primary_category_slug_from_post( $post->ID );
-
-	if ( ! in_array( $category_slug, weixiaoacg_llm_slug_categories(), true ) ) {
-		return;
-	}
-
-	if ( ctype_digit( $post->post_name ) ) {
-		echo '<div class="notice notice-warning inline" style="margin:10px 0;padding:10px;">';
-		echo '⚠️ 此' . esc_html( $category_slug === 'review' ? '評論' : '專題' );
-		echo '文章 slug 為數字 ID（' . esc_html( $post->post_name ) . '），';
-		echo 'Gemini API 可能暫時故障。請於右側「永久連結」改為英文 slug，';
-		echo '或重新儲存讓系統再試一次。';
-		echo '</div>';
-	}
-}
+/** 編輯畫面提示：評論/專題若 slug 為純數字，提醒手動修正 */
+add_action( 'edit_form_after_title', function ( WP_Post $post ): void {
+    if ( $post->post_type !== 'post' || $post->post_status === 'auto-draft' ) return;
+    $cat = weixiaoacg_get_post_cat_slug( [], $post->ID );
+    if ( ! in_array( $cat, WEIXIAOACG_LLM_CATS, true ) ) return;
+    if ( ! ctype_digit( $post->post_name ) ) return;
+    echo '<div class="notice notice-warning inline" style="margin:10px 0;padding:10px;">';
+    echo '⚠️ 此' . ( $cat === 'review' ? '評論' : '專題' ) . '文章 slug 為數字（' . esc_html( $post->post_name ) . '），';
+    echo 'Gemini 可能暫時失敗。請到右側「永久連結」改為英文 slug，或重新更新讓系統再試。';
+    echo '</div>';
+} );
