@@ -2,25 +2,19 @@
 /**
  * Admin Page: Review Queue
  *
- * File: admin/pages/review-queue.php
- * Displays all anime draft posts awaiting editorial review before publishing.
- * Allows bulk publish, bulk delete, individual field editing, and Bangumi
- * pending-ID resolution.
- *
- * ACG v3 – 新增系列缺漏掃描（Series Gap Scan）功能
- *          位置：Filter Bar 與 Bulk Actions 之間
- *          AJAX action：anime_sync_scan_series_gaps
- *          使用 animeSyncAdmin.nonce，風格與現有按鈕一致
- *
- * ACG v4 – 修正：
- *          1. 移除舊版重複的 #btn-scan-gaps / #btn-scan-gaps-force handler，
- *             僅保留要求勾選 ID 的新版 handler。
- *          2. 補回所有 esc_js() 前的 echo，避免 i18n 字串輸出為空。
- *          3. 封面圖優先採 featured image，與 published-list 一致。
- *          4. 時間顯示改用 wp_date()，套用站台時區。
- *          5. 加入 current_user_can('edit_posts') 權限檢查。
- *
  * @package Anime_Sync_Pro
+ * @version 3.0.0
+ *
+ * Changelog:
+ *  - 3.0.0 (2026-05-10):
+ *      • 修正：快取時間從 get_transient() 改為 get_option('anime_sync_series_gaps_time')，
+ *              對應 handler 的寫入方式，否則永遠顯示不到時間。
+ *      • 季節年份範圍動態化（當年 +1 → 2015）。
+ *      • 加入 wp_unslash() 於所有 $_GET 輸入。
+ *      • 加入 button disabled 與 loading 狀態。
+ *      • 系列缺漏掃描表格加入「立即匯入」按鈕（直接送 anime_sync_import_single）。
+ *
+ *  - v4 (前一版): 重複 handler / esc_js 修正 / featured image fallback / wp_date / 權限檢查。
  */
 
 if ( ! defined( 'ABSPATH' ) ) {
@@ -97,13 +91,14 @@ $pending_count = (int) ( new WP_Query( [
 ] ) )->found_posts;
 
 $current_year  = (int) date( 'Y' );
-$years         = range( $current_year + 1, 2000 );
+$years         = range( $current_year + 1, 2015 );
 $seasons       = [ 'WINTER', 'SPRING', 'SUMMER', 'FALL' ];
 
 /* ───────────────────────────────────────────────
-   Gap Scan：transient 快取資訊
+   Gap Scan：快取時間（✅ 修正：用 get_option 對應 handler）
 ─────────────────────────────────────────────── */
-$gap_cached_at = get_transient( 'anime_sync_series_gaps_time' );
+$gap_cached_at_raw = get_option( 'anime_sync_series_gaps_time', '' );
+$gap_cached_at     = $gap_cached_at_raw ? strtotime( $gap_cached_at_raw ) : 0;
 ?>
 
 <div class="wrap anime-sync-review-queue">
@@ -175,8 +170,8 @@ $gap_cached_at = get_transient( 'anime_sync_series_gaps_time' );
 
         <span style="margin-left:16px;color:#777;">
             <?php printf(
-                esc_html__( '共 %d 筆', 'anime-sync-pro' ),
-                $total_posts
+                esc_html__( '共 %s 筆', 'anime-sync-pro' ),
+                esc_html( number_format_i18n( $total_posts ) )
             ); ?>
         </span>
     </form>
@@ -193,11 +188,11 @@ $gap_cached_at = get_transient( 'anime_sync_series_gaps_time' );
             <?php esc_html_e( '強制重新掃描', 'anime-sync-pro' ); ?>
         </button>
 
-        <?php if ( $gap_cached_at ) : ?>
+        <?php if ( $gap_cached_at > 0 ) : ?>
             <span style="margin-left:12px;color:#777;font-size:12px;">
                 <?php printf(
                     esc_html__( '快取時間：%s（6 小時內有效）', 'anime-sync-pro' ),
-                    esc_html( wp_date( 'Y-m-d H:i', (int) $gap_cached_at ) )
+                    esc_html( wp_date( 'Y-m-d H:i', $gap_cached_at ) )
                 ); ?>
             </span>
         <?php endif; ?>
@@ -255,7 +250,8 @@ $gap_cached_at = get_transient( 'anime_sync_series_gaps_time' );
             $season       = get_post_meta( $post_id, 'anime_season',       true );
             $season_year  = get_post_meta( $post_id, 'anime_season_year',  true );
             $status       = get_post_meta( $post_id, 'anime_status',       true );
-            $last_sync    = get_post_meta( $post_id, 'anime_last_sync',    true );
+            $last_sync    = get_post_meta( $post_id, 'anime_sync_time',    true )
+                            ?: get_post_meta( $post_id, 'anime_last_sync', true );
             $is_pending   = get_post_meta( $post_id, '_bangumi_id_pending', true );
             $post_status  = get_post_status( $post_id );
             $title_cn     = get_post_meta( $post_id, 'anime_title_chinese', true );
@@ -479,10 +475,21 @@ $gap_cached_at = get_transient( 'anime_sync_series_gaps_time' );
 
 </div><!-- .wrap -->
 
+<!-- Toast -->
+<div id="rq-toast" style="display:none;position:fixed;top:50px;right:20px;z-index:99999;padding:12px 20px;background:#46b450;color:#fff;border-radius:4px;box-shadow:0 2px 8px rgba(0,0,0,.2);font-size:14px;"></div>
+
 <!-- ───────────────── Inline JS ───────────────── -->
 <script>
 ( function( $ ) {
     'use strict';
+
+    function showToast(message, isError) {
+        var $toast = $('#rq-toast');
+        $toast.text(message)
+              .css('background', isError ? '#dc3232' : '#46b450')
+              .fadeIn(200);
+        setTimeout(function(){ $toast.fadeOut(300); }, 2500);
+    }
 
     /* ── Relation type badge 顏色對應 ── */
     var relationColors = {
@@ -502,21 +509,23 @@ $gap_cached_at = get_transient( 'anime_sync_series_gaps_time' );
     function getCheckedIds() {
         return $( '.queue-item-checkbox:checked' ).map( function () {
             return $( this ).val();
-        } ).get().map( function( id ) { return parseInt( id ); } );
+        } ).get().map( function( id ) { return parseInt( id, 10 ); } );
     }
 
-    /* ── Series Gap Scan（要求勾選 ID）── */
+    /* ── Series Gap Scan ── */
     $( '#btn-scan-gaps, #btn-scan-gaps-force' ).on( 'click', function () {
-        const ids     = getCheckedIds();
-        const force   = $( this ).is( '#btn-scan-gaps-force' );
-        const $status = $( '#gap-scan-status' );
-        const $result = $( '#gap-scan-result' );
+        const $clicked = $( this );
+        const ids      = getCheckedIds();
+        const force    = $clicked.is( '#btn-scan-gaps-force' );
+        const $status  = $( '#gap-scan-status' );
+        const $result  = $( '#gap-scan-result' );
 
         if ( ids.length === 0 ) {
             alert( '<?php echo esc_js( __( '請先在審核列表勾選要掃描的動漫作品', 'anime-sync-pro' ) ); ?>' );
             return;
         }
 
+        $clicked.prop( 'disabled', true );
         $status.text( '<?php echo esc_js( __( '掃描中…', 'anime-sync-pro' ) ); ?>' );
         $result.hide().empty();
 
@@ -526,8 +535,10 @@ $gap_cached_at = get_transient( 'anime_sync_series_gaps_time' );
             force        : force ? 1 : 0,
             selected_ids : ids.join( ',' ),
         }, function ( resp ) {
+            $clicked.prop( 'disabled', false );
+
             if ( resp.success ) {
-                const gaps  = resp.data.gaps || [];
+                const gaps = resp.data.gaps || [];
 
                 let html = '<div style="padding:12px;background:#fff;border:1px solid #ddd;border-radius:4px;">';
                 html += '<h3 style="margin:0 0 12px;">📡 系列缺漏掃描結果（已勾選 ' + ids.length + ' 部動漫）</h3>';
@@ -548,12 +559,18 @@ $gap_cached_at = get_transient( 'anime_sync_series_gaps_time' );
                     gaps.forEach( function( gap ) {
                         const relTypeCN = gap.relation_type_cn || gap.relation_type || '';
                         const relInfo   = relationColors[ gap.relation_type ] || { bg: '#0073aa', color: '#fff' };
+                        const missing   = gap.missing_anilist_id || '';
+                        const title     = gap.missing_title || '（無標題）';
+
                         html += '<tr style="border-bottom:1px solid #eee;">';
                         html += '<td style="padding:8px;">' + $( '<span>' ).text( gap.source_title || '' ).html() + '</td>';
                         html += '<td style="padding:8px;"><span style="background:' + relInfo.bg + ';color:' + relInfo.color + ';padding:2px 6px;border-radius:3px;font-size:11px;">' + $( '<span>' ).text( relTypeCN ).html() + '</span></td>';
-                        html += '<td style="padding:8px;"><a href="https://anilist.co/anime/' + ( gap.missing_anilist_id || '' ) + '" target="_blank" rel="noopener">' + ( gap.missing_anilist_id || '' ) + '</a></td>';
-                        html += '<td style="padding:8px;">' + $( '<span>' ).text( gap.missing_title || '（無標題）' ).html() + '</td>';
-                        html += '<td style="padding:8px;"><a href="' + ( gap.source_url || '' ) + '" target="_blank" class="button button-small">編輯來源</a></td>';
+                        html += '<td style="padding:8px;"><a href="https://anilist.co/anime/' + missing + '" target="_blank" rel="noopener">' + missing + '</a></td>';
+                        html += '<td style="padding:8px;">' + $( '<span>' ).text( title ).html() + '</td>';
+                        html += '<td style="padding:8px;">';
+                        html += '<a href="' + ( gap.source_url || '#' ) + '" target="_blank" class="button button-small">編輯來源</a> ';
+                        html += '<button type="button" class="button button-small button-primary btn-gap-import" data-anilist-id="' + missing + '" data-title="' + $( '<span>' ).text( title ).html() + '">立即匯入</button>';
+                        html += '</td>';
                         html += '</tr>';
                     } );
 
@@ -566,9 +583,10 @@ $gap_cached_at = get_transient( 'anime_sync_series_gaps_time' );
                 $status.text( '<?php echo esc_js( __( '完成', 'anime-sync-pro' ) ); ?>' );
             } else {
                 $status.text( '<?php echo esc_js( __( '失敗', 'anime-sync-pro' ) ); ?>' );
-                alert( resp.data || '<?php echo esc_js( __( '掃描失敗', 'anime-sync-pro' ) ); ?>' );
+                showToast( resp.data || '<?php echo esc_js( __( '掃描失敗', 'anime-sync-pro' ) ); ?>', true );
             }
         } ).fail( function () {
+            $clicked.prop( 'disabled', false );
             $status.text( '<?php echo esc_js( __( '網路錯誤', 'anime-sync-pro' ) ); ?>' );
         } );
     } );
@@ -590,10 +608,14 @@ $gap_cached_at = get_transient( 'anime_sync_series_gaps_time' );
         }, function ( resp ) {
             if ( resp.success ) {
                 $btn.closest( 'tr' ).fadeOut( 400, function () { $( this ).remove(); } );
+                showToast( '✓ 已匯入：' + title );
             } else {
                 $btn.prop( 'disabled', false ).text( '立即匯入' );
-                alert( resp.data || '匯入失敗，請稍後再試。' );
+                showToast( ( resp.data && ( resp.data.message || resp.data ) ) || '匯入失敗，請稍後再試。', true );
             }
+        } ).fail( function () {
+            $btn.prop( 'disabled', false ).text( '立即匯入' );
+            showToast( '網路錯誤', true );
         } );
     } );
 
@@ -647,9 +669,10 @@ $gap_cached_at = get_transient( 'anime_sync_series_gaps_time' );
         }, function ( resp ) {
             if ( resp.success ) {
                 $btn.closest( 'tr' ).fadeOut( 400, function () { $( this ).remove(); } );
+                showToast( '✓ 已發佈' );
             } else {
                 $btn.prop( 'disabled', false ).text( '<?php echo esc_js( __( '發佈', 'anime-sync-pro' ) ); ?>' );
-                alert( resp.data || '<?php echo esc_js( __( '失敗', 'anime-sync-pro' ) ); ?>' );
+                showToast( resp.data || '<?php echo esc_js( __( '失敗', 'anime-sync-pro' ) ); ?>', true );
             }
         } );
     } );
@@ -670,7 +693,7 @@ $gap_cached_at = get_transient( 'anime_sync_series_gaps_time' );
             else {
                 $btn.prop( 'disabled', false )
                     .text( '<?php echo esc_js( __( '轉草稿', 'anime-sync-pro' ) ); ?>' );
-                alert( resp.data || '<?php echo esc_js( __( '失敗', 'anime-sync-pro' ) ); ?>' );
+                showToast( resp.data || '<?php echo esc_js( __( '失敗', 'anime-sync-pro' ) ); ?>', true );
             }
         } );
     } );
@@ -690,9 +713,10 @@ $gap_cached_at = get_transient( 'anime_sync_series_gaps_time' );
         }, function ( resp ) {
             if ( resp.success ) {
                 $btn.closest( 'tr' ).fadeOut( 400, function () { $( this ).remove(); } );
+                showToast( '✓ 已刪除' );
             } else {
                 $btn.prop( 'disabled', false );
-                alert( resp.data || '<?php echo esc_js( __( '刪除失敗', 'anime-sync-pro' ) ); ?>' );
+                showToast( resp.data || '<?php echo esc_js( __( '刪除失敗', 'anime-sync-pro' ) ); ?>', true );
             }
         } );
     } );
@@ -702,6 +726,12 @@ $gap_cached_at = get_transient( 'anime_sync_series_gaps_time' );
         const postId    = $( this ).data( 'post-id' );
         const anilistId = $( this ).data( 'anilist-id' );
         const $btn      = $( this );
+
+        if ( ! anilistId ) {
+            showToast( '此筆缺少 AniList ID', true );
+            return;
+        }
+
         $btn.prop( 'disabled', true ).text( '…' );
 
         $.post( ajaxurl, {
@@ -718,9 +748,14 @@ $gap_cached_at = get_transient( 'anime_sync_series_gaps_time' );
                     $( '<span>' ).css( { color:'#46b450', marginRight:'8px' } )
                                  .text( '✓' )
                 );
+                showToast( '✓ 重抓完成' );
             } else {
-                alert( resp.data || '<?php echo esc_js( __( '重抓失敗', 'anime-sync-pro' ) ); ?>' );
+                showToast( ( resp.data && ( resp.data.message || resp.data ) ) || '<?php echo esc_js( __( '重抓失敗', 'anime-sync-pro' ) ); ?>', true );
             }
+        } ).fail( function () {
+            $btn.prop( 'disabled', false )
+                .text( '<?php echo esc_js( __( '重抓', 'anime-sync-pro' ) ); ?>' );
+            showToast( '網路錯誤', true );
         } );
     } );
 
@@ -750,10 +785,11 @@ $gap_cached_at = get_transient( 'anime_sync_series_gaps_time' );
                     + bgmId + '</a>'
                 );
                 $btn.closest( 'tr' ).removeClass( 'bangumi-pending' );
+                showToast( '✓ 已儲存' );
             } else {
                 $btn.prop( 'disabled', false )
                     .text( '<?php echo esc_js( __( '儲存', 'anime-sync-pro' ) ); ?>' );
-                alert( resp.data || '<?php echo esc_js( __( '儲存失敗', 'anime-sync-pro' ) ); ?>' );
+                showToast( resp.data || '<?php echo esc_js( __( '儲存失敗', 'anime-sync-pro' ) ); ?>', true );
             }
         } );
     } );
@@ -768,4 +804,8 @@ $gap_cached_at = get_transient( 'anime_sync_series_gaps_time' );
 .anime-sync-filter-form select,
 .anime-sync-filter-form input[type="checkbox"] { vertical-align: middle; }
 .anime-sync-gap-scan-bar { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+.btn-publish-one[disabled], .btn-unpublish-one[disabled], .btn-refetch-one[disabled],
+.btn-delete-one[disabled], .btn-save-bangumi-id[disabled], .btn-gap-import[disabled] {
+    opacity: .6; cursor: not-allowed;
+}
 </style>
