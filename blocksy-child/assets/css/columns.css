@@ -1,133 +1,201 @@
-/* ============ 專欄頁面 v2.0.0 ============ */
+/* ============================================
+   專欄頁面 v2.1.0 — 深色主題美化
+   ============================================ */
 .columns-page {
-    max-width: 1200px;
+    max-width: 1240px;
     margin: 0 auto;
-    padding: 40px 20px 80px;
+    padding: 48px 24px 96px;
+    color: #e8e8ec;
 }
 
+/* ── 頁面標題 ── */
 .columns-page-header {
     text-align: center;
-    margin-bottom: 48px;
+    margin-bottom: 56px;
+    padding-bottom: 32px;
+    border-bottom: 1px solid rgba(255,255,255,0.08);
 }
 
 .columns-page .page-title {
-    font-size: 2.2rem;
-    margin: 0 0 12px;
-    font-weight: 700;
+    font-size: 2.6rem;
+    margin: 0 0 14px;
+    font-weight: 800;
+    background: linear-gradient(135deg, #6ec1ff 0%, #b794ff 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    letter-spacing: 1px;
+}
+.columns-page .page-title .title-icon {
+    -webkit-text-fill-color: initial;
+    margin-right: 8px;
 }
 
 .columns-page .page-desc {
-    color: #666;
-    font-size: 1.05rem;
+    color: #a0a0ad;
+    font-size: 1.08rem;
     margin: 0;
+    letter-spacing: 0.3px;
 }
 
+/* ── Section 標題（重點美化）── */
 .columns-section {
-    margin-bottom: 56px;
+    margin-bottom: 64px;
 }
 
 .columns-section .section-header {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    border-bottom: 2px solid #eee;
-    padding-bottom: 12px;
-    margin-bottom: 24px;
+    margin-bottom: 28px;
+    padding: 14px 20px;
+    background: linear-gradient(90deg,
+        rgba(110,193,255,0.10) 0%,
+        rgba(183,148,255,0.06) 60%,
+        transparent 100%);
+    border-left: 4px solid #6ec1ff;
+    border-radius: 6px;
 }
 
-.columns-section .section-header h2 {
-    font-size: 1.5rem;
+/* 不同區塊用不同主色 */
+.feature-section .section-header {
+    background: linear-gradient(90deg,
+        rgba(255,180,120,0.12) 0%,
+        rgba(255,120,180,0.06) 60%,
+        transparent 100%);
+    border-left-color: #ffb478;
+}
+
+.columns-section .section-title {
+    font-size: 1.7rem;          /* ← 加大 */
     margin: 0;
     font-weight: 700;
+    color: #ffffff;             /* ← 純白，最大對比 */
+    letter-spacing: 1.2px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    text-shadow: 0 2px 8px rgba(0,0,0,0.3);
+}
+
+.section-icon {
+    font-size: 1.5rem;
+    filter: drop-shadow(0 2px 4px rgba(0,0,0,0.4));
 }
 
 .columns-section .more-link {
     font-size: 0.95rem;
-    color: #0073aa;
+    color: #6ec1ff;
     text-decoration: none;
+    padding: 6px 14px;
+    border: 1px solid rgba(110,193,255,0.3);
+    border-radius: 20px;
+    transition: all .25s ease;
     white-space: nowrap;
+    font-weight: 500;
 }
-.columns-section .more-link:hover { text-decoration: underline; }
+.columns-section .more-link:hover {
+    background: rgba(110,193,255,0.15);
+    border-color: #6ec1ff;
+    transform: translateX(2px);
+}
 
-/* Grid：響應式，避免高度錯亂 */
+/* ── Grid ── */
 .columns-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
     gap: 24px;
 }
 
-/* 卡片本體 */
+/* ── 卡片（深色玻璃擬態）── */
 .column-card {
     display: flex;
     flex-direction: column;
-    background: #fff;
-    border: 1px solid #ececec;
-    border-radius: 10px;
+    background: linear-gradient(145deg, #1f2128 0%, #1a1c22 100%);
+    border: 1px solid rgba(255,255,255,0.06);
+    border-radius: 14px;
     overflow: hidden;
-    transition: transform .2s ease, box-shadow .2s ease;
+    transition: transform .25s ease, box-shadow .25s ease, border-color .25s ease;
     height: 100%;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.25);
 }
 .column-card:hover {
-    transform: translateY(-3px);
-    box-shadow: 0 8px 24px rgba(0,0,0,.08);
+    transform: translateY(-6px);
+    box-shadow: 0 16px 36px rgba(0,0,0,0.5),
+                0 0 0 1px rgba(110,193,255,0.25);
+    border-color: rgba(110,193,255,0.2);
 }
 
-/* 圖片區（固定比例，無圖時佔位） */
+/* ── 圖片區 ── */
 .card-thumb-link {
     display: block;
     width: 100%;
     aspect-ratio: 16 / 9;
     overflow: hidden;
-    background: #f5f5f5;
+    background: #0e0f13;
+    position: relative;
 }
-.card-thumb,
+.card-thumb-img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+    transition: transform .5s ease;
+}
+.column-card:hover .card-thumb-img {
+    transform: scale(1.06);
+}
+
 .card-thumb-placeholder {
     width: 100%;
     height: 100%;
     display: flex;
     align-items: center;
     justify-content: center;
+    background:
+        radial-gradient(circle at 30% 40%, rgba(110,193,255,0.15), transparent 60%),
+        radial-gradient(circle at 70% 60%, rgba(183,148,255,0.12), transparent 60%),
+        linear-gradient(135deg, #23252d 0%, #1a1c22 100%);
 }
-.card-thumb img {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-    display: block;
-}
-.card-thumb-placeholder {
-    font-size: 3rem;
-    color: #ccc;
-    background: linear-gradient(135deg, #f5f5f5, #e8e8e8);
+.placeholder-icon {
+    font-size: 3.4rem;
+    opacity: 0.45;
+    filter: drop-shadow(0 4px 12px rgba(0,0,0,0.5));
 }
 
-/* 卡片內容區 */
+/* ── 卡片內容 ── */
 .card-info {
     padding: 16px 18px 20px;
     display: flex;
     flex-direction: column;
     flex: 1;
-    gap: 8px;
+    gap: 9px;
 }
 
 .card-channels {
-    font-size: 0.8rem;
+    font-size: 0.78rem;
 }
 .card-channels a {
     display: inline-block;
-    padding: 2px 8px;
-    background: #f0f4f8;
-    color: #0073aa;
-    border-radius: 4px;
+    padding: 3px 10px;
+    background: rgba(110,193,255,0.12);
+    color: #8dcfff;
+    border-radius: 12px;
     text-decoration: none;
-    font-size: 0.78rem;
+    font-size: 0.76rem;
     margin-right: 4px;
+    border: 1px solid rgba(110,193,255,0.18);
+    transition: all .2s ease;
 }
-.card-channels a:hover { background: #e3ebf3; }
+.card-channels a:hover {
+    background: rgba(110,193,255,0.22);
+    color: #c5e6ff;
+}
 
 .card-title {
-    font-size: 1.1rem;
-    line-height: 1.4;
-    margin: 4px 0 0;
+    font-size: 1.08rem;
+    line-height: 1.45;
+    margin: 2px 0 0;
     font-weight: 600;
     display: -webkit-box;
     -webkit-line-clamp: 2;
@@ -135,20 +203,23 @@
     overflow: hidden;
 }
 .card-title a {
-    color: #222;
+    color: #f0f0f5;
     text-decoration: none;
+    transition: color .2s ease;
 }
-.card-title a:hover { color: #0073aa; }
+.card-title a:hover { color: #6ec1ff; }
 
 .card-meta {
-    font-size: 0.82rem;
-    color: #999;
+    font-size: 0.8rem;
+    color: #8a8a96;
+    display: flex;
+    gap: 12px;
 }
 
 .card-excerpt {
-    font-size: 0.9rem;
-    color: #555;
-    line-height: 1.55;
+    font-size: 0.88rem;
+    color: #b0b0ba;
+    line-height: 1.6;
     display: -webkit-box;
     -webkit-line-clamp: 3;
     -webkit-box-orient: vertical;
@@ -156,18 +227,39 @@
     margin-top: auto;
 }
 
+/* ── 空狀態 ── */
 .empty-msg {
     text-align: center;
-    color: #999;
-    padding: 40px 20px;
-    background: #fafafa;
-    border-radius: 8px;
+    color: #888;
+    padding: 48px 20px;
+    background: rgba(255,255,255,0.02);
+    border: 1px dashed rgba(255,255,255,0.08);
+    border-radius: 10px;
 }
 
-/* 手機版 */
+/* ── 手機版 ── */
+@media (max-width: 768px) {
+    .columns-page { padding: 32px 16px 64px; }
+    .columns-page .page-title { font-size: 2rem; }
+    .columns-section .section-title { font-size: 1.4rem; }
+    .columns-section .section-header { padding: 12px 14px; }
+}
+
 @media (max-width: 600px) {
-    .columns-grid { grid-template-columns: 1fr; gap: 16px; }
-    .columns-page { padding: 24px 16px 48px; }
-    .columns-page .page-title { font-size: 1.7rem; }
-    .columns-section .section-header h2 { font-size: 1.25rem; }
+    .columns-grid { grid-template-columns: 1fr; gap: 18px; }
+    .columns-page .page-title { font-size: 1.75rem; }
+    .columns-page .page-desc { font-size: 0.95rem; }
+    .columns-section .section-title { font-size: 1.25rem; }
+    .columns-section .more-link { font-size: 0.85rem; padding: 4px 10px; }
+}
+
+/* ── 淺色模式自動適配（如果使用者切回淺色）── */
+@media (prefers-color-scheme: light) {
+    body:not(.dark-mode) .columns-page { color: #222; }
+    body:not(.dark-mode) .column-card {
+        background: #fff;
+        border-color: #ececec;
+    }
+    body:not(.dark-mode) .card-title a { color: #222; }
+    body:not(.dark-mode) .card-excerpt { color: #555; }
 }
