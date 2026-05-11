@@ -1029,18 +1029,57 @@ add_action( 'edit_form_after_title', function ( WP_Post $post ): void {
     echo 'Gemini 可能暫時失敗。請到右側「永久連結」改為英文 slug，或重新更新讓系統再試。';
     echo '</div>';
 } );
-/* ==========================================================
- *  Member Center v2.0.1 - AJAX endpoints
- *  載入「我的清單／評分」更多項目；前端 nonce 由 wp_localize_script 注入
- *  v2.0.1 (2026-05-11): 修正「收藏」篩選改用 favorited 欄位
- * ========================================================== */
+/* ============================================================
+   Member Center v2.0.1 - AJAX endpoints + JS/CSS enqueue
+   ============================================================ */
+
+/* 共用判斷：是否為會員中心頁面 */
+function smacg_is_member_page(): bool {
+    if (!function_exists('um_is_core_page')) return is_page_template('page-member.php');
+    return um_is_core_page('user')
+        || get_query_var('um_user')
+        || is_page_template('page-member.php');
+}
+
+/* 注入 member.js / member.css（page-member 模板 + UM user 頁面都載入） */
+add_action('wp_enqueue_scripts', function () {
+    if (!smacg_is_member_page()) return;
+
+    $js_path  = get_stylesheet_directory() . '/assets/js/member.js';
+    $css_path = get_stylesheet_directory() . '/assets/css/member.css';
+
+    if (file_exists($js_path)) {
+        wp_enqueue_script(
+            'smacg-member',
+            get_stylesheet_directory_uri() . '/assets/js/member.js',
+            ['jquery'],
+            filemtime($js_path),
+            true
+        );
+        wp_localize_script('smacg-member', 'smacgMember', [
+            'ajax'  => admin_url('admin-ajax.php'),
+            'nonce' => wp_create_nonce('smacg_member_nonce'),
+        ]);
+    }
+
+    if (file_exists($css_path)) {
+        wp_enqueue_style(
+            'smacg-member-css',
+            get_stylesheet_directory_uri() . '/assets/css/member.css',
+            [],
+            filemtime($css_path)
+        );
+    }
+}, 20);
+
+/* AJAX：載入更多清單／評分 */
 add_action('wp_ajax_smacg_member_loadmore', function () {
     check_ajax_referer('smacg_member_nonce', 'nonce');
 
     $uid = get_current_user_id();
     if (!$uid) wp_send_json_error(['msg' => '請先登入'], 401);
 
-    $type   = sanitize_key($_POST['type']   ?? '');   // watchlist | ratings
+    $type   = sanitize_key($_POST['type']   ?? '');
     $offset = max(0, (int) ($_POST['offset'] ?? 0));
     $limit  = min(50, max(1, (int) ($_POST['limit'] ?? 20)));
     $filter = sanitize_key($_POST['filter'] ?? 'all');
@@ -1053,7 +1092,6 @@ add_action('wp_ajax_smacg_member_loadmore', function () {
     if ($type === 'watchlist') {
         $items = smacg_build_watchlist($uid);
 
-        // ⭐ v2.0.1：收藏走 favorited 欄位；其餘走 status
         if ($filter === 'favorited') {
             $items = array_filter($items, fn($w) => !empty($w['favorited']));
         } elseif ($filter !== 'all' && $filter !== '') {
@@ -1101,7 +1139,7 @@ add_action('wp_ajax_smacg_member_loadmore', function () {
 });
 
 /* watchlist 排序 helper */
-function smacg_sort_watchlist(array $list, $sort) {
+function smacg_sort_watchlist(array $list, $sort): array {
     usort($list, fn($a, $b) => match ($sort) {
         'title'    => strcmp(get_the_title($a['post_id']), get_the_title($b['post_id'])),
         'progress' => (int)$b['progress'] <=> (int)$a['progress'],
@@ -1111,26 +1149,3 @@ function smacg_sort_watchlist(array $list, $sort) {
     });
     return $list;
 }
-
-/* 注入 nonce 與 AJAX url 給前端 JS（page-member 模板才注入） */
-add_action('wp_enqueue_scripts', function () {
-    if (!is_page_template('page-member.php')) return;
-
-    wp_enqueue_script(
-        'smacg-member',
-        get_stylesheet_directory_uri() . '/assets/js/member.js',
-        ['jquery'],
-        '2.0.1',
-        true
-    );
-    wp_localize_script('smacg-member', 'smacgMember', [
-        'ajax'  => admin_url('admin-ajax.php'),
-        'nonce' => wp_create_nonce('smacg_member_nonce'),
-    ]);
-    wp_enqueue_style(
-        'smacg-member-css',
-        get_stylesheet_directory_uri() . '/assets/css/member.css',
-        [],
-        '2.0.1'
-    );
-}, 20);
