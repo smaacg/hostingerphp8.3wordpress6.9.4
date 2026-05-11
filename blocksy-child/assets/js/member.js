@@ -1,6 +1,7 @@
 /**
- * Member Center JS v2.0.1
- * 修正：收藏分頁改用 data-favorited 判斷
+ * Member Center JS v2.0.2 (2026-05-11)
+ * - v2.0.1: 收藏分頁改用 data-favorited 判斷
+ * - v2.0.2: 新增頭像即時上傳（AJAX）
  */
 (function ($) {
   'use strict';
@@ -109,4 +110,73 @@
     }).fail(() => alert('網路錯誤，請稍後再試'))
       .always(() => $btn.removeClass('loading').prop('disabled', false));
   }
+
+  /* ===== Avatar Upload (v2.0.2) ===== */
+  const $avatarInput = $('#mc-avatar-input');
+  const $avatarImg   = $('#mc-avatar-img');
+  const $avatarMsg   = $('#mc-avatar-msg');
+
+  $avatarInput.on('change', function () {
+    const file = this.files && this.files[0];
+    if (!file) return;
+
+    if (file.size > 5 * 1024 * 1024) {
+      showAvatarMsg('檔案過大（上限 5 MB）', 'error');
+      this.value = '';
+      return;
+    }
+
+    // 即時預覽
+    const reader = new FileReader();
+    reader.onload = e => $avatarImg.css('opacity', '.5').attr('src', e.target.result);
+    reader.readAsDataURL(file);
+
+    const fd = new FormData();
+    fd.append('action', 'smacg_upload_avatar');
+    fd.append('nonce', smacgMember.nonce);
+    fd.append('avatar', file);
+
+    showAvatarMsg('上傳中…', 'info');
+
+    fetch(smacgMember.ajax, {
+      method: 'POST',
+      body: fd,
+      credentials: 'same-origin',
+    })
+      .then(r => r.json())
+      .then(res => {
+        if (res.success) {
+          $avatarImg.css('opacity', '1').attr('src', res.data.url + '?t=' + Date.now());
+          showAvatarMsg(res.data.msg || '頭像已更新', 'success');
+          setTimeout(() => $avatarMsg.hide(), 2500);
+
+          // 同步 header / 留言區頭像（簡單刷新所有同 user 的頭像 src）
+          $('img.avatar, .um-user-avatar img').each(function () {
+            const $img = $(this);
+            const src = $img.attr('src') || '';
+            if (src.includes('gravatar.com') || src.includes('avatar')) {
+              $img.attr('src', res.data.url + '?t=' + Date.now());
+            }
+          });
+        } else {
+          $avatarImg.css('opacity', '1');
+          showAvatarMsg((res.data && res.data.msg) || '上傳失敗', 'error');
+        }
+      })
+      .catch(() => {
+        $avatarImg.css('opacity', '1');
+        showAvatarMsg('網路錯誤', 'error');
+      })
+      .finally(() => {
+        $avatarInput.val('');
+      });
+  });
+
+  function showAvatarMsg(text, type) {
+    $avatarMsg
+      .attr('class', 'mc-avatar-msg mc-avatar-msg--' + type)
+      .text(text)
+      .show();
+  }
+
 })(jQuery);
