@@ -698,3 +698,51 @@ body.page-template-page-member .mc-wrap {
     .mc-hero-avatar-overlay i { font-size: 16px; }
     .mc-hero-avatar-overlay span { font-size: 11px; }
 }
+/* ==========================================================
+ * v2.0.3 統計卡內文字提亮 — 評分分布 / 類型偏好 / 年代分布
+ * ========================================================== */
+
+/* 統計卡通用：標題與 small */
+.mc-stats-card h3,
+.mc-stats-card h3 small { color:#f1f5f9 !important; }
+.mc-stats-card h3 small { color:#cbd5e1 !important; font-weight:500; }
+
+/* 評分分布：左側分數 / 右側計數 */
+.mc-stats-card .mc-bar-label,
+.mc-stats-card .mc-bar-count {
+    color:#e2e8f0 !important;
+    font-weight:600;
+    text-shadow:0 1px 2px rgba(0,0,0,.4);
+}
+
+/* 評分摘要（平均分 / 評分數） */
+.mc-stats-summary b { color:#fff !important; }
+.mc-stats-summary span { color:#cbd5e1 !important; }
+
+/* 類型偏好：legend 文字 */
+.mc-pie-legend li {
+    color:#e2e8f0 !important;
+    font-weight:500;
+}
+.mc-pie-legend li b {
+    color:#fff !important;
+    font-weight:700;
+}
+.mc-pie-legend li small {
+    color:#94a3b8 !important;
+}
+
+/* 製作公司排行 */
+.mc-rank-list li,
+.mc-rank-name { color:#e2e8f0 !important; }
+.mc-rank-num  { color:#fbbf24 !important; font-weight:700; }
+.mc-rank-count{ color:#94a3b8 !important; }
+
+/* 年代分布（與評分分布共用 .mc-bar-row，這裡再保險一次） */
+.mc-stats-card .mc-bar-row { color:#e2e8f0; }
+
+/* 觀看時數 banner（順便確保不被吃掉） */
+.mc-banner-label,
+.mc-banner-sub { color:#cbd5e1 !important; }
+.mc-banner-num,
+.mc-banner-unit { color:#fff !important; }
