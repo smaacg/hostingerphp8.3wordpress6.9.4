@@ -1030,18 +1030,21 @@ add_action( 'edit_form_after_title', function ( WP_Post $post ): void {
     echo '</div>';
 } );
 /* ============================================================
-   Member Center v2.0.1 - AJAX endpoints + JS/CSS enqueue
+   ▓▓▓ Member Center v2.0.2 - 完整 endpoints / enqueue / avatar ▓▓▓
+   2026-05-11
    ============================================================ */
 
 /* 共用判斷：是否為會員中心頁面 */
-function smacg_is_member_page(): bool {
-    if (!function_exists('um_is_core_page')) return is_page_template('page-member.php');
-    return um_is_core_page('user')
-        || get_query_var('um_user')
-        || is_page_template('page-member.php');
+if (!function_exists('smacg_is_member_page')) {
+    function smacg_is_member_page(): bool {
+        if (!function_exists('um_is_core_page')) return is_page_template('page-member.php');
+        return um_is_core_page('user')
+            || get_query_var('um_user')
+            || is_page_template('page-member.php');
+    }
 }
 
-/* 注入 member.js / member.css（page-member 模板 + UM user 頁面都載入） */
+/* 注入 member.js / member.css（UM user 頁面 + page-member 模板都載入） */
 add_action('wp_enqueue_scripts', function () {
     if (!smacg_is_member_page()) return;
 
@@ -1139,13 +1142,95 @@ add_action('wp_ajax_smacg_member_loadmore', function () {
 });
 
 /* watchlist 排序 helper */
-function smacg_sort_watchlist(array $list, $sort): array {
-    usort($list, fn($a, $b) => match ($sort) {
-        'title'    => strcmp(get_the_title($a['post_id']), get_the_title($b['post_id'])),
-        'progress' => (int)$b['progress'] <=> (int)$a['progress'],
-        'year'     => (int) get_post_meta($b['post_id'], 'anime_season_year', true)
-                  <=> (int) get_post_meta($a['post_id'], 'anime_season_year', true),
-        default    => strcmp($b['updated'] ?? '', $a['updated'] ?? ''),
-    });
-    return $list;
+if (!function_exists('smacg_sort_watchlist')) {
+    function smacg_sort_watchlist(array $list, $sort): array {
+        usort($list, fn($a, $b) => match ($sort) {
+            'title'    => strcmp(get_the_title($a['post_id']), get_the_title($b['post_id'])),
+            'progress' => (int)$b['progress'] <=> (int)$a['progress'],
+            'year'     => (int) get_post_meta($b['post_id'], 'anime_season_year', true)
+                      <=> (int) get_post_meta($a['post_id'], 'anime_season_year', true),
+            default    => strcmp($b['updated'] ?? '', $a['updated'] ?? ''),
+        });
+        return $list;
+    }
 }
+
+/* ============================================================
+   頭像上傳 AJAX
+   ============================================================ */
+add_action('wp_ajax_smacg_upload_avatar', function () {
+    check_ajax_referer('smacg_member_nonce', 'nonce');
+
+    $uid = get_current_user_id();
+    if (!$uid) wp_send_json_error(['msg' => '請先登入'], 401);
+
+    if (empty($_FILES['avatar']) || $_FILES['avatar']['error'] !== UPLOAD_ERR_OK) {
+        wp_send_json_error(['msg' => '上傳失敗，請重試'], 400);
+    }
+
+    $file = $_FILES['avatar'];
+
+    if ($file['size'] > 5 * 1024 * 1024) {
+        wp_send_json_error(['msg' => '檔案過大（上限 5 MB）'], 400);
+    }
+
+    $allowed = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+    $mime = wp_check_filetype($file['name'])['type'] ?? @mime_content_type($file['tmp_name']);
+    if (!in_array($mime, $allowed, true)) {
+        wp_send_json_error(['msg' => '僅支援 JPG / PNG / WEBP / GIF'], 400);
+    }
+
+    require_once ABSPATH . 'wp-admin/includes/file.php';
+    require_once ABSPATH . 'wp-admin/includes/image.php';
+    require_once ABSPATH . 'wp-admin/includes/media.php';
+
+    $attach_id = media_handle_upload('avatar', 0);
+    if (is_wp_error($attach_id)) {
+        wp_send_json_error(['msg' => $attach_id->get_error_message()], 500);
+    }
+
+    // 刪除舊頭像
+    $old = (int) get_user_meta($uid, 'smacg_avatar_id', true);
+    if ($old && $old !== $attach_id) {
+        wp_delete_attachment($old, true);
+    }
+
+    update_user_meta($uid, 'smacg_avatar_id', $attach_id);
+
+    $url = wp_get_attachment_url($attach_id);
+
+    // 同步給 UM（若已安裝）
+    if (function_exists('um_fetch_user')) {
+        update_user_meta($uid, 'profile_photo', basename($url));
+        update_user_meta($uid, 'synced_profile_photo', $url);
+    }
+
+    wp_send_json_success([
+        'url' => $url,
+        'msg' => '頭像已更新',
+    ]);
+});
+
+/* 讓 get_avatar_url 全站優先讀 smacg_avatar_id */
+add_filter('get_avatar_url', function ($url, $id_or_email, $args) {
+    $uid = 0;
+    if (is_numeric($id_or_email)) {
+        $uid = (int) $id_or_email;
+    } elseif (is_object($id_or_email)) {
+        $uid = (int) ($id_or_email->user_id ?? 0);
+    } elseif (is_string($id_or_email)) {
+        $u = get_user_by('email', $id_or_email);
+        $uid = $u ? (int) $u->ID : 0;
+    }
+    if (!$uid) return $url;
+
+    $att = (int) get_user_meta($uid, 'smacg_avatar_id', true);
+    if ($att) {
+        $size = isset($args['size']) ? (int) $args['size'] : 96;
+        $img  = wp_get_attachment_image_src($att, [$size, $size]);
+        if ($img) return $img[0];
+    }
+    return $url;
+}, 10, 3);
+
+
