@@ -1,10 +1,14 @@
 <?php
 /**
  * Template Name: 會員中心
- * Version: 2.0.0 (2026-05-10)
+ * Version: 2.0.1 (2026-05-11)
  *
  * 架構：本檔僅負責登入檢查 + 框架，資料統計交給 inc/member-stats.php，
  *      各 tab render 交給 inc/member-render.php。
+ *
+ * v2.0.1 變更：
+ *   - 最外層 <main> 改回 <div>，避免 Blocksy 偵測到 <main> 觸發兩欄 grid 佈局
+ *     導致右半邊空白。其餘結構與功能不變。
  */
 
 if (!defined('ABSPATH')) exit;
@@ -58,7 +62,7 @@ $stats       = smacg_calc_member_stats($watchlist, $ratings);
 
 get_header(); ?>
 
-<main class="mc-wrap" data-uid="<?php echo (int)$uid; ?>">
+<div class="mc-wrap" data-uid="<?php echo (int)$uid; ?>">
 
     <?php /* === Hero === */ ?>
     <section class="mc-hero">
@@ -143,6 +147,6 @@ get_header(); ?>
         </section>
     </div>
 
-</main>
+</div>
 
 <?php get_footer(); ?>
