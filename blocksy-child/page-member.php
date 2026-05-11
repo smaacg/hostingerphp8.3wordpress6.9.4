@@ -1,14 +1,14 @@
 <?php
 /**
  * Template Name: 會員中心
- * Version: 2.0.1 (2026-05-11)
+ * Version: 2.0.2 (2026-05-11)
  *
  * 架構：本檔僅負責登入檢查 + 框架，資料統計交給 inc/member-stats.php，
  *      各 tab render 交給 inc/member-render.php。
  *
- * v2.0.1 變更：
- *   - 最外層 <main> 改回 <div>，避免 Blocksy 偵測到 <main> 觸發兩欄 grid 佈局
- *     導致右半邊空白。其餘結構與功能不變。
+ * v2.0.1：<main> 改回 <div>，避免 Blocksy 雙欄 grid 觸發空白
+ * v2.0.2：頭像改為 <label> + 隱藏 <input type="file">，支援即時上傳
+ *         （AJAX 處理在 functions.php：wp_ajax_smacg_upload_avatar）
  */
 
 if (!defined('ABSPATH')) exit;
@@ -35,6 +35,11 @@ $bio         = get_user_meta($uid, 'description', true);
 $avatar_url = function_exists('um_get_user_avatar_url')
     ? um_get_user_avatar_url($uid, 'original')
     : get_avatar_url($uid, ['size' => 200]);
+
+// UM 帳號頁（fallback 用，例如關閉 JS 時可導向）
+$account_url = function_exists('um_get_core_page') && um_get_core_page('account')
+    ? um_get_core_page('account')
+    : admin_url('profile.php');
 
 // ---------- 點數 / 等級 ----------
 $points      = (int) get_user_meta($uid, 'smacg_points', true);
@@ -67,8 +72,26 @@ get_header(); ?>
     <?php /* === Hero === */ ?>
     <section class="mc-hero">
         <div class="mc-hero-avatar">
-            <img src="<?php echo esc_url($avatar_url); ?>" alt="<?php echo esc_attr($display); ?>" loading="lazy">
+            <label class="mc-hero-avatar-link" title="點擊更換頭像">
+                <img id="mc-avatar-img"
+                     src="<?php echo esc_url($avatar_url); ?>"
+                     alt="<?php echo esc_attr($display); ?>"
+                     loading="lazy">
+                <div class="mc-hero-avatar-overlay">
+                    <i class="fa-solid fa-camera"></i>
+                    <span>更換頭像</span>
+                </div>
+                <input type="file"
+                       id="mc-avatar-input"
+                       accept="image/jpeg,image/png,image/webp,image/gif"
+                       hidden>
+            </label>
+            <div id="mc-avatar-msg" class="mc-avatar-msg" hidden></div>
+            <noscript>
+                <a href="<?php echo esc_url($account_url); ?>" class="mc-avatar-fallback">前往帳號頁修改</a>
+            </noscript>
         </div>
+
         <div class="mc-hero-info">
             <h1 class="mc-hero-name"><?php echo esc_html($display); ?>
                 <span class="mc-plan-badge"><?php echo esc_html($plan_label); ?></span>
