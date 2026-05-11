@@ -28,7 +28,11 @@ function smacg_render_anime_card($pid, $extra = []) {
 
     $status_label = ['watching'=>'追番中','completed'=>'已看完','want'=>'想看','dropped'=>'棄番','favorited'=>'收藏'];
     ?>
-    <article class="mc-anime-card" data-status="<?php echo esc_attr($status); ?>" data-title="<?php echo esc_attr(mb_strtolower($title)); ?>">
+    <article class="mc-anime-card"
+         data-status="<?php echo esc_attr($status); ?>"
+         data-favorited="<?php echo !empty($favorited) ? '1' : '0'; ?>"
+         data-title="<?php echo esc_attr(mb_strtolower($title)); ?>">
+
         <a href="<?php echo esc_url($permalink); ?>" class="mc-card-thumb">
             <?php if ($thumb): ?>
                 <img src="<?php echo esc_url($thumb); ?>" alt="<?php echo esc_attr($title); ?>" loading="lazy">
