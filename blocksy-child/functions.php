@@ -1030,13 +1030,14 @@ add_action( 'edit_form_after_title', function ( WP_Post $post ): void {
     echo '</div>';
 } );
 /* ==========================================================
- *  Member Center v2.0 - AJAX endpoints
+ *  Member Center v2.0.1 - AJAX endpoints
  *  載入「我的清單／評分」更多項目；前端 nonce 由 wp_localize_script 注入
+ *  v2.0.1 (2026-05-11): 修正「收藏」篩選改用 favorited 欄位
  * ========================================================== */
 add_action('wp_ajax_smacg_member_loadmore', function () {
     check_ajax_referer('smacg_member_nonce', 'nonce');
 
-    $uid    = get_current_user_id();
+    $uid = get_current_user_id();
     if (!$uid) wp_send_json_error(['msg' => '請先登入'], 401);
 
     $type   = sanitize_key($_POST['type']   ?? '');   // watchlist | ratings
@@ -1051,7 +1052,14 @@ add_action('wp_ajax_smacg_member_loadmore', function () {
 
     if ($type === 'watchlist') {
         $items = smacg_build_watchlist($uid);
-        if ($filter !== 'all') $items = array_filter($items, fn($w) => $w['status'] === $filter);
+
+        // ⭐ v2.0.1：收藏走 favorited 欄位；其餘走 status
+        if ($filter === 'favorited') {
+            $items = array_filter($items, fn($w) => !empty($w['favorited']));
+        } elseif ($filter !== 'all' && $filter !== '') {
+            $items = array_filter($items, fn($w) => ($w['status'] ?? '') === $filter);
+        }
+
         if ($search !== '') {
             $q = mb_strtolower($search);
             $items = array_filter($items, fn($w) => str_contains(mb_strtolower(get_the_title($w['post_id'])), $q));
@@ -1064,12 +1072,10 @@ add_action('wp_ajax_smacg_member_loadmore', function () {
             $q = mb_strtolower($search);
             $items = array_filter($items, fn($r) => str_contains(mb_strtolower(get_the_title($r['anime_id'])), $q));
         }
-        usort($items, function ($a, $b) use ($sort) {
-            return match ($sort) {
-                'score-desc' => (float)$b['overall_score'] <=> (float)$a['overall_score'],
-                'score-asc'  => (float)$a['overall_score'] <=> (float)$b['overall_score'],
-                default      => strcmp($b['updated_at'] ?? '', $a['updated_at'] ?? ''),
-            };
+        usort($items, fn($a, $b) => match ($sort) {
+            'score-desc' => (float)$b['overall_score'] <=> (float)$a['overall_score'],
+            'score-asc'  => (float)$a['overall_score'] <=> (float)$b['overall_score'],
+            default      => strcmp($b['updated_at'] ?? '', $a['updated_at'] ?? ''),
         });
     } else {
         wp_send_json_error(['msg' => '參數錯誤'], 400);
@@ -1087,23 +1093,21 @@ add_action('wp_ajax_smacg_member_loadmore', function () {
         }
     }
     wp_send_json_success([
-        'html'      => ob_get_clean(),
-        'loaded'    => $offset + count($slice),
-        'total'     => count($items),
-        'has_more'  => ($offset + count($slice)) < count($items),
+        'html'     => ob_get_clean(),
+        'loaded'   => $offset + count($slice),
+        'total'    => count($items),
+        'has_more' => ($offset + count($slice)) < count($items),
     ]);
 });
 
 /* watchlist 排序 helper */
 function smacg_sort_watchlist(array $list, $sort) {
-    usort($list, function ($a, $b) use ($sort) {
-        return match ($sort) {
-            'title'    => strcmp(get_the_title($a['post_id']), get_the_title($b['post_id'])),
-            'progress' => (int)$b['progress'] <=> (int)$a['progress'],
-            'year'     => (int) get_post_meta($b['post_id'], 'anime_season_year', true)
-                       <=> (int) get_post_meta($a['post_id'], 'anime_season_year', true),
-            default    => strcmp($b['updated'] ?? '', $a['updated'] ?? ''),
-        };
+    usort($list, fn($a, $b) => match ($sort) {
+        'title'    => strcmp(get_the_title($a['post_id']), get_the_title($b['post_id'])),
+        'progress' => (int)$b['progress'] <=> (int)$a['progress'],
+        'year'     => (int) get_post_meta($b['post_id'], 'anime_season_year', true)
+                  <=> (int) get_post_meta($a['post_id'], 'anime_season_year', true),
+        default    => strcmp($b['updated'] ?? '', $a['updated'] ?? ''),
     });
     return $list;
 }
@@ -1111,11 +1115,12 @@ function smacg_sort_watchlist(array $list, $sort) {
 /* 注入 nonce 與 AJAX url 給前端 JS（page-member 模板才注入） */
 add_action('wp_enqueue_scripts', function () {
     if (!is_page_template('page-member.php')) return;
+
     wp_enqueue_script(
         'smacg-member',
         get_stylesheet_directory_uri() . '/assets/js/member.js',
         ['jquery'],
-        '2.0.0',
+        '2.0.1',
         true
     );
     wp_localize_script('smacg-member', 'smacgMember', [
@@ -1126,7 +1131,6 @@ add_action('wp_enqueue_scripts', function () {
         'smacg-member-css',
         get_stylesheet_directory_uri() . '/assets/css/member.css',
         [],
-        '2.0.0'
+        '2.0.1'
     );
 }, 20);
-
