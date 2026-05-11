@@ -570,3 +570,54 @@ body.page-template-page-member main {
 }
 
 /* mc-wrap 本身已有 max-width: 1200px + margin auto，會自動置中 */
+
+/* ============================================
+   v2.0.1 Layout Fix — 解決 Blocksy 右半邊空白
+   ============================================ */
+
+/* 1. 隱藏 Blocksy 注入的側欄 */
+body.page-template-page-member .ct-sidebar,
+body.page-template-page-member aside[class*="sidebar"],
+body.page-template-page-member [data-sidebar] {
+    display: none !important;
+}
+
+/* 2. 強制單欄布局 */
+body.page-template-page-member .ct-container {
+    grid-template-columns: minmax(0, 1fr) !important;
+    max-width: 1280px !important;
+    width: 100% !important;
+    margin-inline: auto !important;
+}
+
+/* 3. 主內容區佔滿整列 */
+body.page-template-page-member main#main,
+body.page-template-page-member .entries,
+body.page-template-page-member .ct-main-styles {
+    grid-column: 1 / -1 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+}
+
+/* 4. 隱藏 Blocksy hero（避免重複標題） */
+body.page-template-page-member .ct-hero,
+body.page-template-page-member .page-hero-section {
+    display: none !important;
+}
+
+/* 5. .mc-wrap 撐滿並置中 */
+body.page-template-page-member .mc-wrap {
+    width: 100% !important;
+    max-width: 1280px !important;
+    margin-inline: auto !important;
+    padding-inline: clamp(12px, 3vw, 32px);
+    box-sizing: border-box;
+}
+
+/* 6. 手機端微調 */
+@media (max-width: 640px) {
+    body.page-template-page-member .mc-wrap {
+        padding-inline: 12px;
+    }
+}
+
