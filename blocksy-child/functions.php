@@ -838,58 +838,6 @@ add_action( 'um_account_page_load', function() {
     if ( function_exists( 'UM' ) ) UM()->fields()->editing = true;
 }, 1 );
 
-/* 會員頁頭像上傳 */
-add_action('wp_footer', function() {
-    if (!function_exists('um_is_core_page')) return;
-    if (!um_is_core_page('user') && !get_query_var('um_user')) return;
-    $user_id   = get_current_user_id();
-    $timestamp = time();
-    $nonce     = wp_create_nonce('um_upload_nonce-' . $timestamp);
-    ?>
-    <input type="file" id="mc-avatar-file-input" accept="image/jpeg,image/png,image/gif,image/webp" style="display:none;" />
-    <script>
-    (function($){
-        var userId    = <?php echo (int)$user_id; ?>;
-        var nonce     = <?php echo json_encode($nonce); ?>;
-        var timestamp = <?php echo (int)$timestamp; ?>;
-        var ajaxUrl   = <?php echo json_encode(admin_url('admin-ajax.php')); ?>;
-        document.addEventListener('DOMContentLoaded', function() {
-            var imgWrap   = document.querySelector('.mc-avatar-img-wrap');
-            var fileInput = document.getElementById('mc-avatar-file-input');
-            if (!imgWrap || !fileInput) return;
-            imgWrap.addEventListener('click', function() { fileInput.click(); });
-            fileInput.addEventListener('change', function() {
-                var file = fileInput.files[0]; if (!file) return;
-                var overlay = document.getElementById('mc-avatar-overlay');
-                if (overlay) overlay.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i>';
-                var fd = new FormData();
-                fd.append('action','um_imageupload'); fd.append('key','profile_photo');
-                fd.append('user_id',userId); fd.append('_wpnonce',nonce); fd.append('timestamp',timestamp);
-                fd.append('set_id','1520'); fd.append('set_mode','profile');
-                fd.append('type','image'); fd.append('max_size','999999999');
-                fd.append('allowed_types','jpg,jpeg,png,gif,webp'); fd.append('file',file);
-                fetch(ajaxUrl, {method:'POST',body:fd,credentials:'same-origin'})
-                .then(function(r){return r.json();})
-                .then(function(data){
-                    if (data.success) {
-                        var u = data.data && data.data.url ? data.data.url : null;
-                        if (u) { var img = document.getElementById('mc-avatar-img'); if (img) img.src = u + '?t=' + Date.now(); }
-                        if (overlay) overlay.innerHTML = '<i class="fa-solid fa-check"></i>';
-                        setTimeout(function(){ if (overlay) overlay.innerHTML = '<i class="fa-solid fa-camera"></i>'; location.reload(); }, 1000);
-                    } else {
-                        alert((data.data && data.data.error) ? data.data.error : '上傳失敗');
-                        if (overlay) overlay.innerHTML = '<i class="fa-solid fa-camera"></i>';
-                    }
-                })
-                .catch(function(){ alert('上傳時發生錯誤，請稍後再試'); if (overlay) overlay.innerHTML = '<i class="fa-solid fa-camera"></i>'; });
-                fileInput.value = '';
-            });
-        });
-    })(jQuery);
-    </script>
-    <?php
-}, 998);
-
 /* ============================================================
    自訂模板專用 CSS
    ============================================================ */
