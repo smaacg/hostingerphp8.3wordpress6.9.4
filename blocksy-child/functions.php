@@ -1159,26 +1159,70 @@ add_action('wp_ajax_smacg_upload_avatar', function () {
     ]);
 });
 
-/* 讓 get_avatar_url 全站優先讀 smacg_avatar_id */
+/* 讓 get_avatar_url 全站優先讀 smacg_avatar_id（含 cache-bust） */
 add_filter('get_avatar_url', function ($url, $id_or_email, $args) {
     $uid = 0;
     if (is_numeric($id_or_email)) {
         $uid = (int) $id_or_email;
+    } elseif ($id_or_email instanceof WP_User) {
+        $uid = (int) $id_or_email->ID;
+    } elseif ($id_or_email instanceof WP_Comment) {
+        $uid = (int) $id_or_email->user_id;
     } elseif (is_object($id_or_email)) {
-        $uid = (int) ($id_or_email->user_id ?? 0);
-    } elseif (is_string($id_or_email)) {
+        $uid = (int) ($id_or_email->user_id ?? $id_or_email->ID ?? 0);
+    } elseif (is_string($id_or_email) && is_email($id_or_email)) {
         $u = get_user_by('email', $id_or_email);
         $uid = $u ? (int) $u->ID : 0;
     }
     if (!$uid) return $url;
 
-    $att = (int) get_user_meta($uid, 'smacg_avatar_id', true);
-    if ($att) {
-        $size = isset($args['size']) ? (int) $args['size'] : 96;
-        $img  = wp_get_attachment_image_src($att, [$size, $size]);
-        if ($img) return $img[0];
+    $aid = (int) get_user_meta($uid, 'smacg_avatar_id', true);
+    if (!$aid || !wp_attachment_is_image($aid)) return $url;
+
+    $size = isset($args['size']) ? (int) $args['size'] : 96;
+    $img  = wp_get_attachment_image_src($aid, [$size, $size]);
+    if (!$img) return $url;
+
+    return add_query_arg('v', get_post_modified_time('U', false, $aid), $img[0]);
+}, 9999, 3);
+
+/* 攔截整個 get_avatar HTML 輸出，覆蓋 UM 的 um-avatar-default */
+add_filter('get_avatar', function ($html, $id_or_email, $size, $default, $alt, $args) {
+    // 取 user id
+    $uid = 0;
+    if (is_numeric($id_or_email)) {
+        $uid = (int) $id_or_email;
+    } elseif ($id_or_email instanceof WP_User) {
+        $uid = (int) $id_or_email->ID;
+    } elseif ($id_or_email instanceof WP_Comment) {
+        $uid = (int) $id_or_email->user_id;
+    } elseif (is_object($id_or_email)) {
+        $uid = (int) ($id_or_email->user_id ?? $id_or_email->ID ?? 0);
+    } elseif (is_string($id_or_email) && is_email($id_or_email)) {
+        $u = get_user_by('email', $id_or_email);
+        $uid = $u ? (int) $u->ID : 0;
     }
-    return $url;
-}, 10, 3);
+    if (!$uid) return $html;
+
+    // 有自訂頭像？
+    $aid = (int) get_user_meta($uid, 'smacg_avatar_id', true);
+    if (!$aid || !wp_attachment_is_image($aid)) return $html;
+
+    $img = wp_get_attachment_image_src($aid, [$size, $size]);
+    if (!$img) return $html;
+
+    $src = $img[0] . '?v=' . get_post_modified_time('U', false, $aid);
+    $size = (int) $size;
+
+    // 重組 <img>，移除 UM 的 onerror/data-default，避免被打回預設
+    return sprintf(
+        '<img src="%s" class="avatar avatar-%d photo" width="%d" height="%d" alt="%s" loading="lazy" />',
+        esc_url($src),
+        $size,
+        $size,
+        $size,
+        esc_attr($alt ?: '')
+    );
+}, 9999, 6);
 
 
