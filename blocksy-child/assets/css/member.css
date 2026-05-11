@@ -539,3 +539,34 @@
   .mc-hero-stats > div { padding: 6px 4px; }
   .mc-hero-stats b { font-size: 18px; }
 }
+/* ==========================================================
+ *  Blocksy 頁面 layout 強制覆蓋
+ *  因為 page-member.php 經由 template_include filter 套用，
+ *  Blocksy 仍按 UM user page 的 sidebar 設定渲染容器，
+ *  需強制接管 main + 移除 sidebar
+ * ========================================================== */
+body.um-page-user .ct-container,
+body.page-template-page-member .ct-container,
+body[class*="um-page-"] .ct-container {
+    grid-template-columns: 1fr !important;
+    max-width: 100% !important;
+}
+
+body.um-page-user [class*="sidebar"],
+body.um-page-user aside.sidebar,
+body.um-page-user .ct-sidebar,
+body.page-template-page-member [class*="sidebar"],
+body.page-template-page-member .ct-sidebar {
+    display: none !important;
+}
+
+body.um-page-user main,
+body.um-page-user .entry-content,
+body.um-page-user .ct-main-styles,
+body.page-template-page-member main {
+    max-width: 100% !important;
+    width: 100% !important;
+    grid-column: 1 / -1 !important;
+}
+
+/* mc-wrap 本身已有 max-width: 1200px + margin auto，會自動置中 */
