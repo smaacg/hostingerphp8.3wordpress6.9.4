@@ -1029,7 +1029,6 @@ add_action( 'edit_form_after_title', function ( WP_Post $post ): void {
     echo 'Gemini 可能暫時失敗。請到右側「永久連結」改為英文 slug，或重新更新讓系統再試。';
     echo '</div>';
 } );
-
 /* ==========================================================
  *  Member Center v2.0 - AJAX endpoints
  *  載入「我的清單／評分」更多項目；前端 nonce 由 wp_localize_script 注入
@@ -1050,15 +1049,15 @@ add_action('wp_ajax_smacg_member_loadmore', function () {
     require_once get_stylesheet_directory() . '/inc/member-stats.php';
     require_once get_stylesheet_directory() . '/inc/member-render.php';
 
-// === 篩選 ===
-if ($type === 'watchlist') {
-    if ($filter === 'favorited') {
-        $items = array_filter($items, fn($w) => !empty($w['favorited']));
-    } elseif ($filter !== 'all' && $filter !== '') {
-        $items = array_filter($items, fn($w) => ($w['status'] ?? '') === $filter);
-    }
-    $items = array_values($items);
-}
+    if ($type === 'watchlist') {
+        $items = smacg_build_watchlist($uid);
+        if ($filter !== 'all') $items = array_filter($items, fn($w) => $w['status'] === $filter);
+        if ($search !== '') {
+            $q = mb_strtolower($search);
+            $items = array_filter($items, fn($w) => str_contains(mb_strtolower(get_the_title($w['post_id'])), $q));
+        }
+        $items = smacg_sort_watchlist(array_values($items), $sort);
+
     } elseif ($type === 'ratings') {
         $items = smacg_get_user_ratings($uid);
         if ($search !== '') {
@@ -1130,22 +1129,4 @@ add_action('wp_enqueue_scripts', function () {
         '2.0.0'
     );
 }, 20);
-/* ==========================================================
- *  UM 公開頁面暫時關閉
- *  - /user/{username}/ → 登入者轉到自家會員中心 /member/
- *                       未登入者轉首頁
- *  - /members/ → 一律轉首頁
- *  日後做完自訂公開檔案模板再移除此段
- * ========================================================== */
-add_action('template_redirect', function () {
-    if (!function_exists('um_is_core_page')) return;
 
-    if (um_is_core_page('user')) {
-        wp_safe_redirect(is_user_logged_in() ? home_url('/member/') : home_url('/'));
-        exit;
-    }
-    if (um_is_core_page('members')) {
-        wp_safe_redirect(home_url('/'));
-        exit;
-    }
-}, 1);  // priority 1 比 UM 自身早執行
