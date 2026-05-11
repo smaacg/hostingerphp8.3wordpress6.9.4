@@ -1104,7 +1104,10 @@ if (!function_exists('smacg_sort_watchlist')) {
 }
 
 /* ============================================================
-   頭像上傳 AJAX
+   頭像上傳 AJAX（業界標準版）
+   - 1 MB 上限 / 強制 400x400 / 85% 品質
+   - 5 分鐘冷卻 / 每日 3 次 / 新帳號 24 小時
+   - hash 檔名 / getimagesize 真實圖片驗證
    ============================================================ */
 add_action('wp_ajax_smacg_upload_avatar', function () {
     check_ajax_referer('smacg_member_nonce', 'nonce');
@@ -1112,42 +1115,97 @@ add_action('wp_ajax_smacg_upload_avatar', function () {
     $uid = get_current_user_id();
     if (!$uid) wp_send_json_error(['msg' => '請先登入'], 401);
 
+    /* ===== 防濫用 ===== */
+    // ① 5 分鐘冷卻
+    $last = (int) get_user_meta($uid, 'smacg_avatar_last_upload', true);
+    if ($last && (time() - $last) < 300) {
+        $wait = 300 - (time() - $last);
+        $min  = ceil($wait / 60);
+        wp_send_json_error(['msg' => "更換頻率過高，請於 {$min} 分鐘後再試"], 429);
+    }
+
+    // ② 每日上限 3 次
+    $today_key   = 'smacg_avatar_count_' . date('Ymd');
+    $today_count = (int) get_user_meta($uid, $today_key, true);
+    if ($today_count >= 3) {
+        wp_send_json_error(['msg' => '今日更換次數已達上限（3 次），請明天再試'], 429);
+    }
+
+    // ③ 新帳號 24 小時內禁止上傳
+    $user = get_userdata($uid);
+    if ($user && strtotime($user->user_registered) > time() - 86400) {
+        wp_send_json_error(['msg' => '新註冊帳號需等待 24 小時後才能更換頭像'], 403);
+    }
+
+    /* ===== 檔案驗證 ===== */
     if (empty($_FILES['avatar']) || $_FILES['avatar']['error'] !== UPLOAD_ERR_OK) {
         wp_send_json_error(['msg' => '上傳失敗，請重試'], 400);
     }
-
     $file = $_FILES['avatar'];
 
-    if ($file['size'] > 5 * 1024 * 1024) {
-        wp_send_json_error(['msg' => '檔案過大（上限 5 MB）'], 400);
+    if ($file['size'] > 1024 * 1024) {
+        wp_send_json_error(['msg' => '檔案過大（上限 1 MB）'], 400);
     }
 
-    $allowed = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+    $allowed = ['image/jpeg', 'image/png', 'image/webp'];
     $mime = wp_check_filetype($file['name'])['type'] ?? @mime_content_type($file['tmp_name']);
     if (!in_array($mime, $allowed, true)) {
-        wp_send_json_error(['msg' => '僅支援 JPG / PNG / WEBP / GIF'], 400);
+        wp_send_json_error(['msg' => '僅支援 JPG / PNG / WEBP'], 400);
     }
 
+    // ④ 用 getimagesize 驗證是真圖片（防偽造副檔名上傳）
+    $info = @getimagesize($file['tmp_name']);
+    $allowed_types = [IMAGETYPE_JPEG, IMAGETYPE_PNG, IMAGETYPE_WEBP];
+    if (!$info || !in_array($info[2], $allowed_types, true)) {
+        wp_send_json_error(['msg' => '檔案不是有效的圖片'], 400);
+    }
+
+    /* ===== 上傳到媒體庫 ===== */
     require_once ABSPATH . 'wp-admin/includes/file.php';
     require_once ABSPATH . 'wp-admin/includes/image.php';
     require_once ABSPATH . 'wp-admin/includes/media.php';
 
+    // hash 檔名：防猜測 + 自然 cache-bust
+    $rename = function ($f) use ($uid) {
+        $ext = strtolower(pathinfo($f['name'], PATHINFO_EXTENSION));
+        $f['name'] = 'avatar_' . substr(md5($uid . microtime(true)), 0, 16) . '.' . $ext;
+        return $f;
+    };
+    add_filter('wp_handle_upload_prefilter', $rename);
     $attach_id = media_handle_upload('avatar', 0);
+    remove_filter('wp_handle_upload_prefilter', $rename);
+
     if (is_wp_error($attach_id)) {
         wp_send_json_error(['msg' => $attach_id->get_error_message()], 500);
     }
 
-    // 刪除舊頭像
+    /* ===== 強制 resize 400x400 + 85% 品質 ===== */
+    $path   = get_attached_file($attach_id);
+    $editor = wp_get_image_editor($path);
+    if (!is_wp_error($editor)) {
+        $editor->resize(400, 400, true); // crop = true，強制方形
+        $editor->set_quality(85);
+        $editor->save($path);
+        wp_update_attachment_metadata(
+            $attach_id,
+            wp_generate_attachment_metadata($attach_id, $path)
+        );
+    }
+
+    /* ===== 刪除舊頭像 ===== */
     $old = (int) get_user_meta($uid, 'smacg_avatar_id', true);
     if ($old && $old !== $attach_id) {
         wp_delete_attachment($old, true);
     }
 
+    /* ===== 寫入 meta + 計次 ===== */
     update_user_meta($uid, 'smacg_avatar_id', $attach_id);
+    update_user_meta($uid, 'smacg_avatar_last_upload', time());
+    update_user_meta($uid, $today_key, $today_count + 1);
 
     $url = wp_get_attachment_url($attach_id);
 
-    // 同步給 UM（若已安裝）
+    // 同步給 UM
     if (function_exists('um_fetch_user')) {
         update_user_meta($uid, 'profile_photo', basename($url));
         update_user_meta($uid, 'synced_profile_photo', $url);
@@ -1158,6 +1216,10 @@ add_action('wp_ajax_smacg_upload_avatar', function () {
         'msg' => '頭像已更新',
     ]);
 });
+
+/* ============================================================
+   頭像顯示 Filter（保持原樣，不要動）
+   ============================================================ */
 
 /* 讓 get_avatar_url 全站優先讀 smacg_avatar_id（含 cache-bust） */
 add_filter('get_avatar_url', function ($url, $id_or_email, $args) {
@@ -1188,7 +1250,6 @@ add_filter('get_avatar_url', function ($url, $id_or_email, $args) {
 
 /* 攔截整個 get_avatar HTML 輸出，覆蓋 UM 的 um-avatar-default */
 add_filter('get_avatar', function ($html, $id_or_email, $size, $default, $alt, $args) {
-    // 取 user id
     $uid = 0;
     if (is_numeric($id_or_email)) {
         $uid = (int) $id_or_email;
@@ -1204,17 +1265,15 @@ add_filter('get_avatar', function ($html, $id_or_email, $size, $default, $alt, $
     }
     if (!$uid) return $html;
 
-    // 有自訂頭像？
     $aid = (int) get_user_meta($uid, 'smacg_avatar_id', true);
     if (!$aid || !wp_attachment_is_image($aid)) return $html;
 
     $img = wp_get_attachment_image_src($aid, [$size, $size]);
     if (!$img) return $html;
 
-    $src = $img[0] . '?v=' . get_post_modified_time('U', false, $aid);
+    $src  = $img[0] . '?v=' . get_post_modified_time('U', false, $aid);
     $size = (int) $size;
 
-    // 重組 <img>，移除 UM 的 onerror/data-default，避免被打回預設
     return sprintf(
         '<img src="%s" class="avatar avatar-%d photo" width="%d" height="%d" alt="%s" loading="lazy" />',
         esc_url($src),
@@ -1241,7 +1300,6 @@ add_filter('um_user_avatar_url_filter', function ($avatar_uri, $user_id) {
 
 /* 移除 UM 對 <img> 加的 um-avatar-default class（讓圖正常顯示） */
 add_filter('get_avatar', function ($html, $id_or_email) {
-    // 取 user id
     $uid = 0;
     if (is_numeric($id_or_email)) $uid = (int) $id_or_email;
     elseif ($id_or_email instanceof WP_User) $uid = $id_or_email->ID;
@@ -1254,11 +1312,8 @@ add_filter('get_avatar', function ($html, $id_or_email) {
     if (!$uid) return $html;
     if (!get_user_meta($uid, 'smacg_avatar_id', true)) return $html;
 
-    // 有自訂頭像 → 移除 um-avatar-default class 和 onerror（避免被打回預設圖）
     $html = preg_replace('/\sum-avatar-default/', '', $html);
     $html = preg_replace('/\sonerror="[^"]*"/', '', $html);
     $html = preg_replace('/\sdata-default="[^"]*"/', '', $html);
     return $html;
 }, 99999, 2);
-
-
