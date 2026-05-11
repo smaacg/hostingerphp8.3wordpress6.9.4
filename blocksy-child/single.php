@@ -1,21 +1,65 @@
 <?php
 /**
- * Single Post Template  v2.0  2026-05-10
+ * Single Post Template  v2.4  2026-05-11
  *
  * 變更：
- * - 修跑版：把 </main> 移到 aside 之後，aside 改放在 .single-wrap 裡
- * - 移除 aside 的 .container class（避免 max-width 鎖死）
- * - 移除錯誤路徑的 <link>（已由 functions.php enqueue）
- * - 新增社群分享列（FB / X / LINE / Threads / 複製連結）
- *
- * 服務 URL：
- *   /announcement/post-slug/
- *   /news/anime/post-slug/   /review/anime/post-slug/   /feature/anime/post-slug/  ...
+ * - [安全退場] 非真實單篇文章 → 走最簡 page 流程（header + the_content + footer）
+ *              不再 load 父主題模板，避免 fatal error
  *
  * Path: wp-content/themes/blocksy-child/single.php
  */
 
 if ( ! defined( 'ABSPATH' ) ) exit;
+
+/* ============================================================
+   判斷是否為真實單篇文章
+   ============================================================ */
+$smacg_bail = false;
+
+if ( ! is_singular( 'post' ) || is_page() ) $smacg_bail = true;
+
+if ( function_exists( 'um_is_core_page' ) && (
+        um_is_core_page( 'user' )     || get_query_var( 'um_user' ) ||
+        um_is_core_page( 'account' )  || um_is_core_page( 'login' ) ||
+        um_is_core_page( 'register' ) || um_is_core_page( 'password-reset' ) ||
+        um_is_core_page( 'logout' )   || um_is_core_page( 'members' )
+   ) ) {
+    $smacg_bail = true;
+}
+
+if ( function_exists( 'is_wpforo_page' ) && is_wpforo_page() ) {
+    $smacg_bail = true;
+}
+
+$req_uri = $_SERVER['REQUEST_URI'] ?? '';
+foreach ( [ '/community', '/account', '/forum' ] as $needle ) {
+    if ( stripos( $req_uri, $needle ) !== false ) { $smacg_bail = true; break; }
+}
+
+/* ============================================================
+   ★ 退場模式：最簡 page 渲染（無 aside / 無 share / 無 related）
+   ============================================================ */
+if ( $smacg_bail ) {
+    get_header();
+    ?>
+    <main class="container single-wrap" style="padding: 24px 0 64px;">
+      <article class="single-article glass">
+        <div class="single-content">
+          <?php
+          if ( have_posts() ) {
+              while ( have_posts() ) {
+                  the_post();
+                  the_content();
+              }
+          }
+          ?>
+        </div>
+      </article>
+    </main>
+    <?php
+    get_footer();
+    return;
+}
 
 get_header();
 
@@ -37,6 +81,12 @@ $chans = get_the_terms( $post_id, 'channel' );
 if ( ! empty( $chans ) && ! is_wp_error( $chans ) ) {
     $primary_chan = $chans[0];
 }
+
+/* ── 第二道防護：黑名單時不顯示分享列與相關文章 ────────── */
+$smacg_skip_share_related = false;
+$skip_slugs    = [ 'community', 'forum', 'forums', 'account', 'privacy' ];
+$current_slug  = get_post_field( 'post_name', $post_id );
+if ( in_array( $current_slug, $skip_slugs, true ) ) $smacg_skip_share_related = true;
 
 /* ── 閱讀時間估算（中文約 400 字/分） ─────────────────── */
 $content_text = wp_strip_all_tags( get_post_field( 'post_content', $post_id ) );
@@ -93,7 +143,6 @@ if ( ! empty( $related_tax ) )   $related_args['tax_query'] = $related_tax;
 
 $related_query = new WP_Query( $related_args );
 
-// 不足 6 篇時，僅以同 category 補
 if ( $related_query->found_posts < 6 && $primary_cat ) {
     $related_query = new WP_Query( [
         'post_type'           => 'post',
@@ -230,7 +279,8 @@ $share_links = [
     </div>
     <?php endif; ?>
 
-    <!-- ── 社群分享列 ── -->
+    <!-- ── 社群分享列（黑名單時隱藏） ── -->
+    <?php if ( ! $smacg_skip_share_related ) : ?>
     <div class="single-share" aria-label="分享文章">
       <span class="share-label"><i class="fa-solid fa-share-nodes"></i> 分享到</span>
       <div class="share-buttons">
@@ -253,6 +303,7 @@ $share_links = [
         </button>
       </div>
     </div>
+    <?php endif; ?>
 
     <!-- ── 上下篇 ── -->
     <nav class="single-nav">
@@ -266,8 +317,8 @@ $share_links = [
 
   </article>
 
-  <!-- ── 相關文章 ── -->
-  <?php if ( $related_query->have_posts() ) : ?>
+  <!-- ── 相關文章（黑名單時隱藏） ── -->
+  <?php if ( ! $smacg_skip_share_related && $related_query->have_posts() ) : ?>
   <section class="related-section">
     <h2 class="section-title">
       <i class="fa-solid fa-layer-group"></i> 相關文章
@@ -313,10 +364,9 @@ $share_links = [
 
   <?php endwhile; ?>
 
-  <!-- ── 側欄（grid 第二欄；行動版會自動掉到下方） ── -->
+  <!-- ── 側欄 ── -->
   <aside class="news-sidebar single-sidebar">
 
-    <!-- 同分類熱門 -->
     <?php if ( $popular_query->have_posts() ) : ?>
     <div class="sidebar-widget glass">
       <div class="sidebar-widget-title">
@@ -341,7 +391,6 @@ $share_links = [
     </div>
     <?php endif; ?>
 
-    <!-- 熱門標籤 -->
     <?php if ( ! empty( $popular_tags ) ) : ?>
     <div class="sidebar-widget glass">
       <div class="sidebar-widget-title">
@@ -357,7 +406,6 @@ $share_links = [
     </div>
     <?php endif; ?>
 
-    <!-- 訂閱快報 -->
     <div class="sidebar-widget glass subscribe-box">
       <div class="sidebar-widget-title">
         <i class="fa-solid fa-bell" style="color:var(--accent-blue);"></i> 訂閱快報
