@@ -31,10 +31,21 @@ $email       = $user->user_email;
 $reg_date    = mysql2date('Y-m-d', $user->user_registered);
 $bio         = get_user_meta($uid, 'description', true);
 
-// 頭像（優先 UM）
-$avatar_url = function_exists('um_get_user_avatar_url')
-    ? um_get_user_avatar_url($uid, 'original')
-    : get_avatar_url($uid, ['size' => 200]);
+// 頭像：優先讀自訂上傳，其次 UM，最後 Gravatar
+$avatar_url = '';
+$custom_aid = (int) get_user_meta($uid, 'smacg_avatar_id', true);
+if ($custom_aid && wp_attachment_is_image($custom_aid)) {
+    $img = wp_get_attachment_image_src($custom_aid, 'medium');
+    if ($img) {
+        $avatar_url = $img[0] . '?v=' . get_post_modified_time('U', false, $custom_aid);
+    }
+}
+if (!$avatar_url && function_exists('um_get_user_avatar_url')) {
+    $avatar_url = um_get_user_avatar_url($uid, 'original');
+}
+if (!$avatar_url) {
+    $avatar_url = get_avatar_url($uid, ['size' => 200]);
+}
 
 // UM 帳號頁（fallback 用，例如關閉 JS 時可導向）
 $account_url = function_exists('um_get_core_page') && um_get_core_page('account')
