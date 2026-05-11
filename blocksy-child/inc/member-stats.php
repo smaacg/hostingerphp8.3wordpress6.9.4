@@ -1,12 +1,19 @@
 <?php
 /**
  * Member Center - Stats & Data Layer
- * Version: 2.0.0
+ * Version: 2.0.1 (2026-05-11)
  *
  * 所有資料抓取 / 統計計算集中於此。重點：
  * - 一律批次預載 post（解 N+1）
  * - 觀看時數使用 anime_duration 真實值，fallback 24
  * - 收藏列入獨立分類，不再誤判為「想看」
+ *
+ * v2.0.1 變更：
+ *   - 修正 wp_anime_ratings 真實欄位名稱
+ *     (score_overall / score_story / score_music / score_animation / score_voice)
+ *   - 對外仍以 overall_score 等命名回傳，下游程式碼無需改動
+ *   - 評分表存在性檢查（避免表不存在時 SQL fatal）
+ *   - 會員方案 (smacg_get_plan_label) 加入 smaacg_vvip / smaacg_vip / vvip / vip 等 role
  */
 if (!defined('ABSPATH')) exit;
 
@@ -31,20 +38,23 @@ function smacg_calc_level($points) {
     ];
 }
 
-/* ===== 會員方案 ===== */
+/* ===== 會員方案（兼容 smaacg_* / um_* / WP 內建 role） ===== */
 function smacg_get_plan_label($user) {
     $roles = (array) $user->roles;
-    $map = [
-        'um_vip'        => 'VIP 會員',
-        'um_premium'    => '進階會員',
-        'administrator' => '管理員',
-        'editor'        => '編輯',
-        'subscriber'    => '一般會員',
-    ];
-    foreach ($map as $r => $label) {
-        if (in_array($r, $roles, true)) return $label;
+
+    // VVIP 優先判斷
+    foreach (['smaacg_vvip', 'vvip'] as $r) {
+        if (in_array($r, $roles, true)) return '👑 VVIP 會員';
     }
-    return '一般會員';
+    // VIP / Premium
+    foreach (['smaacg_vip', 'smaacg_pro', 'vip', 'um_vip', 'um_premium'] as $r) {
+        if (in_array($r, $roles, true)) return '⭐ VIP 會員';
+    }
+    // 管理 / 編輯
+    if (in_array('administrator', $roles, true)) return '管理員';
+    if (in_array('editor', $roles, true))        return '編輯';
+
+    return '免費會員';
 }
 
 /* ===== 清單建構（修復收藏歸類）===== */
@@ -95,28 +105,58 @@ function smacg_prime_posts(array $ids) {
     _prime_post_caches($ids, true, true); // WP core，會一次抓 post + meta + term
 }
 
-/* ===== 評分（批次預載）===== */
+/* ===== 評分（批次預載 + 欄位正規化）===== */
 function smacg_get_user_ratings($uid) {
     global $wpdb;
     $tbl = $wpdb->prefix . 'anime_ratings';
+
+    // 表不存在則回空，避免 SQL fatal
+    if ($wpdb->get_var($wpdb->prepare("SHOW TABLES LIKE %s", $tbl)) !== $tbl) {
+        return [];
+    }
+
     $rows = $wpdb->get_results($wpdb->prepare(
-        "SELECT anime_id, overall_score, story_score, art_score, sound_score,
-                character_score, enjoyment_score, review_text, updated_at
-         FROM {$tbl} WHERE user_id = %d ORDER BY updated_at DESC",
+        "SELECT anime_id,
+                score_overall,
+                score_story,
+                score_music,
+                score_animation,
+                score_voice,
+                updated_at
+         FROM {$tbl}
+         WHERE user_id = %d
+         ORDER BY updated_at DESC",
         $uid
     ), ARRAY_A);
+
     if (!$rows) return [];
 
-    smacg_prime_posts(array_column($rows, 'anime_id'));
-    return $rows;
+    // 正規化欄位：對外仍使用 overall_score 等命名
+    $normalized = [];
+    foreach ($rows as $r) {
+        $normalized[] = [
+            'anime_id'        => (int) $r['anime_id'],
+            'overall_score'   => (float) $r['score_overall'],
+            'story_score'     => (float) $r['score_story'],
+            'music_score'     => (float) $r['score_music'],
+            'animation_score' => (float) $r['score_animation'],
+            'voice_score'     => (float) $r['score_voice'],
+            'updated_at'      => $r['updated_at'],
+        ];
+    }
+
+    smacg_prime_posts(array_column($normalized, 'anime_id'));
+    return $normalized;
 }
 
 /* ===== 點數紀錄 ===== */
 function smacg_get_points_log($uid, $limit = 50) {
     global $wpdb;
     $tbl = $wpdb->prefix . 'smacg_points_log';
+
     // 表不存在則回空，避免錯誤
-    if ($wpdb->get_var("SHOW TABLES LIKE '{$tbl}'") !== $tbl) return [];
+    if ($wpdb->get_var($wpdb->prepare("SHOW TABLES LIKE %s", $tbl)) !== $tbl) return [];
+
     return $wpdb->get_results($wpdb->prepare(
         "SELECT change_value, reason, created_at FROM {$tbl}
          WHERE user_id = %d ORDER BY created_at DESC LIMIT %d",
