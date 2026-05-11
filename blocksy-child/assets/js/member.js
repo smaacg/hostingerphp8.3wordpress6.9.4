@@ -120,8 +120,8 @@
     const file = this.files && this.files[0];
     if (!file) return;
 
-    if (file.size > 5 * 1024 * 1024) {
-      showAvatarMsg('檔案過大（上限 5 MB）', 'error');
+    if (file.size > 1024 * 1024) {
+  showAvatarMsg('檔案過大（上限 1 MB）', 'error');
       this.value = '';
       return;
     }
