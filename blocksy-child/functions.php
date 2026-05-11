@@ -1050,15 +1050,15 @@ add_action('wp_ajax_smacg_member_loadmore', function () {
     require_once get_stylesheet_directory() . '/inc/member-stats.php';
     require_once get_stylesheet_directory() . '/inc/member-render.php';
 
-    if ($type === 'watchlist') {
-        $items = smacg_build_watchlist($uid);
-        if ($filter !== 'all') $items = array_filter($items, fn($w) => $w['status'] === $filter);
-        if ($search !== '') {
-            $q = mb_strtolower($search);
-            $items = array_filter($items, fn($w) => str_contains(mb_strtolower(get_the_title($w['post_id'])), $q));
-        }
-        $items = smacg_sort_watchlist(array_values($items), $sort);
-
+// === 篩選 ===
+if ($type === 'watchlist') {
+    if ($filter === 'favorited') {
+        $items = array_filter($items, fn($w) => !empty($w['favorited']));
+    } elseif ($filter !== 'all' && $filter !== '') {
+        $items = array_filter($items, fn($w) => ($w['status'] ?? '') === $filter);
+    }
+    $items = array_values($items);
+}
     } elseif ($type === 'ratings') {
         $items = smacg_get_user_ratings($uid);
         if ($search !== '') {
