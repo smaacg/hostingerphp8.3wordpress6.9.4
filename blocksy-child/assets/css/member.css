@@ -1,6 +1,7 @@
 /* ==========================================================
- * Member Center v2.0  (2026-05-10)
+ * Member Center v2.0.2 (2026-05-11)
  * Dark theme + glass-morphism, fully responsive
+ * v2.0.2: Layout fix 統一為 um-page-user + page-template-page-member
  * ========================================================== */
 
 :root {
@@ -63,6 +64,11 @@
   display: flex; gap: 16px; flex-wrap: wrap;
   color: var(--mc-text-dim); font-size: 14px; margin: 0 0 12px;
 }
+.mc-hero-meta span,
+.mc-hero-bio {
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
 .mc-hero-bio { color: var(--mc-text-dim); margin: 0 0 16px; line-height: 1.6; }
 
 .mc-level-bar {
@@ -85,7 +91,9 @@
 }
 
 .mc-hero-stats {
-  display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 12px;
 }
 .mc-hero-stats > div {
   text-align: center;
@@ -523,7 +531,6 @@
   .mc-hero { grid-template-columns: 100px 1fr; gap: 16px; padding: 18px; }
   .mc-hero-avatar img { width: 100px; height: 100px; }
   .mc-hero-name { font-size: 22px; }
-  .mc-hero-stats { grid-template-columns: repeat(3, 1fr); }
   .mc-dash-grid { grid-template-columns: 1fr; grid-template-areas: "watching" "quick" "comments" "plan"; }
   .mc-list-toolbar { flex-direction: column; align-items: stretch; }
   .mc-search { width: 100%; }
@@ -539,43 +546,18 @@
   .mc-hero-stats > div { padding: 6px 4px; }
   .mc-hero-stats b { font-size: 18px; }
 }
+
 /* ==========================================================
- *  Blocksy 頁面 layout 強制覆蓋
- *  因為 page-member.php 經由 template_include filter 套用，
- *  Blocksy 仍按 UM user page 的 sidebar 設定渲染容器，
- *  需強制接管 main + 移除 sidebar
+ *  v2.0.2 Blocksy 容器接管 + 頭像上傳樣式（統一版）
+ *  針對 /user/{username}/ 經 template_include filter 渲染
+ *  body.um-page-user 為主要選擇器
+ *  body.page-template-page-member 為備援
  * ========================================================== */
-body.um-page-user .ct-container,
-body.page-template-page-member .ct-container,
-body[class*="um-page-"] .ct-container {
-    grid-template-columns: 1fr !important;
-    max-width: 100% !important;
-}
-
-body.um-page-user [class*="sidebar"],
-body.um-page-user aside.sidebar,
-body.um-page-user .ct-sidebar,
-body.page-template-page-member [class*="sidebar"],
-body.page-template-page-member .ct-sidebar {
-    display: none !important;
-}
-
-body.um-page-user main,
-body.um-page-user .entry-content,
-body.um-page-user .ct-main-styles,
-body.page-template-page-member main {
-    max-width: 100% !important;
-    width: 100% !important;
-    grid-column: 1 / -1 !important;
-}
-
-/* mc-wrap 本身已有 max-width: 1200px + margin auto，會自動置中 */
-
-/* ============================================
-   v2.0.1 Layout Fix — 解決 Blocksy 右半邊空白
-   ============================================ */
 
 /* 1. 隱藏 Blocksy 注入的側欄 */
+body.um-page-user .ct-sidebar,
+body.um-page-user aside[class*="sidebar"],
+body.um-page-user [data-sidebar],
 body.page-template-page-member .ct-sidebar,
 body.page-template-page-member aside[class*="sidebar"],
 body.page-template-page-member [data-sidebar] {
@@ -583,6 +565,7 @@ body.page-template-page-member [data-sidebar] {
 }
 
 /* 2. 強制單欄布局 */
+body.um-page-user .ct-container,
 body.page-template-page-member .ct-container {
     grid-template-columns: minmax(0, 1fr) !important;
     max-width: 1280px !important;
@@ -591,33 +574,127 @@ body.page-template-page-member .ct-container {
 }
 
 /* 3. 主內容區佔滿整列 */
+body.um-page-user main#main,
+body.um-page-user .entries,
+body.um-page-user .ct-main-styles,
+body.um-page-user .entry-content,
 body.page-template-page-member main#main,
 body.page-template-page-member .entries,
-body.page-template-page-member .ct-main-styles {
+body.page-template-page-member .ct-main-styles,
+body.page-template-page-member .entry-content {
     grid-column: 1 / -1 !important;
     width: 100% !important;
     max-width: 100% !important;
 }
 
-/* 4. 隱藏 Blocksy hero（避免重複標題） */
+/* 4. 隱藏 Blocksy hero */
+body.um-page-user .ct-hero,
+body.um-page-user .page-hero-section,
 body.page-template-page-member .ct-hero,
 body.page-template-page-member .page-hero-section {
     display: none !important;
 }
 
 /* 5. .mc-wrap 撐滿並置中 */
+body.um-page-user .mc-wrap,
 body.page-template-page-member .mc-wrap {
     width: 100% !important;
     max-width: 1280px !important;
-    margin-inline: auto !important;
+    margin: 32px auto 64px !important;
     padding-inline: clamp(12px, 3vw, 32px);
     box-sizing: border-box;
 }
 
-/* 6. 手機端微調 */
 @media (max-width: 640px) {
+    body.um-page-user .mc-wrap,
     body.page-template-page-member .mc-wrap {
-        padding-inline: 12px;
+        padding-inline: 12px !important;
+        margin-top: 16px !important;
     }
 }
 
+/* ==========================================================
+ *  Avatar Upload UI（v2.0.2）
+ * ========================================================== */
+.mc-hero-avatar {
+    position: relative;
+    display: inline-block;
+}
+.mc-hero-avatar-link {
+    position: relative;
+    display: block;
+    width: 160px;
+    height: 160px;
+    border-radius: 50%;
+    overflow: hidden;
+    cursor: pointer;
+    border: 3px solid var(--mc-accent);
+    box-shadow: 0 0 24px rgba(255, 107, 174, .3);
+    background: #1a1f26;
+}
+.mc-hero-avatar-link img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+    transition: opacity .3s ease, filter .25s ease;
+}
+.mc-hero-avatar-overlay {
+    position: absolute;
+    inset: 0;
+    background: rgba(0, 0, 0, .65);
+    color: #fff;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    opacity: 0;
+    transition: opacity .25s ease;
+    border-radius: 50%;
+    pointer-events: none;
+}
+.mc-hero-avatar-overlay i {
+    font-size: 22px;
+}
+.mc-hero-avatar-overlay span {
+    font-size: 13px;
+    font-weight: 500;
+}
+.mc-hero-avatar-link:hover .mc-hero-avatar-overlay,
+.mc-hero-avatar-link:focus-within .mc-hero-avatar-overlay {
+    opacity: 1;
+}
+.mc-hero-avatar-link:hover img {
+    filter: brightness(.85);
+}
+
+.mc-avatar-msg {
+    margin-top: 10px;
+    padding: 6px 12px;
+    font-size: 12px;
+    border-radius: 6px;
+    text-align: center;
+    max-width: 160px;
+    line-height: 1.4;
+}
+.mc-avatar-msg--info    { background: rgba(107, 182, 255, .15); color: var(--mc-watching); }
+.mc-avatar-msg--success { background: rgba(52, 211, 153, .15);  color: var(--mc-completed); }
+.mc-avatar-msg--error   { background: rgba(248, 113, 113, .15); color: #f87171; }
+
+.mc-avatar-fallback {
+    display: inline-block;
+    margin-top: 10px;
+    font-size: 12px;
+    color: var(--mc-accent);
+}
+
+/* 手機端 avatar 縮小 */
+@media (max-width: 900px) {
+    .mc-hero-avatar-link {
+        width: 100px;
+        height: 100px;
+    }
+    .mc-hero-avatar-overlay i { font-size: 16px; }
+    .mc-hero-avatar-overlay span { font-size: 11px; }
+}
