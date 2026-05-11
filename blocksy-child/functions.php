@@ -860,123 +860,189 @@ add_action( 'wp_enqueue_scripts', function () {
     }
 }, 20 );
 
-/* =============================================================
- *  混合制 URL 策略 — Gemini 2.0 Flash 版  v1.1.0
- *  - announcement / news → 數字 ID slug
- *  - review / feature   → Gemini 英文 slug
- *  作用範圍：post type = 'post'，動漫 CPT 不受影響
- * ============================================================= */
+/* ============================================================
+   混合式 URL 策略（Gemini 2.0 Flash）v2.0
+   - 支援子分類向上查找
+   - 加強 debug log
+   - 後台手動重生 slug 按鈕
+   ============================================================ */
 
-/** 取得文章主分類 slug（僅匹配本系統四種類型） */
-function weixiaoacg_get_post_cat_slug( array $postarr = [], int $post_id = 0 ): string {
-    $ids = $postarr['post_category'] ?? ( $postarr['tax_input']['category'] ?? [] );
-    if ( empty( $ids ) && $post_id > 0 ) $ids = wp_get_post_categories( $post_id );
-    $allowed = [ ...WEIXIAOACG_ID_CATS, ...WEIXIAOACG_LLM_CATS ];
-    foreach ( (array) $ids as $id ) {
-        $term = get_term( (int) $id, 'category' );
-        if ( $term && ! is_wp_error( $term ) && in_array( $term->slug, $allowed, true ) )
-            return $term->slug;
+/**
+ * 取得文章分類 slug（會遞迴向上找父分類）
+ * 白名單：announcement / news / review / feature
+ */
+function weixiaoacg_get_post_cat_slug($post_id) {
+    $allowed = ['announcement', 'news', 'review', 'feature'];
+    $cats = get_the_category($post_id);
+    if (empty($cats)) return '';
+
+    foreach ($cats as $cat) {
+        // 1) 自己就在白名單
+        if (in_array($cat->slug, $allowed, true)) {
+            return $cat->slug;
+        }
+        // 2) 向上找父分類
+        $parent_id = $cat->parent;
+        while ($parent_id) {
+            $parent = get_term($parent_id, 'category');
+            if (!$parent || is_wp_error($parent)) break;
+            if (in_array($parent->slug, $allowed, true)) {
+                return $parent->slug;
+            }
+            $parent_id = $parent->parent;
+        }
     }
     return '';
 }
 
-/** 第一階段：插入文章前處理 LLM slug */
-add_filter( 'wp_insert_post_data', function ( array $data, array $postarr ): array {
-    if ( ( $data['post_type'] ?? 'post' ) !== 'post' ) return $data;
-    if ( ( $data['post_status'] ?? '' ) === 'auto-draft' ) return $data;
-    if ( empty( $data['post_title'] ) ) return $data;
+/**
+ * wp_insert_post_data：產生英文 slug
+ */
+add_filter('wp_insert_post_data', function ($data, $postarr) {
+    // 只處理 post type
+    if ($data['post_type'] !== 'post') return $data;
+    // 草稿 / 自動儲存 不跑
+    if (in_array($data['post_status'], ['auto-draft', 'inherit', 'trash'], true)) return $data;
+    // 沒標題不跑
+    if (empty($data['post_title'])) return $data;
 
-    $cat     = weixiaoacg_get_post_cat_slug( $postarr, (int) ( $postarr['ID'] ?? 0 ) );
-    $slug    = $postarr['post_name'] ?? '';
-    $has_cjk = $slug !== '' && preg_match( '/[^\x00-\x7F]/', $slug );
+    $post_id = $postarr['ID'] ?? 0;
+    if (!$post_id) return $data;
 
-    // 評論/專題分類，或抓不到分類但 slug 含中文 → 一律送 Gemini
-    $need_llm = in_array( $cat, WEIXIAOACG_LLM_CATS, true ) || ( $cat === '' && $has_cjk );
-    if ( ! $need_llm ) return $data;
-    if ( $slug !== '' && ! $has_cjk ) return $data; // 已是純 ASCII，尊重作者
+    $cat_slug = weixiaoacg_get_post_cat_slug($post_id);
 
-    $en = weixiaoacg_gemini_slug( $data['post_title'] );
-    if ( $en !== '' ) $data['post_name'] = $en;
+    // announcement / news → 用文章 ID
+    if (in_array($cat_slug, ['announcement', 'news'], true)) {
+        $data['post_name'] = (string) $post_id;
+        return $data;
+    }
+
+    // review / feature → Gemini 英文 slug
+    if (in_array($cat_slug, ['review', 'feature'], true)) {
+        // 已是純英文 slug 就不重生（避免每次更新都打 API）
+        $current = $data['post_name'] ?? '';
+        if ($current && preg_match('/^[a-z0-9\-]+$/', $current) && !ctype_digit($current)) {
+            return $data;
+        }
+
+        $en_slug = weixiaoacg_gemini_slug($data['post_title']);
+        if ($en_slug) {
+            $data['post_name'] = $en_slug;
+            error_log("[Gemini slug] OK: {$data['post_title']} → {$en_slug}");
+        } else {
+            error_log("[Gemini slug] FAILED: {$data['post_title']} (cat={$cat_slug})");
+        }
+    }
+
     return $data;
-}, 10, 2 );
-/** 第二階段：發佈後處理 ID slug（announcement / news） */
-add_action( 'save_post_post', function ( int $post_id, WP_Post $post ): void {
-    if ( wp_is_post_revision( $post_id ) || wp_is_post_autosave( $post_id ) ) return;
-    if ( $post->post_status === 'auto-draft' ) return;
+}, 10, 2);
 
-    $cat = weixiaoacg_get_post_cat_slug( [], $post_id );
-    if ( ! in_array( $cat, WEIXIAOACG_ID_CATS, true ) ) return;
+/**
+ * wp_unique_post_slug：含非 ASCII 字元時用 ID
+ */
+add_filter('wp_unique_post_slug', function ($slug, $post_ID, $post_status, $post_type) {
+    if ($post_type !== 'post') return $slug;
+    if (preg_match('/[^\x20-\x7E]/', $slug)) {
+        return (string) $post_ID;
+    }
+    return $slug;
+}, 10, 4);
 
-    $target = (string) $post_id;
-    if ( $post->post_name === $target ) return;
-
-    remove_action( 'save_post_post', __FUNCTION__, 99 );
-    global $wpdb;
-    $wpdb->update( $wpdb->posts, [ 'post_name' => $target ], [ 'ID' => $post_id ] );
-    clean_post_cache( $post_id );
-    add_action( 'save_post_post', __FUNCTION__, 99, 2 );
-}, 99, 2 );
-
-/** 兜底：仍含中文時改用 post_id */
-add_filter( 'wp_unique_post_slug', function ( string $slug, int $post_id, string $status, string $type ): string {
-    if ( $type !== 'post' ) return $slug;
-    return preg_match( '/[^\x00-\x7F]/', $slug ) ? (string) $post_id : $slug;
-}, 10, 4 );
-
-/** 呼叫 Gemini 2.0 Flash 產生英文 slug */
-function weixiaoacg_gemini_slug( string $title ): string {
-    if ( ! defined( 'WEIXIAOACG_GEMINI_API_KEY' ) || WEIXIAOACG_GEMINI_API_KEY === '' ) return '';
-
-    $cache_key = 'wxacg_slug_' . md5( $title );
-    if ( ( $cached = get_transient( $cache_key ) ) !== false ) return (string) $cached;
-
-    $prompt = '你是 ACG 網站的 URL slug 產生器。輸入中文/日文標題，產出英文 slug。'
-        . '規則：(1)全小寫 a-z 0-9 連字號；(2)長度 5-60；'
-        . '(3)作品用官方英文或羅馬拼音（葬送的芙莉蓮→frieren、咒術迴戰→jujutsu-kaisen、'
-        . '我推的孩子→oshi-no-ko、SPY×FAMILY→spy-family、鏈鋸人→chainsaw-man）；'
-        . '(4)評論加 -review 字尾；(5)省略 the/of/and/第/季/集；'
-        . '(6)第二季→s2、第18話→ep18、2026春→spring-2026；'
-        . '(7)只回傳純 slug，不要解釋、引號、句點、換行。';
-
-    $res = wp_remote_post(
-        'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key='
-            . urlencode( WEIXIAOACG_GEMINI_API_KEY ),
-        [
-            'headers' => [ 'Content-Type' => 'application/json' ],
-            'body'    => wp_json_encode( [
-                'systemInstruction' => [ 'parts' => [ [ 'text' => $prompt ] ] ],
-                'contents'          => [ [ 'role' => 'user', 'parts' => [ [ 'text' => $title ] ] ] ],
-                'generationConfig'  => [ 'temperature' => 0.3, 'maxOutputTokens' => 60 ],
-            ] ),
-            'timeout' => 15,
-        ]
-    );
-
-    if ( is_wp_error( $res ) || wp_remote_retrieve_response_code( $res ) !== 200 ) {
-        error_log( '[Gemini slug] failed: ' . ( is_wp_error( $res ) ? $res->get_error_message() : wp_remote_retrieve_body( $res ) ) );
+/**
+ * Gemini 2.0 Flash 產生英文 slug（含 transient 快取）
+ */
+function weixiaoacg_gemini_slug($title) {
+    if (!defined('WEIXIAOACG_GEMINI_API_KEY') || !WEIXIAOACG_GEMINI_API_KEY) {
+        error_log('[Gemini slug] No API key defined');
         return '';
     }
 
-    $json = json_decode( wp_remote_retrieve_body( $res ), true );
-    $slug = sanitize_title( trim( $json['candidates'][0]['content']['parts'][0]['text'] ?? '' ) );
+    $cache_key = 'gemini_slug_' . md5($title);
+    $cached = get_transient($cache_key);
+    if ($cached) return $cached;
 
-    if ( $slug === '' || strlen( $slug ) < 3 || strlen( $slug ) > 60 ) return '';
+    $prompt = "Translate this Chinese title into an English URL slug. Rules:\n"
+            . "- lowercase only\n"
+            . "- hyphens between words\n"
+            . "- no special chars, only a-z 0-9 -\n"
+            . "- max 60 characters\n"
+            . "- concise but meaningful\n"
+            . "- return ONLY the slug, no explanation\n\n"
+            . "Title: {$title}";
 
-    set_transient( $cache_key, $slug, MONTH_IN_SECONDS );
+    $body = [
+        'contents' => [['parts' => [['text' => $prompt]]]],
+        'generationConfig' => ['temperature' => 0.2, 'maxOutputTokens' => 80],
+    ];
+
+    $url = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key='
+         . WEIXIAOACG_GEMINI_API_KEY;
+
+    $res = wp_remote_post($url, [
+        'timeout' => 15,
+        'headers' => ['Content-Type' => 'application/json'],
+        'body'    => wp_json_encode($body),
+    ]);
+
+    if (is_wp_error($res)) {
+        error_log('[Gemini slug] WP error: ' . $res->get_error_message());
+        return '';
+    }
+
+    $code = wp_remote_retrieve_response_code($res);
+    $raw  = wp_remote_retrieve_body($res);
+    if ($code !== 200) {
+        error_log("[Gemini slug] HTTP {$code}: {$raw}");
+        return '';
+    }
+
+    $json = json_decode($raw, true);
+    $text = $json['candidates'][0]['content']['parts'][0]['text'] ?? '';
+    $text = trim($text);
+    if (!$text) {
+        error_log('[Gemini slug] Empty response: ' . $raw);
+        return '';
+    }
+
+    // 清理：只留 a-z 0-9 -
+    $slug = strtolower($text);
+    $slug = preg_replace('/[^a-z0-9\-]+/', '-', $slug);
+    $slug = preg_replace('/-+/', '-', $slug);
+    $slug = trim($slug, '-');
+    $slug = substr($slug, 0, 60);
+
+    if (!$slug || ctype_digit($slug)) {
+        error_log("[Gemini slug] Invalid after clean: {$text}");
+        return '';
+    }
+
+    set_transient($cache_key, $slug, MONTH_IN_SECONDS);
     return $slug;
 }
 
-/** 編輯畫面提示：評論/專題若 slug 為純數字，提醒手動修正 */
-add_action( 'edit_form_after_title', function ( WP_Post $post ): void {
-    if ( $post->post_type !== 'post' || $post->post_status === 'auto-draft' ) return;
-    $cat = weixiaoacg_get_post_cat_slug( [], $post->ID );
-    if ( ! in_array( $cat, WEIXIAOACG_LLM_CATS, true ) ) return;
-    if ( ! ctype_digit( $post->post_name ) ) return;
-    echo '<div class="notice notice-warning inline" style="margin:10px 0;padding:10px;">';
-    echo '⚠️ 此' . ( $cat === 'review' ? '評論' : '專題' ) . '文章 slug 為數字（' . esc_html( $post->post_name ) . '），';
-    echo 'Gemini 可能暫時失敗。請到右側「永久連結」改為英文 slug，或重新更新讓系統再試。';
-    echo '</div>';
-} );
+/**
+ * 編輯頁警告：slug 為數字或含中文
+ */
+add_action('edit_form_after_title', function ($post) {
+    if ($post->post_type !== 'post' || $post->post_status === 'auto-draft') return;
+    $slug = $post->post_name;
+    if (!$slug) return;
+
+    $is_numeric = ctype_digit($slug);
+    $has_cjk = preg_match('/[^\x20-\x7E]/', $slug);
+    $cat_slug = weixiaoacg_get_post_cat_slug($post->ID);
+
+    // announcement / news 用數字是正常的
+    if ($is_numeric && in_array($cat_slug, ['announcement', 'news'], true)) return;
+
+    if ($is_numeric || $has_cjk) {
+        echo '<div class="notice notice-warning inline" style="margin:10px 0;padding:10px;">';
+        echo '⚠️ <strong>Slug 異常</strong>：目前為 <code>' . esc_html($slug) . '</code>（分類：' . esc_html($cat_slug ?: '無') . '）';
+        echo '<br>清空 slug 後重新更新文章，即可讓 Gemini 重新產生英文 slug。';
+        echo '</div>';
+    }
+});
+
 /* ============================================================
    ▓▓▓ Member Center v2.0.2 - 完整 endpoints / enqueue / avatar ▓▓▓
    2026-05-11
