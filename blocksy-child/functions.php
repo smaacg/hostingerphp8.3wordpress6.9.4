@@ -1225,4 +1225,40 @@ add_filter('get_avatar', function ($html, $id_or_email, $size, $default, $alt, $
     );
 }, 9999, 6);
 
+/* ★ 核心：覆蓋 UM 的頭像 URL（這才是 UM 真正讀的 filter） */
+add_filter('um_user_avatar_url_filter', function ($avatar_uri, $user_id) {
+    $user_id = (int) $user_id;
+    if (!$user_id) return $avatar_uri;
+    $aid = (int) get_user_meta($user_id, 'smacg_avatar_id', true);
+    if ($aid && wp_attachment_is_image($aid)) {
+        $img = wp_get_attachment_image_src($aid, 'medium');
+        if ($img) {
+            return $img[0] . '?v=' . get_post_modified_time('U', false, $aid);
+        }
+    }
+    return $avatar_uri;
+}, 9999, 2);
+
+/* 移除 UM 對 <img> 加的 um-avatar-default class（讓圖正常顯示） */
+add_filter('get_avatar', function ($html, $id_or_email) {
+    // 取 user id
+    $uid = 0;
+    if (is_numeric($id_or_email)) $uid = (int) $id_or_email;
+    elseif ($id_or_email instanceof WP_User) $uid = $id_or_email->ID;
+    elseif ($id_or_email instanceof WP_Comment) $uid = (int) $id_or_email->user_id;
+    elseif (is_object($id_or_email)) $uid = (int) ($id_or_email->user_id ?? $id_or_email->ID ?? 0);
+    elseif (is_string($id_or_email) && is_email($id_or_email)) {
+        $u = get_user_by('email', $id_or_email);
+        $uid = $u ? $u->ID : 0;
+    }
+    if (!$uid) return $html;
+    if (!get_user_meta($uid, 'smacg_avatar_id', true)) return $html;
+
+    // 有自訂頭像 → 移除 um-avatar-default class 和 onerror（避免被打回預設圖）
+    $html = preg_replace('/\sum-avatar-default/', '', $html);
+    $html = preg_replace('/\sonerror="[^"]*"/', '', $html);
+    $html = preg_replace('/\sdata-default="[^"]*"/', '', $html);
+    return $html;
+}, 99999, 2);
+
 
