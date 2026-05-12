@@ -2,8 +2,24 @@
 /**
  * Template Name: 動漫排行榜
  * Template Post Type: page
+ *
+ * v1.1  2026-05-11
+ * - 品牌名稱：weixiaoacg+ → 微笑動漫+
+ * - <div class="rank-category-tab"> 改 <button>
+ * - inline style="display:none" 改 hidden 屬性
+ * - 文字加 esc_html__() 包裝（為未來 i18n 預留）
+ * - 平台說明卡：圖示與描述微調
+ * - 新增最後更新時間顯示（前端 JS 補值）
+ *
+ * Path: wp-content/themes/blocksy-child/page-ranking.php
  */
-get_header(); ?>
+
+if ( ! defined( 'ABSPATH' ) ) exit;
+get_header();
+
+// 主品牌名（將來改名只需動這一行）
+$smacg_brand = '微笑動漫+';
+?>
 
 <!-- ================================================================
      HERO
@@ -13,28 +29,28 @@ get_header(); ?>
   <div class="rank-hero__overlay"></div>
   <div class="container rank-hero__content">
     <div class="rank-hero__eyebrow">
-      <span class="chip"><i class="fa-solid fa-database"></i> 多平台整合數據</span>
-      <span class="chip chip--green"><i class="fa-solid fa-clock-rotate-left"></i> 每小時更新</span>
+      <span class="chip"><i class="fa-solid fa-database"></i> <?php echo esc_html__( '多平台整合數據', 'weixiaoacg' ); ?></span>
+      <span class="chip chip--green"><i class="fa-solid fa-clock-rotate-left"></i> <?php echo esc_html__( '每小時更新', 'weixiaoacg' ); ?></span>
     </div>
     <h1 class="rank-hero__title">
       <span class="rank-hero__trophy">🏆</span>
-      動漫排行榜
+      <?php echo esc_html__( '動漫排行榜', 'weixiaoacg' ); ?>
     </h1>
-    <p class="rank-hero__subtitle">整合全球四大平台數據，發現真正的神作</p>
+    <p class="rank-hero__subtitle"><?php echo esc_html__( '整合全球四大平台數據，發現真正的神作', 'weixiaoacg' ); ?></p>
     <div class="rank-hero__stats">
       <div class="rank-hero__stat">
         <span class="rank-hero__stat-num grad-text">4</span>
-        <span class="rank-hero__stat-label">資料平台</span>
+        <span class="rank-hero__stat-label"><?php echo esc_html__( '資料平台', 'weixiaoacg' ); ?></span>
       </div>
       <div class="rank-hero__stat-divider"></div>
       <div class="rank-hero__stat">
         <span class="rank-hero__stat-num grad-text">500萬+</span>
-        <span class="rank-hero__stat-label">全球評分數</span>
+        <span class="rank-hero__stat-label"><?php echo esc_html__( '全球評分數', 'weixiaoacg' ); ?></span>
       </div>
       <div class="rank-hero__stat-divider"></div>
       <div class="rank-hero__stat">
         <span class="rank-hero__stat-num grad-text">Top 20</span>
-        <span class="rank-hero__stat-label">每榜收錄</span>
+        <span class="rank-hero__stat-label"><?php echo esc_html__( '每榜收錄', 'weixiaoacg' ); ?></span>
       </div>
     </div>
   </div>
@@ -45,23 +61,35 @@ get_header(); ?>
      ================================================================ -->
 <div class="rank-category-row">
   <div class="container">
-    <div class="rank-category-tabs" id="rank-category-tabs">
-      <div class="rank-category-tab active" data-category="anime">🎬 動畫</div>
-      <div class="rank-category-tab coming-soon" data-category="manga" title="即將推出">
-        📖 漫畫 <span class="soon-badge">Coming Soon</span>
-      </div>
-      <div class="rank-category-tab coming-soon" data-category="novel" title="即將推出">
-        📚 輕小說 <span class="soon-badge">Coming Soon</span>
-      </div>
-      <div class="rank-category-tab coming-soon" data-category="music" title="即將推出">
-        🎵 音樂 <span class="soon-badge">Coming Soon</span>
-      </div>
-      <div class="rank-category-tab coming-soon" data-category="game" title="即將推出">
-        🎮 遊戲 <span class="soon-badge">Coming Soon</span>
-      </div>
-      <div class="rank-category-tab coming-soon" data-category="vtuber" title="即將推出">
-        📺 VTuber <span class="soon-badge">Coming Soon</span>
-      </div>
+    <div class="rank-category-tabs" id="rank-category-tabs" role="tablist" aria-label="<?php esc_attr_e( '排行榜分類', 'weixiaoacg' ); ?>">
+      <button type="button" class="rank-category-tab active" data-category="anime" role="tab" aria-selected="true">
+        🎬 <?php echo esc_html__( '動畫', 'weixiaoacg' ); ?>
+      </button>
+      <button type="button" class="rank-category-tab coming-soon" data-category="manga" role="tab" aria-selected="false" disabled
+              title="<?php esc_attr_e( '即將推出', 'weixiaoacg' ); ?>">
+        📖 <?php echo esc_html__( '漫畫', 'weixiaoacg' ); ?>
+        <span class="soon-badge">Coming Soon</span>
+      </button>
+      <button type="button" class="rank-category-tab coming-soon" data-category="novel" role="tab" aria-selected="false" disabled
+              title="<?php esc_attr_e( '即將推出', 'weixiaoacg' ); ?>">
+        📚 <?php echo esc_html__( '輕小說', 'weixiaoacg' ); ?>
+        <span class="soon-badge">Coming Soon</span>
+      </button>
+      <button type="button" class="rank-category-tab coming-soon" data-category="music" role="tab" aria-selected="false" disabled
+              title="<?php esc_attr_e( '即將推出', 'weixiaoacg' ); ?>">
+        🎵 <?php echo esc_html__( '音樂', 'weixiaoacg' ); ?>
+        <span class="soon-badge">Coming Soon</span>
+      </button>
+      <button type="button" class="rank-category-tab coming-soon" data-category="game" role="tab" aria-selected="false" disabled
+              title="<?php esc_attr_e( '即將推出', 'weixiaoacg' ); ?>">
+        🎮 <?php echo esc_html__( '遊戲', 'weixiaoacg' ); ?>
+        <span class="soon-badge">Coming Soon</span>
+      </button>
+      <button type="button" class="rank-category-tab coming-soon" data-category="vtuber" role="tab" aria-selected="false" disabled
+              title="<?php esc_attr_e( '即將推出', 'weixiaoacg' ); ?>">
+        📺 VTuber
+        <span class="soon-badge">Coming Soon</span>
+      </button>
     </div>
   </div>
 </div>
@@ -76,44 +104,55 @@ get_header(); ?>
       <!-- 左欄：排行榜主區 -->
       <div class="rank-main">
 
-        <!-- 平台頁籤
-             ★ 修改：移除 site tab 上的 style="display:none" 佔位，
-               改由 JS 依真實狀態控制顯示 -->
+        <!-- 平台頁籤 -->
         <div class="rank-platform-row">
-          <div class="rank-platform-tabs" id="rank-platform-tabs">
-            <button class="rank-platform-tab" data-platform="site">⭐ weixiaoacg+</button>
-            <button class="rank-platform-tab active" data-platform="anilist">🌐 AniList</button>
-            <button class="rank-platform-tab" data-platform="mal">📊 MAL / Jikan</button>
-            <button class="rank-platform-tab" data-platform="bangumi">🎯 Bangumi</button>
+          <div class="rank-platform-tabs" id="rank-platform-tabs" role="tablist" aria-label="<?php esc_attr_e( '評分平台', 'weixiaoacg' ); ?>">
+            <button type="button" class="rank-platform-tab" data-platform="site" role="tab" aria-selected="false">
+              ⭐ <?php echo esc_html( $smacg_brand ); ?>
+            </button>
+            <button type="button" class="rank-platform-tab active" data-platform="anilist" role="tab" aria-selected="true">
+              🌐 AniList
+            </button>
+            <button type="button" class="rank-platform-tab" data-platform="mal" role="tab" aria-selected="false">
+              📊 MAL / Jikan
+            </button>
+            <button type="button" class="rank-platform-tab" data-platform="bangumi" role="tab" aria-selected="false">
+              🎯 Bangumi
+            </button>
           </div>
         </div>
 
-        <!-- 站內子分類
-             ★ 修改：切換到 site 時顯示，有 rating 真實資料，
-               views / favorites 顯示「即將上線」 -->
-        <div class="site-sub-row" id="site-sub-tabs" style="display:none;">
-          <button class="site-sub-btn active" data-rank-type="rating">⭐ 評分最高</button>
-          <button class="site-sub-btn" data-rank-type="views">🔥 最多瀏覽</button>
-          <button class="site-sub-btn" data-rank-type="favorites">💖 最多收藏</button>
+        <!-- 站內子分類（切到 site 才顯示） -->
+        <div class="site-sub-row" id="site-sub-tabs" hidden>
+          <button type="button" class="site-sub-btn active" data-rank-type="rating">
+            ⭐ <?php echo esc_html__( '評分最高', 'weixiaoacg' ); ?>
+          </button>
+          <button type="button" class="site-sub-btn" data-rank-type="views">
+            🔥 <?php echo esc_html__( '最多瀏覽', 'weixiaoacg' ); ?>
+          </button>
+          <button type="button" class="site-sub-btn" data-rank-type="favorites">
+            💖 <?php echo esc_html__( '最多收藏', 'weixiaoacg' ); ?>
+          </button>
         </div>
 
         <!-- 平台介紹卡 -->
         <div class="platform-info-card glass-card" id="platform-info-card"></div>
 
-        <!-- 時間週期 + 計數
-             ★ 修改：site 平台時隱藏 period-btns（站內排行無時間維度） -->
+        <!-- 時間週期 + 計數 -->
         <div class="rank-toolbar">
-          <div class="period-btns" id="period-btns">
-            <button class="period-btn" data-period="daily">今日</button>
-            <button class="period-btn active" data-period="weekly">本週</button>
-            <button class="period-btn" data-period="monthly">本月</button>
-            <button class="period-btn" data-period="yearly">年度</button>
+          <div class="period-btns" id="period-btns" role="group" aria-label="<?php esc_attr_e( '時間範圍', 'weixiaoacg' ); ?>">
+            <button type="button" class="period-btn" data-period="daily"><?php echo esc_html__( '今日', 'weixiaoacg' ); ?></button>
+            <button type="button" class="period-btn active" data-period="weekly"><?php echo esc_html__( '本週', 'weixiaoacg' ); ?></button>
+            <button type="button" class="period-btn" data-period="monthly"><?php echo esc_html__( '本月', 'weixiaoacg' ); ?></button>
+            <button type="button" class="period-btn" data-period="yearly"><?php echo esc_html__( '年度', 'weixiaoacg' ); ?></button>
           </div>
-          <span class="rank-count-info" id="rank-count-info">本週 AniList 排行 · Top 20</span>
+          <span class="rank-count-info" id="rank-count-info">
+            <?php echo esc_html__( '本週 AniList 排行', 'weixiaoacg' ); ?> · Top 20
+          </span>
         </div>
 
         <!-- 排行列表 -->
-        <div class="rank-list" id="rank-list">
+        <div class="rank-list" id="rank-list" aria-live="polite">
           <div class="rank-loading">
             <div class="skeleton" style="height:90px;border-radius:16px;"></div>
             <div class="skeleton" style="height:90px;border-radius:16px;margin-top:10px;"></div>
@@ -121,11 +160,22 @@ get_header(); ?>
           </div>
         </div>
 
-        <!-- 站內排行底部提示
-             ★ 修改：切換到 site 時才顯示 -->
-        <p class="site-rank-note" id="site-rank-note" style="display:none;">
+        <!-- 站內排行底部提示 -->
+        <p class="site-rank-note" id="site-rank-note" hidden>
           <i class="fa-solid fa-circle-info"></i>
-          數據來自本站會員的真實評分（貝葉斯加權），至少 1 人評分即入榜
+          <?php
+          printf(
+            esc_html__( '數據來自 %s 會員的真實評分（貝葉斯加權），至少 1 人評分即入榜', 'weixiaoacg' ),
+            esc_html( $smacg_brand )
+          );
+          ?>
+        </p>
+
+        <!-- 最後更新時間（JS 補值） -->
+        <p class="rank-updated-at" id="rank-updated-at" hidden>
+          <i class="fa-regular fa-clock"></i>
+          <?php echo esc_html__( '最後更新：', 'weixiaoacg' ); ?>
+          <span id="rank-updated-time">—</span>
         </p>
 
       </div><!-- /rank-main -->
@@ -137,7 +187,7 @@ get_header(); ?>
         <div class="rank-sidebar-card glass-mid">
           <h3 class="rank-sidebar-title">
             <i class="fa-solid fa-circle-plus" style="color:var(--accent-cyan);"></i>
-            本週新上榜 🆕
+            <?php echo esc_html__( '本週新上榜', 'weixiaoacg' ); ?> 🆕
           </h3>
           <div class="sb-rank-list" id="sidebar-new-list"></div>
         </div>
@@ -146,7 +196,7 @@ get_header(); ?>
         <div class="rank-sidebar-card glass-mid">
           <h3 class="rank-sidebar-title">
             <i class="fa-solid fa-chart-line" style="color:var(--accent-violet);"></i>
-            本週排名變動 📈
+            <?php echo esc_html__( '本週排名變動', 'weixiaoacg' ); ?> 📈
           </h3>
           <div class="sb-rank-list" id="sidebar-movers-list"></div>
         </div>
@@ -155,40 +205,40 @@ get_header(); ?>
         <div class="rank-sidebar-card glass-mid">
           <h3 class="rank-sidebar-title">
             <i class="fa-solid fa-circle-question" style="color:var(--accent-blue);"></i>
-            平台說明
+            <?php echo esc_html__( '平台說明', 'weixiaoacg' ); ?>
           </h3>
           <div class="platform-guide">
             <div class="pg-item">
               <span class="pg-icon" style="background:rgba(108,99,255,0.15);color:#6c63ff;">⭐</span>
               <div class="pg-info">
-                <div class="pg-name">weixiaoacg+</div>
-                <div class="pg-desc">本站社群真實數據</div>
+                <div class="pg-name"><?php echo esc_html( $smacg_brand ); ?></div>
+                <div class="pg-desc"><?php echo esc_html__( '本站社群真實數據', 'weixiaoacg' ); ?></div>
               </div>
             </div>
             <div class="pg-item">
               <span class="pg-icon" style="background:rgba(2,169,255,0.15);color:#02a9ff;">🌐</span>
               <div class="pg-info">
                 <div class="pg-name">AniList</div>
-                <div class="pg-desc">歐美社群・精細評分</div>
+                <div class="pg-desc"><?php echo esc_html__( '歐美社群・精細評分', 'weixiaoacg' ); ?></div>
               </div>
             </div>
             <div class="pg-item">
               <span class="pg-icon" style="background:rgba(46,81,162,0.15);color:#4d7fff;">📊</span>
               <div class="pg-info">
                 <div class="pg-name">MAL / Jikan</div>
-                <div class="pg-desc">全球最大・歷史最完整</div>
+                <div class="pg-desc"><?php echo esc_html__( '全球最大・歷史最完整', 'weixiaoacg' ); ?></div>
               </div>
             </div>
             <div class="pg-item">
               <span class="pg-icon" style="background:rgba(240,145,153,0.15);color:#f09199;">🎯</span>
               <div class="pg-info">
                 <div class="pg-name">Bangumi</div>
-                <div class="pg-desc">華語圈・聲優資料詳盡</div>
+                <div class="pg-desc"><?php echo esc_html__( '華語圈・聲優資料詳盡', 'weixiaoacg' ); ?></div>
               </div>
             </div>
           </div>
           <p style="font-size:11px;color:var(--text-muted);margin-top:12px;line-height:1.6;">
-            各平台用戶組成不同，排名順序可能有差異，體現真實的口味多元性。
+            <?php echo esc_html__( '各平台用戶組成不同，排名順序可能有差異，體現真實的口味多元性。', 'weixiaoacg' ); ?>
           </p>
         </div>
 
@@ -198,6 +248,6 @@ get_header(); ?>
   </div>
 </section>
 
-<div class="toast-container" id="toast-container"></div>
+<div class="toast-container" id="toast-container" aria-live="polite"></div>
 
 <?php get_footer(); ?>
