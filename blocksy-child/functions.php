@@ -1383,3 +1383,78 @@ add_filter('get_avatar', function ($html, $id_or_email) {
     $html = preg_replace('/\sdata-default="[^"]*"/', '', $html);
     return $html;
 }, 99999, 2);
+
+/* ============================================================
+   防止 single.php 套用到 Page / UM / wpForo 等非 post 頁面
+   優先級 999，比上方優先級 99 的 UM user → page-member.php 晚跑，
+   page-member.php 已選中時不會被覆蓋
+   ============================================================ */
+add_filter( 'template_include', function( $template ) {
+    // 只在 WP 選了 single.php 時介入
+    if ( basename( $template ) !== 'single.php' ) return $template;
+
+    // 真．單篇文章：post type=post 且不是 Page
+    $is_real_single = is_singular( 'post' ) && ! is_page();
+
+    // UM 動態頁
+    if ( function_exists( 'um_is_core_page' ) && (
+            um_is_core_page( 'user' )     || get_query_var( 'um_user' ) ||
+            um_is_core_page( 'account' )  || um_is_core_page( 'login' ) ||
+            um_is_core_page( 'register' ) || um_is_core_page( 'password-reset' ) ||
+            um_is_core_page( 'logout' )   || um_is_core_page( 'members' )
+       ) ) {
+        $is_real_single = false;
+    }
+
+    // wpForo
+    if ( function_exists( 'is_wpforo_page' ) && is_wpforo_page() ) {
+        $is_real_single = false;
+    }
+
+    if ( ! $is_real_single ) {
+        // 改用父主題的 page.php
+        $page_tpl = get_template_directory() . '/page.php';
+        if ( file_exists( $page_tpl ) ) return $page_tpl;
+        // 父主題沒 page.php 才退而求其次走 index.php
+        $idx_tpl = get_template_directory() . '/index.php';
+        if ( file_exists( $idx_tpl ) ) return $idx_tpl;
+    }
+
+    return $template;
+}, 999 );
+
+/* === 會員中心：更新基本資料 AJAX === */
+add_action('wp_ajax_smacg_update_profile', function () {
+    if (!is_user_logged_in()) {
+        wp_send_json_error(['msg' => '請先登入']);
+    }
+    check_ajax_referer('smacg_update_profile', 'nonce');
+
+    $uid     = get_current_user_id();
+    $display = sanitize_text_field($_POST['display_name'] ?? '');
+    $nick    = sanitize_text_field($_POST['nickname']     ?? '');
+    $bio     = sanitize_textarea_field($_POST['description'] ?? '');
+
+    if ($display === '') {
+        wp_send_json_error(['msg' => '顯示名稱不可為空']);
+    }
+    if (mb_strlen($display) > 40 || mb_strlen($nick) > 40 || mb_strlen($bio) > 300) {
+        wp_send_json_error(['msg' => '欄位長度超出限制']);
+    }
+
+    $r = wp_update_user([
+        'ID'           => $uid,
+        'display_name' => $display,
+        'nickname'     => $nick !== '' ? $nick : $display,
+        'description'  => $bio,
+    ]);
+
+    if (is_wp_error($r)) {
+        wp_send_json_error(['msg' => $r->get_error_message()]);
+    }
+    // 清 UM 快取
+    if (function_exists('UM')) UM()->user()->remove_cache($uid);
+
+    wp_send_json_success(['msg' => '已儲存 ✓']);
+});
+
