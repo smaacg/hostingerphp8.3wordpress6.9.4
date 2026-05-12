@@ -1458,3 +1458,27 @@ add_action('wp_ajax_smacg_update_profile', function () {
     wp_send_json_success(['msg' => '已儲存 ✓']);
 });
 
+/**
+ * P0-1: 隱私設定 AJAX handler
+ */
+add_action( 'wp_ajax_smacg_update_privacy', function () {
+    if ( ! is_user_logged_in() ) wp_send_json_error( [ 'msg' => '請先登入' ] );
+    check_ajax_referer( 'smacg_privacy', 'nonce' );
+    $uid = get_current_user_id();
+
+    $allowed = [ 'show_email', 'public_profile', 'public_watchlist' ];
+    $current = function_exists( 'smacg_get_user_privacy' )
+        ? smacg_get_user_privacy( $uid )
+        : [];
+
+    $key = sanitize_key( $_POST['key'] ?? '' );
+    if ( ! in_array( $key, $allowed, true ) ) {
+        wp_send_json_error( [ 'msg' => '無效參數' ] );
+    }
+    $current[ $key ] = ! empty( $_POST['value'] ) ? 1 : 0;
+
+    update_user_meta( $uid, 'smacg_privacy', $current );
+    wp_send_json_success( [ 'msg' => '已儲存 ✓', 'privacy' => $current ] );
+} );
+
+
