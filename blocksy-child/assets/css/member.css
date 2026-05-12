@@ -1138,3 +1138,117 @@ body.page-template-page-member .mc-wrap {
 .mc-toast--ok{background:rgba(16,185,129,.92);}
 .mc-toast--err{background:rgba(239,68,68,.92);}
 @media (prefers-reduced-motion:reduce){.mc-card-actions{transition:none;}.mc-card-btn{transition:none;}}
+
+
+/* ==========================================================
+ *  P1-2: Continue Watching - 繼續觀看橫向列（2026-05-12）
+ * ========================================================== */
+.mc-continue-section {
+  margin-bottom: 32px;
+  padding: 20px 24px;
+  background: linear-gradient(135deg, rgba(107, 182, 255, .08), rgba(167, 139, 250, .08));
+  border: 1px solid var(--mc-border);
+  border-radius: var(--mc-radius);
+}
+
+.mc-continue-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.mc-continue-title {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--mc-text);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.mc-continue-title small {
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--mc-text-dim);
+}
+
+/* 左右捲動箭頭 */
+.mc-continue-nav {
+  display: flex;
+  gap: 6px;
+}
+.mc-continue-arrow {
+  width: 34px;
+  height: 34px;
+  border: 1px solid var(--mc-border);
+  background: var(--mc-surface);
+  color: var(--mc-text);
+  border-radius: 50%;
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+  transition: all .2s;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.mc-continue-arrow:hover {
+  background: var(--mc-accent);
+  border-color: var(--mc-accent);
+  color: #fff;
+}
+.mc-continue-arrow:disabled {
+  opacity: .35;
+  cursor: not-allowed;
+}
+
+/* 橫向 scroll 容器 */
+.mc-continue-scroll {
+  display: flex;
+  gap: 14px;
+  overflow-x: auto;
+  scroll-behavior: smooth;
+  scroll-snap-type: x mandatory;
+  padding: 4px 2px 12px;
+  -webkit-overflow-scrolling: touch;
+}
+.mc-continue-scroll::-webkit-scrollbar { height: 6px; }
+.mc-continue-scroll::-webkit-scrollbar-track { background: transparent; }
+.mc-continue-scroll::-webkit-scrollbar-thumb {
+  background: var(--mc-border);
+  border-radius: 3px;
+}
+.mc-continue-scroll::-webkit-scrollbar-thumb:hover {
+  background: var(--mc-accent);
+}
+
+/* 單張卡片：寬度固定，重用 .mc-anime-card 樣式 */
+.mc-continue-card {
+  flex: 0 0 180px;
+  scroll-snap-align: start;
+}
+
+/* 空狀態 */
+.mc-continue-empty-box {
+  text-align: center;
+  padding: 24px 16px;
+  color: var(--mc-text-dim);
+}
+.mc-continue-empty-box p {
+  margin: 0 0 14px;
+  font-size: 14px;
+}
+
+/* RWD */
+@media (max-width: 640px) {
+  .mc-continue-section {
+    padding: 16px 14px;
+  }
+  .mc-continue-card { flex-basis: 150px; }
+  .mc-continue-title { font-size: 16px; }
+}
+@media (max-width: 480px) {
+  .mc-continue-card { flex-basis: 140px; }
+}
