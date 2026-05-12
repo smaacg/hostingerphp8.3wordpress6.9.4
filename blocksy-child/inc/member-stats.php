@@ -270,3 +270,30 @@ function smacg_calc_member_stats($watchlist, $ratings) {
         'years'   => $years_arr,
     ];
 }
+
+/**
+ * 取得使用者隱私設定（v2.0.2 新增）
+ * 三個布林值：show_email, public_profile, public_watchlist
+ */
+function smacg_get_user_privacy( $uid ) {
+    $defaults = [
+        'show_email'      => 0, // 預設遮罩 email
+        'public_profile'  => 1, // 預設公開個人頁
+        'public_watchlist'=> 1, // 預設公開追番列表
+    ];
+    $saved = get_user_meta( $uid, 'smacg_privacy', true );
+    if ( ! is_array( $saved ) ) $saved = [];
+    return array_merge( $defaults, $saved );
+}
+
+/**
+ * 遮罩 email：a***@gmail.com
+ */
+function smacg_mask_email( $email ) {
+    if ( ! $email || strpos( $email, '@' ) === false ) return '';
+    list( $name, $domain ) = explode( '@', $email, 2 );
+    $len = mb_strlen( $name );
+    if ( $len <= 1 ) return $name . '***@' . $domain;
+    return mb_substr( $name, 0, 1 ) . str_repeat( '*', min( 3, $len - 1 ) ) . '@' . $domain;
+}
+
