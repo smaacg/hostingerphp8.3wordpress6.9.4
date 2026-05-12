@@ -1,14 +1,21 @@
 <?php
 /**
  * Member Center - Render Layer
- * Version: 2.0.0
+ * Version: 2.0.1 (2026-05-12)
  *
  * 各 tab 的 HTML 輸出。所有清單一律「先渲染前 N 筆」，其餘由 AJAX 載入。
  * 桌機 20 / 行動 12（前端 JS 偵測，PHP 預設輸出 20）
+ *
+ * v2.0.1：設定 tab 三張卡片連結重寫
+ *   - 基本資料：改為 inline 編輯（顯示名稱/簡介），不再跳 /account/
+ *   - 重設密碼：改用 /password-reset/ 自訂頁
+ *   - 登出帳號：維持 wp_logout_url()
  */
 if (!defined('ABSPATH')) exit;
 
-const SMACG_PAGE_SIZE = 20;
+if (!defined('SMACG_PAGE_SIZE')) {
+    define('SMACG_PAGE_SIZE', 20);
+}
 
 /* ========== 共用：單張 anime 卡片 ========== */
 function smacg_render_anime_card($pid, $extra = []) {
@@ -65,7 +72,7 @@ function smacg_render_anime_card($pid, $extra = []) {
     <?php
 }
 
-/* ========== 縮圖 fallback（與 page-columns.php 一致）========== */
+/* ========== 縮圖 fallback ========== */
 function smacg_get_card_thumb_url($pid) {
     if (has_post_thumbnail($pid)) return get_the_post_thumbnail_url($pid, 'medium');
     $meta = get_post_meta($pid, 'anime_cover_image', true);
@@ -139,7 +146,7 @@ function smacg_render_dashboard($watchlist, $stats, $recent_cmt, $points_log, $p
 }
 
 /* =====================================================
- *  Tab 2：我的清單（含分頁/搜尋/排序）
+ *  Tab 2：我的清單
  * ===================================================== */
 function smacg_render_watchlist($watchlist, $counts) {
     $first = array_slice($watchlist, 0, SMACG_PAGE_SIZE);
@@ -181,14 +188,12 @@ function smacg_render_watchlist($watchlist, $counts) {
 }
 
 /* =====================================================
- *  Tab 3：統計（純 CSS 圖表）
+ *  Tab 3：統計
  * ===================================================== */
 function smacg_render_stats($s) {
     $r = $s['rating']; ?>
-
     <div class="mc-stats-grid">
 
-        <?php /* 觀看時數 banner */ ?>
         <div class="mc-stats-banner">
             <div>
                 <span class="mc-banner-label">你已經沉浸在動畫世界</span>
@@ -201,7 +206,6 @@ function smacg_render_stats($s) {
             </div>
         </div>
 
-        <?php /* 評分分布 */ ?>
         <div class="mc-stats-card">
             <h3>⭐ 評分分布</h3>
             <?php if ($r['count']): ?>
@@ -226,8 +230,7 @@ function smacg_render_stats($s) {
             <?php endif; ?>
         </div>
 
-        <?php /* 類型偏好（CSS pie：用 conic-gradient）*/
-        if ($s['genres']):
+        <?php if ($s['genres']):
             $colors = ['#ff6bae','#6bb6ff','#a78bfa','#fbbf24','#34d399','#f87171','#60a5fa','#c084fc'];
             $stops = []; $acc = 0;
             foreach ($s['genres'] as $i => $g) {
@@ -255,8 +258,7 @@ function smacg_render_stats($s) {
             </div>
         <?php endif; ?>
 
-        <?php /* 製作公司 Top 5 */
-        if ($s['studios']): ?>
+        <?php if ($s['studios']): ?>
             <div class="mc-stats-card">
                 <h3>🏢 製作公司 <small>Top 5</small></h3>
                 <ol class="mc-rank-list">
@@ -271,8 +273,7 @@ function smacg_render_stats($s) {
             </div>
         <?php endif; ?>
 
-        <?php /* 年代分布 */
-        if ($s['years']):
+        <?php if ($s['years']):
             $ymax = max(array_column($s['years'], 'count')) ?: 1; ?>
             <div class="mc-stats-card">
                 <h3>📅 年代分布</h3>
@@ -286,7 +287,6 @@ function smacg_render_stats($s) {
             </div>
         <?php endif; ?>
 
-        <?php /* 最高 / 最低分 */ ?>
         <?php if ($r['top3']): ?>
             <div class="mc-stats-card">
                 <h3>🏆 我給高分的作品</h3>
@@ -309,7 +309,7 @@ function smacg_render_stats($s) {
 }
 
 /* =====================================================
- *  Tab 4：評分（分頁）
+ *  Tab 4：評分
  * ===================================================== */
 function smacg_render_ratings($ratings, $rating_stats) {
     $total = count($ratings);
@@ -403,22 +403,68 @@ function smacg_render_points($points, $lvl, $log) { ?>
 <?php }
 
 /* =====================================================
- *  Tab 7：設定
+ *  Tab 7：設定（v2.0.1 重寫）
  * ===================================================== */
-function smacg_render_settings($user) { ?>
+function smacg_render_settings($user) {
+    $display = $user->display_name ?: $user->user_login;
+    $bio     = get_user_meta($user->ID, 'description', true);
+    $nick    = get_user_meta($user->ID, 'nickname', true);
+    $reset_url = home_url('/password-reset/'); // 自訂前台密碼重設頁
+    ?>
     <div class="mc-settings-grid">
+
+        <?php /* 卡片 1：基本資料（inline 編輯，不再跳 /account/） */ ?>
         <div class="mc-set-card">
             <h3>👤 基本資料</h3>
-            <p>修改顯示名稱、簡介、頭像請至</p>
-            <a href="<?php echo esc_url(um_get_core_page('account')); ?>" class="mc-btn-primary">帳號設定 →</a>
+            <form id="mc-profile-form" class="mc-set-form" autocomplete="off">
+                <?php wp_nonce_field('smacg_update_profile', 'smacg_profile_nonce'); ?>
+
+                <label class="mc-set-label">
+                    <span>顯示名稱</span>
+                    <input type="text" name="display_name" maxlength="40"
+                           value="<?php echo esc_attr($display); ?>" required>
+                </label>
+
+                <label class="mc-set-label">
+                    <span>暱稱</span>
+                    <input type="text" name="nickname" maxlength="40"
+                           value="<?php echo esc_attr($nick); ?>">
+                </label>
+
+                <label class="mc-set-label">
+                    <span>簡介</span>
+                    <textarea name="description" rows="3" maxlength="300"
+                              placeholder="介紹一下你自己…"><?php echo esc_textarea($bio); ?></textarea>
+                </label>
+
+                <div class="mc-set-actions">
+                    <button type="submit" class="mc-btn-primary">儲存變更</button>
+                    <span class="mc-set-msg" id="mc-profile-msg" hidden></span>
+                </div>
+            </form>
+            <p class="mc-set-hint">頭像請至上方點擊大圖更換。</p>
         </div>
+
+        <?php /* 卡片 2：密碼安全 */ ?>
         <div class="mc-set-card">
             <h3>🔐 密碼安全</h3>
-            <a href="<?php echo wp_lostpassword_url(); ?>" class="mc-btn-secondary">重設密碼</a>
+            <p>透過 Email 寄送重設密碼連結，安全且方便。</p>
+            <a href="<?php echo esc_url($reset_url); ?>"
+               class="mc-btn-secondary mc-settings-reset-pwd">
+                重設密碼
+            </a>
         </div>
+
+        <?php /* 卡片 3：登出 */ ?>
         <div class="mc-set-card mc-set-card--danger">
             <h3>🚪 登出</h3>
-            <a href="<?php echo wp_logout_url(home_url()); ?>" class="mc-btn-danger">登出帳號</a>
+            <p>登出後將需重新輸入帳號密碼。</p>
+            <a href="<?php echo esc_url(wp_logout_url(home_url('/'))); ?>"
+               class="mc-btn-danger">
+                登出帳號
+            </a>
         </div>
+
     </div>
-<?php }
+    <?php
+}
