@@ -1,0 +1,181 @@
+<?php
+/**
+ * 樣式 / 腳本載入：jQuery / FA / CSS / JS / 條件式載入 / 自訂模板 CSS
+ *
+ * @package weixiaoacg
+ * @subpackage Enqueue
+ */
+defined( 'ABSPATH' ) || exit;
+
+/* ============================================================
+   jQuery 3.6.4
+   ============================================================ */
+add_action( 'wp_enqueue_scripts', function() {
+    wp_deregister_script('jquery');
+    wp_deregister_script('jquery-core');
+    wp_deregister_script('jquery-migrate');
+    wp_register_script('jquery-core','https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.4/jquery.min.js',[],'3.6.4',false);
+    wp_register_script('jquery',false,['jquery-core'],null,false);
+    wp_enqueue_script('jquery');
+}, 1 );
+
+/* ============================================================
+   Font Awesome
+   ============================================================ */
+add_action( 'wp_enqueue_scripts', function() {
+    if ( wp_style_is( 'weixiaoacg-fa6', 'registered' ) ) return;
+    wp_enqueue_style('weixiaoacg-fa6','https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css',[],'6.5.0');
+}, 5 );
+
+/* ============================================================
+   主要樣式載入
+   ============================================================ */
+add_action( 'wp_enqueue_scripts', function() {
+    wp_enqueue_style('blocksy-parent', get_template_directory_uri().'/style.css', ['weixiaoacg-fa6'], wp_get_theme('blocksy')->get('Version'));
+    wp_enqueue_style('weixiaoacg-child-style', get_stylesheet_uri(), ['blocksy-parent'], weixiaoacg_VERSION);
+    wp_enqueue_style('weixiaoacg-fonts','https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@300;400;500;700&family=Inter:wght@300;400;500;600;700;800&display=swap',[],null);
+
+    foreach ([
+        'weixiaoacg-glass' => ['glass.css', ['weixiaoacg-child-style']],
+        'weixiaoacg-style' => ['style.css', ['weixiaoacg-glass']],
+    ] as $h => [$f,$dep]) {
+        $p = weixiaoacg_THEME_DIR.'/assets/css/'.$f;
+        if (file_exists($p)) wp_enqueue_style($h, weixiaoacg_THEME_URL.'/assets/css/'.$f, $dep, filemtime($p));
+    }
+
+    $is_um_user = function_exists('um_is_core_page') && (um_is_core_page('user') || get_query_var('um_user'));
+    $cond = [];
+    if ( is_page('news')   || is_page_template('page-news.php') )    $cond['weixiaoacg-news']       = 'news.css';
+    if ( is_page('season') || is_page_template('page-season.php') )  $cond['weixiaoacg-season']     = 'season.css';
+    if ( is_page_template('page-ranking.php') )                       $cond['weixiaoacg-ranking']    = 'ranking.css';
+    if ( is_page_template('page-anime-list.php') )                    $cond['weixiaoacg-anime-list'] = 'anime-list.css';
+    if ( is_page_template('page-music.php') )                         $cond['weixiaoacg-music']      = 'music.css';
+    if ( is_page_template('page-cosplay.php') )                       $cond['weixiaoacg-cosplay']    = 'cosplay.css';
+    if ( is_search() )                                                $cond['weixiaoacg-search']     = 'search.css';
+    if ( is_404() )                                                   $cond['weixiaoacg-404']        = '404.css';
+    if ( is_page(['about','contact','disclaimer','sources','privacy','terms','join']) || is_page_template('page-join.php') )
+                                                                      $cond['weixiaoacg-static']     = 'static.css';
+    if ( is_page_template('page-member.php') || $is_um_user )         $cond['weixiaoacg-member']     = 'member.css';
+
+    $is_account = is_page(1527) || is_page('account') ||
+                  (function_exists('um_is_core_page') && um_is_core_page('account')) ||
+                  (isset($_SERVER['REQUEST_URI']) && strpos($_SERVER['REQUEST_URI'], '/account') !== false);
+    if ( $is_account ) $cond['weixiaoacg-account'] = 'account.css';
+
+    foreach ($cond as $h => $f) {
+        $p = weixiaoacg_THEME_DIR.'/assets/css/'.$f;
+        if (file_exists($p)) wp_enqueue_style($h, weixiaoacg_THEME_URL.'/assets/css/'.$f, ['weixiaoacg-style'], filemtime($p));
+    }
+
+    if ( is_singular('anime') ) {
+        if ( ! wp_style_is( 'weixiaoacg-anime', 'registered' ) ) {
+            $anime_css = WP_PLUGIN_DIR.'/anime-sync-pro/public/assets/css/anime-single.css';
+            if (file_exists($anime_css))
+                wp_enqueue_style('weixiaoacg-anime', plugins_url('anime-sync-pro/public/assets/css/anime-single.css'), ['weixiaoacg-style','weixiaoacg-fa6'], filemtime($anime_css));
+        }
+        $tb = weixiaoacg_THEME_DIR.'/assets/css/track-bar.css';
+        if (file_exists($tb)) wp_enqueue_style('smacg-track-bar', weixiaoacg_THEME_URL.'/assets/css/track-bar.css', ['weixiaoacg-anime'], filemtime($tb));
+        $as = weixiaoacg_THEME_DIR.'/assets/css/anime-status.css';
+        if (file_exists($as)) wp_enqueue_style('smacg-anime-status', weixiaoacg_THEME_URL.'/assets/css/anime-status.css', ['smacg-track-bar'], filemtime($as));
+    }
+
+    $p = weixiaoacg_THEME_DIR.'/assets/css/admin-sync.css';
+    if (file_exists($p) && filesize($p) > 0)
+        wp_enqueue_style('weixiaoacg-admin-sync', weixiaoacg_THEME_URL.'/assets/css/admin-sync.css', ['weixiaoacg-style'], filemtime($p));
+}, 10 );
+
+add_action( 'admin_enqueue_scripts', function() {
+    $p = weixiaoacg_THEME_DIR.'/assets/css/admin-sync.css';
+    if (file_exists($p) && filesize($p) > 0)
+        wp_enqueue_style('weixiaoacg-admin', weixiaoacg_THEME_URL.'/assets/css/admin-sync.css', [], filemtime($p));
+} );
+
+/* LiteSpeed 排除 Font Awesome */
+add_filter('litespeed_optm_css_minify', fn($c)=>$c, 10);
+add_filter('litespeed_optimize_css_excludes', function($excludes) {
+    $excludes[] = 'cdnjs.cloudflare.com/ajax/libs/font-awesome';
+    $excludes[] = 'fontawesome';
+    return $excludes;
+});
+
+/* ============================================================
+   JS 載入
+   ============================================================ */
+add_action( 'wp_enqueue_scripts', function() {
+    foreach ([
+        'weixiaoacg-api'           => ['api.js',           []],
+        'weixiaoacg-utils'         => ['utils.js',         ['weixiaoacg-api']],
+        'weixiaoacg-page-template' => ['page-template.js', ['weixiaoacg-utils']],
+        'weixiaoacg-nav'           => ['nav.js',           ['weixiaoacg-utils']],
+    ] as $h => [$f,$dep]) {
+        $p = weixiaoacg_THEME_DIR.'/assets/js/'.$f;
+        if (file_exists($p)) wp_enqueue_script($h, weixiaoacg_THEME_URL.'/assets/js/'.$f, $dep, filemtime($p), true);
+    }
+
+    if (is_front_page()) {
+        $p = weixiaoacg_THEME_DIR.'/assets/js/main.js';
+        if (file_exists($p)) wp_enqueue_script('weixiaoacg-main', weixiaoacg_THEME_URL.'/assets/js/main.js', ['weixiaoacg-api'], filemtime($p), true);
+    }
+
+    if (is_singular('anime')) {
+        foreach ([
+            'weixiaoacg-anime-js' => 'anime.js',
+            'smacg-anime-status'  => 'anime-status.js',
+            'smacg-anime-rating'  => 'anime-rating.js',
+        ] as $h=>$f) {
+            $p = weixiaoacg_THEME_DIR.'/assets/js/'.$f;
+            if (file_exists($p)) wp_enqueue_script($h, weixiaoacg_THEME_URL.'/assets/js/'.$f, ['weixiaoacg-api'], filemtime($p), true);
+        }
+        wp_localize_script('smacg-anime-status','SmacgConfig',[
+            'apiUrl'    => esc_url_raw(rest_url('weixiaoacg/v1/')),
+            'ajaxUrl'   => admin_url('admin-ajax.php'),
+            'nonce'     => wp_create_nonce('wp_rest'),
+            'ajaxNonce' => wp_create_nonce('smacg_nonce'),
+            'loggedIn'  => is_user_logged_in(),
+            'loginUrl'  => function_exists('um_get_core_page') ? um_get_core_page('login') : wp_login_url(get_permalink()),
+            'postId'    => get_the_ID(),
+            'permalink' => get_permalink(),
+            'title'     => get_the_title(),
+        ]);
+    }
+
+    if (is_page_template('page-ranking.php')) {
+        $p = weixiaoacg_THEME_DIR.'/assets/js/ranking.js';
+        if (file_exists($p)) wp_enqueue_script('weixiaoacg-ranking', weixiaoacg_THEME_URL.'/assets/js/ranking.js', ['weixiaoacg-utils','weixiaoacg-api'], filemtime($p), true);
+    }
+
+    wp_localize_script('weixiaoacg-nav','weixiaoacg_ajax',[
+        'ajax_url'     => admin_url('admin-ajax.php'),
+        'nonce'        => wp_create_nonce('weixiaoacg_nonce'),
+        'user_id'      => get_current_user_id(),
+        'is_logged_in' => is_user_logged_in(),
+        'user_level'   => weixiaoacg_get_user_level_int(),
+        'site_url'     => home_url(),
+        'login_url'    => wp_login_url(get_permalink()),
+        'register_url' => wp_registration_url(),
+        'rest_url'     => rest_url('weixiaoacg/v1/'),
+        'rest_nonce'   => wp_create_nonce('wp_rest'),
+    ]);
+}, 10 );
+
+/* ============================================================
+   自訂模板專用 CSS（後台外的條件式 CSS）
+   ============================================================ */
+add_action( 'wp_enqueue_scripts', function () {
+    $base_url = get_stylesheet_directory_uri() . '/assets/css/';
+    $base_dir = get_stylesheet_directory()     . '/assets/css/';
+    $ver = fn($f) => file_exists($base_dir.$f) ? filemtime($base_dir.$f) : '1.0';
+
+    if ( is_category() || is_tax( 'channel' ) )
+        wp_enqueue_style( 'smacg-news', $base_url . 'news.css', [], $ver('news.css') );
+
+    if ( is_singular( 'post' ) ) {
+        wp_enqueue_style( 'smacg-news',   $base_url . 'news.css',   [],            $ver('news.css') );
+        wp_enqueue_style( 'smacg-single', $base_url . 'single.css', ['smacg-news'], $ver('single.css') );
+    }
+
+    if ( is_page_template( 'page-columns.php' ) ) {
+        wp_enqueue_style( 'smacg-news',    $base_url . 'news.css',    [],              $ver('news.css') );
+        wp_enqueue_style( 'smacg-columns', $base_url . 'columns.css', ['smacg-news'], $ver('columns.css') );
+    }
+}, 20 );
