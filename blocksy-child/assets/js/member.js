@@ -221,5 +221,35 @@
     e.preventDefault();
     window.location.href = smacgMember.passwordResetUrl || '/password-reset/';
   });
+  /* ===== 設定面板：基本資料 inline 儲存 ===== */
+  $wrap.on('submit', '#mc-profile-form', function (e) {
+    e.preventDefault();
+    const $form = $(this);
+    const $msg  = $('#mc-profile-msg');
+    const $btn  = $form.find('button[type=submit]');
+
+    $btn.prop('disabled', true).text('儲存中…');
+    $msg.hide();
+
+    $.post(smacgMember.ajax, {
+      action: 'smacg_update_profile',
+      nonce: $form.find('[name=smacg_profile_nonce]').val(),
+      display_name: $form.find('[name=display_name]').val(),
+      nickname:     $form.find('[name=nickname]').val(),
+      description:  $form.find('[name=description]').val(),
+    }, null, 'json')
+    .done(res => {
+      if (res.success) {
+        $msg.text(res.data.msg).attr('class','mc-set-msg mc-set-msg--ok').show();
+        // 同步 hero 區顯示名稱
+        $('.mc-hero-name').contents().filter(function(){return this.nodeType===3;}).first()
+          .replaceWith(document.createTextNode($form.find('[name=display_name]').val() + ' '));
+      } else {
+        $msg.text((res.data && res.data.msg) || '儲存失敗').attr('class','mc-set-msg mc-set-msg--err').show();
+      }
+    })
+    .fail(() => $msg.text('網路錯誤').attr('class','mc-set-msg mc-set-msg--err').show())
+    .always(() => $btn.prop('disabled', false).text('儲存變更'));
+  });
 
 })(jQuery);
