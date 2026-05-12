@@ -1,7 +1,7 @@
 <?php
 /**
  * Template Name: 會員中心
- * Version: 2.0.3 (2026-05-12)
+ * Version: 2.0.4 (2026-05-12)
  *
  * 架構：本檔僅負責登入檢查 + 框架，資料統計交給 inc/member-stats.php，
  *      各 tab render 交給 inc/member-render.php。
@@ -9,6 +9,7 @@
  * v2.0.1：<main> 改回 <div>，避免 Blocksy 雙欄 grid 觸發空白
  * v2.0.2：頭像改為 <label> + 隱藏 <input type="file">，支援即時上傳
  * v2.0.3：移除 /account/ 依賴；fallback URL 改為自家會員頁
+ * v2.0.4：P1-2 新增 Continue Watching 橫向列（Hero 下方、Tab 上方）
  */
 
 if (!defined('ABSPATH')) exit;
@@ -106,7 +107,7 @@ get_header(); ?>
                 <span class="mc-plan-badge"><?php echo esc_html($plan_label); ?></span>
             </h1>
             <p class="mc-hero-meta">
-                <span>📧 <?php echo esc_html($email); ?></span>
+                <span>📧 <?php echo esc_html($display_email); ?></span>
                 <span>📅 <?php echo esc_html($reg_date); ?></span>
             </p>
             <?php if ($bio): ?><p class="mc-hero-bio"><?php echo esc_html($bio); ?></p><?php endif; ?>
@@ -128,6 +129,9 @@ get_header(); ?>
             </div>
         </div>
     </section>
+
+    <?php /* === Continue Watching - P1-2 繼續觀看橫向列 === */ ?>
+    <?php smacg_render_continue_watching( $watchlist ); ?>
 
     <?php /* === Tabs === */ ?>
     <nav class="mc-tabs" role="tablist">
@@ -175,7 +179,7 @@ get_header(); ?>
         </section>
 
         <section class="mc-panel" data-panel="settings">
-            <?php smacg_render_settings($user); ?>
+            <?php smacg_render_settings($user, $privacy, $is_owner); ?>
         </section>
     </div>
 
