@@ -405,66 +405,109 @@ function smacg_render_points($points, $lvl, $log) { ?>
 /* =====================================================
  *  Tab 7：設定（v2.0.1 重寫）
  * ===================================================== */
-function smacg_render_settings($user) {
-    $display = $user->display_name ?: $user->user_login;
-    $bio     = get_user_meta($user->ID, 'description', true);
-    $nick    = get_user_meta($user->ID, 'nickname', true);
-    $reset_url = home_url('/password-reset/'); // 自訂前台密碼重設頁
+function smacg_render_settings( $user, $privacy = null, $is_owner = true ) {
+    if ( $privacy === null && function_exists( 'smacg_get_user_privacy' ) ) {
+        $privacy = smacg_get_user_privacy( $user->ID );
+    }
+    $privacy = wp_parse_args( (array) $privacy, [
+        'show_email'       => 0,
+        'public_profile'   => 1,
+        'public_watchlist' => 1,
+    ] );
+    $nonce = wp_create_nonce( 'smacg_privacy' );
     ?>
     <div class="mc-settings-grid">
 
-        <?php /* 卡片 1：基本資料（inline 編輯，不再跳 /account/） */ ?>
+        <!-- 卡片 1：基本資料 -->
         <div class="mc-set-card">
-            <h3>👤 基本資料</h3>
-            <form id="mc-profile-form" class="mc-set-form" autocomplete="off">
-                <?php wp_nonce_field('smacg_update_profile', 'smacg_profile_nonce'); ?>
-
+            <h3 class="mc-set-title"><i class="fa-solid fa-id-card"></i> 基本資料</h3>
+            <form id="mc-profile-form" class="mc-set-form">
+                <?php wp_nonce_field( 'smacg_update_profile', 'smacg_profile_nonce' ); ?>
                 <label class="mc-set-label">
                     <span>顯示名稱</span>
-                    <input type="text" name="display_name" maxlength="40"
-                           value="<?php echo esc_attr($display); ?>" required>
+                    <input type="text" name="display_name" value="<?php echo esc_attr( $user->display_name ); ?>" required>
                 </label>
-
                 <label class="mc-set-label">
                     <span>暱稱</span>
-                    <input type="text" name="nickname" maxlength="40"
-                           value="<?php echo esc_attr($nick); ?>">
+                    <input type="text" name="nickname" value="<?php echo esc_attr( get_user_meta( $user->ID, 'nickname', true ) ); ?>">
                 </label>
-
                 <label class="mc-set-label">
-                    <span>簡介</span>
-                    <textarea name="description" rows="3" maxlength="300"
-                              placeholder="介紹一下你自己…"><?php echo esc_textarea($bio); ?></textarea>
+                    <span>個人簡介</span>
+                    <textarea name="description" rows="3"><?php echo esc_textarea( $user->description ); ?></textarea>
                 </label>
-
                 <div class="mc-set-actions">
                     <button type="submit" class="mc-btn-primary">儲存變更</button>
-                    <span class="mc-set-msg" id="mc-profile-msg" hidden></span>
+                    <span id="mc-profile-msg" class="mc-set-msg" style="display:none"></span>
                 </div>
             </form>
-            <p class="mc-set-hint">頭像請至上方點擊大圖更換。</p>
         </div>
 
-        <?php /* 卡片 2：密碼安全 */ ?>
+        <!-- 卡片 2：隱私設定（P0-1 新增） -->
         <div class="mc-set-card">
-            <h3>🔐 密碼安全</h3>
-            <p>透過 Email 寄送重設密碼連結，安全且方便。</p>
-            <a href="<?php echo esc_url($reset_url); ?>"
-               class="mc-btn-secondary mc-settings-reset-pwd">
-                重設密碼
-            </a>
+            <h3 class="mc-set-title"><i class="fa-solid fa-user-shield"></i> 隱私設定</h3>
+            <div class="mc-privacy-form" data-nonce="<?php echo esc_attr( $nonce ); ?>">
+
+                <div class="mc-toggle-row">
+                    <div class="mc-toggle-info">
+                        <div class="mc-toggle-name">公開 Email</div>
+                        <div class="mc-toggle-desc">關閉時其他人看到的 email 會遮罩為 a***@example.com</div>
+                    </div>
+                    <label class="mc-toggle">
+                        <input type="checkbox" data-key="show_email" <?php checked( $privacy['show_email'], 1 ); ?>>
+                        <span class="mc-toggle-slider"></span>
+                    </label>
+                </div>
+
+                <div class="mc-toggle-row">
+                    <div class="mc-toggle-info">
+                        <div class="mc-toggle-name">公開個人頁</div>
+                        <div class="mc-toggle-desc">關閉後只有你本人能瀏覽此頁面</div>
+                    </div>
+                    <label class="mc-toggle">
+                        <input type="checkbox" data-key="public_profile" <?php checked( $privacy['public_profile'], 1 ); ?>>
+                        <span class="mc-toggle-slider"></span>
+                    </label>
+                </div>
+
+                <div class="mc-toggle-row">
+                    <div class="mc-toggle-info">
+                        <div class="mc-toggle-name">公開追番列表</div>
+                        <div class="mc-toggle-desc">關閉後其他用戶看不到你的觀看記錄</div>
+                    </div>
+                    <label class="mc-toggle">
+                        <input type="checkbox" data-key="public_watchlist" <?php checked( $privacy['public_watchlist'], 1 ); ?>>
+                        <span class="mc-toggle-slider"></span>
+                    </label>
+                </div>
+
+                <div id="mc-privacy-msg" class="mc-set-msg" style="display:none"></div>
+            </div>
         </div>
 
-        <?php /* 卡片 3：登出 */ ?>
+        <!-- 卡片 3：帳號安全 -->
+        <div class="mc-set-card">
+            <h3 class="mc-set-title"><i class="fa-solid fa-key"></i> 帳號安全</h3>
+            <p class="mc-set-hint">若需變更密碼，請點下方按鈕，系統會寄送重設信件至你的 email。</p>
+            <div class="mc-set-actions">
+                <a class="mc-btn-secondary mc-settings-reset-pwd"
+                   href="<?php echo esc_url( home_url( '/password-reset/' ) ); ?>">
+                    <i class="fa-solid fa-rotate"></i> 重設密碼
+                </a>
+            </div>
+        </div>
+
+        <!-- 卡片 4：登出 -->
         <div class="mc-set-card mc-set-card--danger">
-            <h3>🚪 登出</h3>
-            <p>登出後將需重新輸入帳號密碼。</p>
-            <a href="<?php echo esc_url(wp_logout_url(home_url('/'))); ?>"
-               class="mc-btn-danger">
-                登出帳號
-            </a>
+            <h3 class="mc-set-title"><i class="fa-solid fa-right-from-bracket"></i> 結束工作階段</h3>
+            <p class="mc-set-hint">登出後將回到網站首頁。</p>
+            <div class="mc-set-actions">
+                <a class="mc-btn-danger" href="<?php echo esc_url( wp_logout_url( home_url( '/' ) ) ); ?>">
+                    <i class="fa-solid fa-arrow-right-from-bracket"></i> 登出帳號
+                </a>
+            </div>
         </div>
 
     </div>
     <?php
 }
+
