@@ -520,8 +520,34 @@ class Anime_Sync_Admin {
             $has_next = ! empty( $body['data']['Page']['pageInfo']['hasNextPage'] );
 
             foreach ( $list as $item ) {
-                $all_list[] = $item;
-            }
+    $anilist_id = (int) ( $item['id'] ?? 0 );
+    if ( ! $anilist_id ) {
+        continue;
+    }
+
+    // 檢查站內是否已匯入（依 anime_anilist_id meta 判斷）
+    $existing_ids = get_posts( [
+        'post_type'      => 'anime',
+        'meta_key'       => 'anime_anilist_id',
+        'meta_value'     => $anilist_id,
+        'posts_per_page' => 1,
+        'fields'         => 'ids',
+        'post_status'    => 'any',
+        'no_found_rows'  => true,
+        'suppress_filters' => true,
+    ] );
+
+    $all_list[] = [
+        'anilist_id'   => $anilist_id,
+        'mal_id'       => (int) ( $item['idMal'] ?? 0 ),
+        'title_romaji' => (string) ( $item['title']['romaji'] ?? '' ),
+        'format'       => (string) ( $item['format']     ?? '' ),
+        'episodes'     => (int)    ( $item['episodes']   ?? 0 ),
+        'popularity'   => (int)    ( $item['popularity'] ?? 0 ),
+        'status'       => (string) ( $item['status']     ?? '' ),
+        'imported'     => ! empty( $existing_ids ),
+    ];
+}
 
             $page++;
         } while ( $has_next && $page <= 10 );
