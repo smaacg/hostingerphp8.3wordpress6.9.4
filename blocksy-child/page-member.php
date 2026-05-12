@@ -46,7 +46,6 @@ if (!$avatar_url && function_exists('um_get_user_avatar_url')) {
 if (!$avatar_url) {
     $avatar_url = get_avatar_url($uid, ['size' => 200]);
 }
-
 // fallback：noscript 用，已改為自家會員頁（不再導向 /account/）
 $account_url = get_permalink();
 
@@ -56,6 +55,15 @@ $lvl_info    = smacg_calc_level($points);
 
 // ---------- 會員方案 ----------
 $plan_label  = smacg_get_plan_label($user);
+
+// ---------- v2.0.4: 隱私設定 + Email 遮罩（P0-1） ----------
+$privacy  = smacg_get_user_privacy( $uid );
+
+// 觀看者是否為本人；非本人時依隱私決定 email 顯示
+$is_owner      = ( get_current_user_id() === $uid );
+$display_email = $is_owner
+    ? $user->user_email
+    : ( ! empty( $privacy['show_email'] ) ? $user->user_email : smacg_mask_email( $user->user_email ) );
 
 // ---------- 清單 / 評分 / 點數 / 留言 ----------
 $watchlist   = smacg_build_watchlist($uid);
