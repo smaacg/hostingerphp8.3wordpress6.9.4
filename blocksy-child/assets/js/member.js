@@ -252,7 +252,7 @@
     .always(() => $btn.prop('disabled', false).text('儲存變更'));
   });
 
-  /* =========================================================
+/* =========================================================
  * P0-1: 隱私 toggle 開關
  * ========================================================= */
 $wrap.on('change', '.mc-privacy-form input[type=checkbox]', function(){
@@ -390,5 +390,43 @@ $wrap.on('click', '.mc-card-btn--remove', function(){
         }
     }).catch(()=>{ toast('網路錯誤', false); $btn.prop('disabled', false); });
 });
+
+  /* =========================================================
+   * P1-2: Continue Watching 左右箭頭捲動
+   * +1 按鈕直接重用 P0-2 的 .mc-card-btn--plus
+   * ========================================================= */
+  $wrap.on('click', '.mc-continue-arrow', function () {
+    const $scroll = $('#mc-continue-scroll');
+    if (!$scroll.length) return;
+    const dir = $(this).data('dir');
+    const cardWidth = $scroll.find('.mc-continue-card').outerWidth(true) || 200;
+    const distance  = cardWidth * 2; // 每次滑 2 張
+    $scroll[0].scrollBy({
+      left: dir === 'next' ? distance : -distance,
+      behavior: 'smooth'
+    });
+  });
+
+  // 進度滿時自動移除卡片（搭配 P0-2 的 +1 完成事件）
+  // 由於 P0-2 已有 toast「🎉 已看完所有集數」邏輯，這裡延伸：把卡片移出 Continue Watching
+  $wrap.on('click', '.mc-continue-card .mc-card-btn--plus', function () {
+    const $card    = $(this).closest('.mc-continue-card');
+    const $actions = $(this).closest('.mc-card-actions');
+    const total    = parseInt($actions.data('total'), 10) || 0;
+    // 在 P0-2 fetch 完成後檢查：因為 P0-2 會更新 data-progress
+    setTimeout(function () {
+      const cur = parseInt($actions.data('progress'), 10) || 0;
+      if (total > 0 && cur >= total) {
+        $card.fadeOut(400, function () {
+          $(this).remove();
+          // 若全空，整區顯示空狀態
+          if (!$('#mc-continue-scroll .mc-continue-card').length) {
+            $('#mc-continue-section').fadeOut(300);
+          }
+        });
+      }
+    }, 800); // 等 REST 回來 + DOM 更新
+  });
+
 
 })(jQuery);
