@@ -156,6 +156,8 @@
   align-items: center;
   gap: 12px;
   flex-wrap: wrap;
+  color: #ffffff;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, .35);
 }
 .mc-plan-badge {
   font-size: 13px;
