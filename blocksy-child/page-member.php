@@ -130,8 +130,10 @@ get_header(); ?>
         </div>
     </section>
 
-    <?php /* === Continue Watching - P1-2 繼續觀看橫向列 === */ ?>
-    <?php smacg_render_continue_watching( $watchlist ); ?>
+    <?php /* === Continue Watching - P1-2 繼續觀看橫向列（可由設定開關） === */ ?>
+    <?php if ( ! empty( $privacy['show_continue_watching'] ) ) : ?>
+        <?php smacg_render_continue_watching( $watchlist ); ?>
+    <?php endif; ?>
 
     <?php /* === Tabs === */ ?>
     <nav class="mc-tabs" role="tablist">
