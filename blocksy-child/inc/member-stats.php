@@ -277,15 +277,15 @@ function smacg_calc_member_stats($watchlist, $ratings) {
  */
 function smacg_get_user_privacy( $uid ) {
     $defaults = [
-        'show_email'      => 0, // 預設遮罩 email
-        'public_profile'  => 1, // 預設公開個人頁
-        'public_watchlist'=> 1, // 預設公開追番列表
+        'show_email'             => 0, // 預設遮罩 email
+        'public_profile'         => 1, // 預設公開個人頁
+        'public_watchlist'       => 1, // 預設公開追番列表
+        'show_continue_watching' => 1, // 預設顯示「繼續觀看」橫向列（P1-2）
     ];
     $saved = get_user_meta( $uid, 'smacg_privacy', true );
     if ( ! is_array( $saved ) ) $saved = [];
     return array_merge( $defaults, $saved );
 }
-
 /**
  * 遮罩 email：a***@gmail.com
  */
