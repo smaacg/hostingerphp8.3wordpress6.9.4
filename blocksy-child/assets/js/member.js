@@ -252,4 +252,143 @@
     .always(() => $btn.prop('disabled', false).text('儲存變更'));
   });
 
+  /* =========================================================
+ * P0-1: 隱私 toggle 開關
+ * ========================================================= */
+$wrap.on('change', '.mc-privacy-form input[type=checkbox]', function(){
+    const $box   = $(this);
+    const $form  = $box.closest('.mc-privacy-form');
+    const $msg   = $('#mc-privacy-msg');
+    const key    = $box.data('key');
+    const value  = $box.is(':checked') ? 1 : 0;
+    const nonce  = $form.data('nonce');
+
+    $box.prop('disabled', true);
+    $.post(smacgMember.ajax, {
+        action: 'smacg_update_privacy',
+        nonce:  nonce,
+        key:    key,
+        value:  value
+    }, null, 'json')
+    .done(r => {
+        if (r.success) {
+            $msg.text(r.data.msg).attr('class','mc-set-msg mc-set-msg--ok').show();
+            setTimeout(()=>$msg.fadeOut(),1800);
+        } else {
+            $box.prop('checked', !value); // 還原
+            $msg.text(r.data.msg || '儲存失敗').attr('class','mc-set-msg mc-set-msg--err').show();
+        }
+    })
+    .fail(()=>{
+        $box.prop('checked', !value);
+        $msg.text('網路錯誤').attr('class','mc-set-msg mc-set-msg--err').show();
+    })
+    .always(()=> $box.prop('disabled', false));
+});
+
+/* =========================================================
+ * P0-2: 卡片快速操作（+1 集 / 完成 / 移除）
+ * 直接呼叫既有 REST：/wp-json/weixiaoacg/v1/user-status/{id}
+ * ========================================================= */
+const REST_BASE = (window.wpApiSettings && wpApiSettings.root)
+    ? wpApiSettings.root + 'weixiaoacg/v1/user-status/'
+    : '/wp-json/weixiaoacg/v1/user-status/';
+const REST_NONCE = (window.wpApiSettings && wpApiSettings.nonce) || '';
+
+function restCall(animeId, method, body){
+    return fetch(REST_BASE + animeId, {
+        method: method,
+        credentials: 'same-origin',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-WP-Nonce':   REST_NONCE
+        },
+        body: body ? JSON.stringify(body) : undefined
+    }).then(r => r.json());
+}
+
+function toast(text, ok){
+    let $t = $('#mc-toast');
+    if(!$t.length){
+        $t = $('<div id="mc-toast" class="mc-toast"></div>').appendTo('body');
+    }
+    $t.text(text)
+      .attr('class', 'mc-toast ' + (ok ? 'mc-toast--ok' : 'mc-toast--err'))
+      .stop(true,true).fadeIn(120).delay(1400).fadeOut(300);
+}
+
+// +1 集
+$wrap.on('click', '.mc-card-btn--plus', function(){
+    const $btn  = $(this);
+    const $bar  = $btn.closest('.mc-card-actions');
+    const id    = $bar.data('anime');
+    const total = parseInt($bar.data('total'),10) || 0;
+    let   cur   = parseInt($bar.data('progress'),10) || 0;
+    if(total && cur >= total){
+        toast('已達總集數', false); return;
+    }
+    $btn.prop('disabled', true);
+    restCall(id, 'POST', {action:'progress', value: 1}).then(r => {
+        if(r && r.success){
+            cur += 1;
+            $bar.data('progress', cur);
+            // 更新進度條 + 數字（卡片 DOM 自行尋找）
+            const $card = $btn.closest('.mc-anime-card, .mc-card');
+            const $fill = $card.find('.mc-progress-bar, .mc-card-progress-fill');
+            const $txt  = $card.find('.mc-progress-text, .mc-card-progress-text');
+            if(total){
+                const pct = Math.min(100, Math.round(cur/total*100));
+                $fill.css('width', pct + '%');
+                $txt.text(cur + ' / ' + total);
+                if(cur >= total){
+                    toast('🎉 已看完所有集數！', true);
+                } else {
+                    toast('進度 +1 ✓', true);
+                }
+            } else {
+                $txt.text(cur + ' 集');
+                toast('進度 +1 ✓', true);
+            }
+        } else {
+            toast((r && r.message) || '更新失敗', false);
+        }
+    }).catch(() => toast('網路錯誤', false))
+      .finally(() => $btn.prop('disabled', false));
+});
+
+// 標記完成
+$wrap.on('click', '.mc-card-btn--done', function(){
+    const $btn = $(this);
+    const id   = $btn.closest('.mc-card-actions').data('anime');
+    if(!confirm('確定標記為看完？')) return;
+    $btn.prop('disabled', true);
+    restCall(id, 'POST', {action:'status', value: 'completed'}).then(r => {
+        if(r && r.success){
+            toast('已標記完成 ✓', true);
+            setTimeout(()=>location.reload(), 600);
+        } else {
+            toast((r && r.message) || '更新失敗', false);
+            $btn.prop('disabled', false);
+        }
+    }).catch(()=>{ toast('網路錯誤', false); $btn.prop('disabled', false); });
+});
+
+// 從清單移除
+$wrap.on('click', '.mc-card-btn--remove', function(){
+    const $btn  = $(this);
+    const $card = $btn.closest('.mc-anime-card, .mc-card');
+    const id    = $btn.closest('.mc-card-actions').data('anime');
+    if(!confirm('確定要從清單中移除？此動作不可復原。')) return;
+    $btn.prop('disabled', true);
+    restCall(id, 'DELETE').then(r => {
+        if(r && r.success){
+            $card.fadeOut(200, function(){ $(this).remove(); });
+            toast('已移除 ✓', true);
+        } else {
+            toast((r && r.message) || '移除失敗', false);
+            $btn.prop('disabled', false);
+        }
+    }).catch(()=>{ toast('網路錯誤', false); $btn.prop('disabled', false); });
+});
+
 })(jQuery);
