@@ -1097,3 +1097,44 @@ body.page-template-page-member .mc-wrap {
     transition: none !important;
   }
 }
+/* =========================================================
+ * P0-1: 隱私 toggle 開關（v2.1.1）
+ * ========================================================= */
+.mc-toggle-row{display:flex;align-items:center;gap:16px;padding:14px 0;border-bottom:1px solid rgba(255,255,255,.06);}
+.mc-toggle-row:last-of-type{border-bottom:none;}
+.mc-toggle-info{flex:1;min-width:0;}
+.mc-toggle-name{font-size:14px;font-weight:600;color:var(--mc-text,#e8eaf2);margin-bottom:4px;}
+.mc-toggle-desc{font-size:12px;color:var(--mc-text-3,#6b7088);line-height:1.5;}
+.mc-toggle{position:relative;display:inline-block;width:44px;height:24px;flex-shrink:0;cursor:pointer;}
+.mc-toggle input{opacity:0;width:0;height:0;}
+.mc-toggle-slider{position:absolute;inset:0;background:rgba(255,255,255,.12);border-radius:24px;transition:background .2s;}
+.mc-toggle-slider::before{content:"";position:absolute;width:18px;height:18px;left:3px;top:3px;background:#fff;border-radius:50%;transition:transform .2s,box-shadow .2s;box-shadow:0 1px 3px rgba(0,0,0,.3);}
+.mc-toggle input:checked + .mc-toggle-slider{background:linear-gradient(135deg,#ff6bae,#a78bfa);}
+.mc-toggle input:checked + .mc-toggle-slider::before{transform:translateX(20px);}
+.mc-toggle input:disabled + .mc-toggle-slider{opacity:.5;cursor:not-allowed;}
+
+/* =========================================================
+ * P0-2: 卡片快速操作工具列
+ * ========================================================= */
+.mc-anime-card,.mc-card{position:relative;}
+.mc-card-actions{position:absolute;top:8px;right:8px;display:flex;gap:6px;opacity:0;transform:translateY(-4px);transition:opacity .18s,transform .18s;pointer-events:none;z-index:5;}
+.mc-anime-card:hover .mc-card-actions,
+.mc-card:hover .mc-card-actions,
+.mc-card-actions:focus-within{opacity:1;transform:translateY(0);pointer-events:auto;}
+.mc-card-btn{width:32px;height:32px;display:inline-flex;align-items:center;justify-content:center;border:none;border-radius:50%;background:rgba(20,22,40,.85);color:#fff;cursor:pointer;backdrop-filter:blur(6px);box-shadow:0 2px 8px rgba(0,0,0,.4);transition:transform .12s,background .15s;font-size:13px;}
+.mc-card-btn:hover{transform:scale(1.1);}
+.mc-card-btn:disabled{opacity:.5;cursor:not-allowed;transform:none;}
+.mc-card-btn--plus:hover{background:linear-gradient(135deg,#ff6bae,#a78bfa);}
+.mc-card-btn--done:hover{background:linear-gradient(135deg,#34d399,#10b981);}
+.mc-card-btn--remove:hover{background:linear-gradient(135deg,#f87171,#ef4444);}
+
+/* 手機版常駐顯示（無 hover） */
+@media (hover:none){
+    .mc-card-actions{opacity:1;transform:none;pointer-events:auto;}
+}
+
+/* Toast */
+.mc-toast{position:fixed;left:50%;bottom:32px;transform:translateX(-50%);padding:10px 18px;border-radius:8px;font-size:14px;font-weight:500;color:#fff;box-shadow:0 4px 16px rgba(0,0,0,.4);z-index:99999;display:none;backdrop-filter:blur(8px);}
+.mc-toast--ok{background:rgba(16,185,129,.92);}
+.mc-toast--err{background:rgba(239,68,68,.92);}
+@media (prefers-reduced-motion:reduce){.mc-card-actions{transition:none;}.mc-card-btn{transition:none;}}
