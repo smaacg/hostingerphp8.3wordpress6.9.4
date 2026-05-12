@@ -333,7 +333,7 @@ add_action( 'wp_ajax_smacg_update_privacy', function () {
     check_ajax_referer( 'smacg_privacy', 'nonce' );
     $uid = get_current_user_id();
 
-    $allowed = [ 'show_email', 'public_profile', 'public_watchlist' ];
+    $allowed = [ 'show_email', 'public_profile', 'public_watchlist', 'show_continue_watching' ]; // ← 加最後一個
     $current = function_exists( 'smacg_get_user_privacy' )
         ? smacg_get_user_privacy( $uid )
         : [];
