@@ -1,7 +1,8 @@
 /**
- * Member Center JS v2.0.2 (2026-05-11)
+ * Member Center JS v2.0.3 (2026-05-12)
  * - v2.0.1: 收藏分頁改用 data-favorited 判斷
  * - v2.0.2: 新增頭像即時上傳（AJAX）
+ * - v2.0.3: 支援 URL ?tab= / ?profiletab= / #hash 自動切換分頁；切換時同步 hash
  */
 (function ($) {
   'use strict';
@@ -13,13 +14,48 @@
   const PAGE_SIZE = matchMedia('(max-width: 480px)').matches ? 12 : 20;
 
   /* ===== Tabs ===== */
+  function switchTab(name, updateHash) {
+    const $tab = $(`.mc-tab[data-tab="${name}"]`);
+    if (!$tab.length) return false;
+    $('.mc-tab').removeClass('active');
+    $tab.addClass('active');
+    $('.mc-panel').removeClass('active');
+    $(`.mc-panel[data-panel="${name}"]`).addClass('active');
+    if (name === 'stats') animateBars();
+    if (updateHash && history.replaceState) {
+      history.replaceState(null, '', '#' + name);
+    }
+    return true;
+  }
+
   $wrap.on('click', '.mc-tab', function () {
     const t = $(this).data('tab');
-    $('.mc-tab').removeClass('active');
-    $(this).addClass('active');
-    $('.mc-panel').removeClass('active');
-    $(`.mc-panel[data-panel="${t}"]`).addClass('active');
-    if (t === 'stats') animateBars();
+    switchTab(t, true);
+  });
+
+  /* ===== URL 自動切換（v2.0.3） ===== */
+  (function initTabFromUrl() {
+    const params = new URLSearchParams(window.location.search);
+    const fromQuery = params.get('tab') || params.get('profiletab');
+    const fromHash  = (window.location.hash || '').replace('#', '');
+    const target    = fromQuery || fromHash;
+    if (!target) return;
+
+    // 等渲染完，避免被預設 active 蓋掉
+    setTimeout(function () {
+      if (switchTab(target, false)) {
+        const $nav = $('.mc-tabs');
+        if ($nav.length) {
+          $('html, body').animate({ scrollTop: $nav.offset().top - 80 }, 300);
+        }
+      }
+    }, 50);
+  })();
+
+  // 監聽 hash 變化（從同頁的 a href="#xxx" 點過來時）
+  $(window).on('hashchange', function () {
+    const t = (window.location.hash || '').replace('#', '');
+    if (t) switchTab(t, false);
   });
 
   /* ===== 圖表動畫 ===== */
@@ -32,7 +68,7 @@
   }
   if ($('.mc-panel[data-panel="stats"].active').length) animateBars();
 
-  /* ===== Filter（修正：收藏走 data-favorited） ===== */
+  /* ===== Filter（收藏走 data-favorited） ===== */
   let currentFilter = 'all';
   $wrap.on('click', '.mc-filter-btn', function () {
     currentFilter = String($(this).data('filter'));
@@ -121,7 +157,7 @@
     if (!file) return;
 
     if (file.size > 1024 * 1024) {
-  showAvatarMsg('檔案過大（上限 1 MB）', 'error');
+      showAvatarMsg('檔案過大（上限 1 MB）', 'error');
       this.value = '';
       return;
     }
@@ -150,7 +186,7 @@
           showAvatarMsg(res.data.msg || '頭像已更新', 'success');
           setTimeout(() => $avatarMsg.hide(), 2500);
 
-          // 同步 header / 留言區頭像（簡單刷新所有同 user 的頭像 src）
+          // 同步 header / 留言區頭像
           $('img.avatar, .um-user-avatar img').each(function () {
             const $img = $(this);
             const src = $img.attr('src') || '';
@@ -178,5 +214,12 @@
       .text(text)
       .show();
   }
+
+  /* ===== 設定面板：重設密碼按鈕（v2.0.3） ===== */
+  // 若 render_settings 的按鈕沒有自帶連結，這裡兜底
+  $wrap.on('click', '.mc-settings-reset-pwd', function (e) {
+    e.preventDefault();
+    window.location.href = smacgMember.passwordResetUrl || '/password-reset/';
+  });
 
 })(jQuery);
