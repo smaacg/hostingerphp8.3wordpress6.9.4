@@ -479,6 +479,17 @@ function smacg_render_settings( $user, $privacy = null, $is_owner = true ) {
                         <span class="mc-toggle-slider"></span>
                     </label>
                 </div>
+                
+                   <div class="mc-toggle-row">
+                    <div class="mc-toggle-info">
+                        <div class="mc-toggle-name">顯示「繼續觀看」</div>
+                        <div class="mc-toggle-desc">關閉後會員頁不再顯示頂部的橫向追番列</div>
+                    </div>
+                    <label class="mc-toggle">
+                        <input type="checkbox" data-key="show_continue_watching" <?php checked( $privacy['show_continue_watching'], 1 ); ?>>
+                        <span class="mc-toggle-slider"></span>
+                    </label>
+                </div>
 
                 <div id="mc-privacy-msg" class="mc-set-msg" style="display:none"></div>
             </div>
