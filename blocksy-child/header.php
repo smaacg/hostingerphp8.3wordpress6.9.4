@@ -1,12 +1,23 @@
 <?php
 /**
  * 微笑動漫 Child Theme — header.php
- * v1.3.0
- * - login modal 加 is_user_logged_in() 判斷
- * - smacgOpenLoginModal 定義在 modal 外，已登入用戶不報錯
- * - 搜尋送出統一用 /?s= 格式
- * - 註冊改為跳轉方案，避免 nonce 衝突
- * - 登入後顯示頭像下拉選單，未登入只顯示登入／註冊按鈕
+ * v1.4.0 (2026-05-12)
+ *
+ * 變更紀錄：
+ * - v1.4.0：
+ *   1. 頭像下拉選單移除 /account/、/account/privacy/ 兩個項目
+ *   2. 新增「設定」項目，使用 #settings hash 直接切到會員中心設定 tab
+ *      （搭配 member.js v2.0.3 的 URL/hash 解析）
+ *   3. 移除 modal 寫死的 dev.weixiaoacg.com/account/ form action
+ *      改用 home_url() 動態取得目前站點 URL
+ *   4. 加上 modal 內 esc_js() 安全處理
+ *
+ * - v1.3.0：
+ *   - login modal 加 is_user_logged_in() 判斷
+ *   - smacgOpenLoginModal 定義在 modal 外，已登入用戶不報錯
+ *   - 搜尋送出統一用 /?s= 格式
+ *   - 註冊改為跳轉方案，避免 nonce 衝突
+ *   - 登入後顯示頭像下拉選單，未登入只顯示登入／註冊按鈕
  *
  * @package weixiaoacg
  */
@@ -159,7 +170,7 @@
                        : home_url( '/user/' . $user->user_login . '/' );
       ?>
 
-        <!-- 已登入：頭像下拉選單 -->
+        <!-- 已登入：頭像下拉選單（v1.4.0 簡化為三項） -->
         <div class="header-user-dropdown">
           <button class="header-avatar-btn" id="header-avatar-btn" aria-expanded="false" aria-haspopup="true">
             <?php echo get_avatar( $user->ID, 32, '', '', ['class' => 'header-avatar'] ); ?>
@@ -171,11 +182,8 @@
             <a href="<?php echo esc_url( $profile_url ); ?>" role="menuitem">
               <i class="fa-solid fa-user"></i> 個人頁面
             </a>
-            <a href="<?php echo esc_url( home_url('/account/') ); ?>" role="menuitem">
-              <i class="fa-solid fa-gear"></i> 帳號設定
-            </a>
-            <a href="<?php echo esc_url( home_url('/account/privacy/') ); ?>" role="menuitem">
-              <i class="fa-solid fa-shield-halved"></i> 隱私權
+            <a href="<?php echo esc_url( $profile_url . '#settings' ); ?>" role="menuitem">
+              <i class="fa-solid fa-gear"></i> 設定
             </a>
             <div class="header-user-menu-divider" role="separator"></div>
             <a href="<?php echo esc_url( wp_logout_url( home_url('/') ) ); ?>"
@@ -369,7 +377,10 @@
     if (!modal) return;
     document.body.style.overflow = 'hidden';
     setTimeout(() => modal.classList.add('lm-open'), 10);
-    modal.querySelectorAll('form.um-form').forEach(f => f.setAttribute('action', 'https://dev.weixiaoacg.com/account/'));
+    // v1.4.0：移除寫死的 dev.weixiaoacg.com/account/，改用當前站點 URL
+    modal.querySelectorAll('form.um-form').forEach(f => {
+      f.setAttribute('action', '<?php echo esc_js( home_url('/') ); ?>');
+    });
   }
 
   function closeModal() {
