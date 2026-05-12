@@ -511,3 +511,101 @@ function smacg_render_settings( $user, $privacy = null, $is_owner = true ) {
     <?php
 }
 
+/* =====================================================
+ *  Continue Watching - 繼續觀看橫向列（P1-2）
+ *
+ *  條件：status = watching 且 progress < total_episodes
+ *  排序：updated_at DESC（最近更新優先，重用 $watchlist 既有排序）
+ *  顯示：最多 10 部
+ * ===================================================== */
+function smacg_render_continue_watching( $watchlist ) {
+    if ( empty( $watchlist ) || ! is_array( $watchlist ) ) {
+        return; // 完全沒清單就不顯示
+    }
+
+    // 篩選：watching + 進度未滿
+    $continue = [];
+    foreach ( $watchlist as $w ) {
+        if ( ( $w['status'] ?? '' ) !== 'watching' ) continue;
+
+        $pid = (int) ( $w['post_id'] ?? 0 );
+        if ( ! $pid ) continue;
+
+        $total = (int) get_post_meta( $pid, 'anime_episodes', true );
+        $prog  = (int) ( $w['progress'] ?? 0 );
+
+        // 已知總集數且已追完 → 跳過（理論上應已自動轉 completed，這裡多一層保險）
+        if ( $total > 0 && $prog >= $total ) continue;
+
+        $continue[] = $w;
+        if ( count( $continue ) >= 10 ) break;
+    }
+
+    // 空狀態：顯示 CTA 而非整個隱藏
+    if ( empty( $continue ) ) {
+        ?>
+        <section class="mc-continue-section mc-continue-empty">
+            <div class="mc-continue-header">
+                <h2 class="mc-continue-title">🎬 繼續觀看</h2>
+            </div>
+            <div class="mc-continue-empty-box">
+                <p>目前沒有觀看中的動畫</p>
+                <a href="<?php echo esc_url( home_url( '/anime/' ) ); ?>" class="mc-btn-primary">去找一部來追 →</a>
+            </div>
+        </section>
+        <?php
+        return;
+    }
+    ?>
+    <section class="mc-continue-section" id="mc-continue-section">
+        <div class="mc-continue-header">
+            <h2 class="mc-continue-title">🎬 繼續觀看 <small>（<?php echo count( $continue ); ?>）</small></h2>
+            <div class="mc-continue-nav">
+                <button type="button" class="mc-continue-arrow" data-dir="prev" aria-label="上一頁">‹</button>
+                <button type="button" class="mc-continue-arrow" data-dir="next" aria-label="下一頁">›</button>
+            </div>
+        </div>
+
+        <div class="mc-continue-scroll" id="mc-continue-scroll">
+            <?php foreach ( $continue as $w ):
+                $pid       = (int) $w['post_id'];
+                $title     = get_the_title( $pid );
+                $permalink = get_permalink( $pid );
+                $thumb     = smacg_get_card_thumb_url( $pid );
+                $total     = (int) get_post_meta( $pid, 'anime_episodes', true );
+                $prog      = (int) $w['progress'];
+                $percent   = $total > 0 ? min( 100, round( $prog / $total * 100 ) ) : 0;
+            ?>
+                <article class="mc-continue-card" data-anime-id="<?php echo $pid; ?>" data-total="<?php echo $total; ?>">
+                    <a href="<?php echo esc_url( $permalink ); ?>" class="mc-continue-thumb">
+                        <?php if ( $thumb ): ?>
+                            <img src="<?php echo esc_url( $thumb ); ?>" alt="<?php echo esc_attr( $title ); ?>" loading="lazy">
+                        <?php else: ?>
+                            <div class="mc-continue-thumb-ph">🎬</div>
+                        <?php endif; ?>
+                        <div class="mc-continue-progress-bar">
+                            <div class="mc-continue-progress-fill" style="width:<?php echo $percent; ?>%"></div>
+                        </div>
+                    </a>
+                    <div class="mc-continue-body">
+                        <h4 class="mc-continue-name">
+                            <a href="<?php echo esc_url( $permalink ); ?>"><?php echo esc_html( $title ); ?></a>
+                        </h4>
+                        <div class="mc-continue-meta">
+                            <span class="mc-continue-progress-text">
+                                <b><?php echo $prog; ?></b> / <?php echo $total ?: '?'; ?> 集
+                            </span>
+                        </div>
+                        <button type="button"
+                                class="mc-continue-plus"
+                                data-anime-id="<?php echo $pid; ?>"
+                                title="進度 +1">
+                            <i class="fa-solid fa-plus"></i> 下一集
+                        </button>
+                    </div>
+                </article>
+            <?php endforeach; ?>
+        </div>
+    </section>
+    <?php
+}
