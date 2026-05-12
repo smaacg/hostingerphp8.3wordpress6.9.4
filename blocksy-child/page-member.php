@@ -1,14 +1,14 @@
 <?php
 /**
  * Template Name: 會員中心
- * Version: 2.0.2 (2026-05-11)
+ * Version: 2.0.3 (2026-05-12)
  *
  * 架構：本檔僅負責登入檢查 + 框架，資料統計交給 inc/member-stats.php，
  *      各 tab render 交給 inc/member-render.php。
  *
  * v2.0.1：<main> 改回 <div>，避免 Blocksy 雙欄 grid 觸發空白
  * v2.0.2：頭像改為 <label> + 隱藏 <input type="file">，支援即時上傳
- *         （AJAX 處理在 functions.php：wp_ajax_smacg_upload_avatar）
+ * v2.0.3：移除 /account/ 依賴；fallback URL 改為自家會員頁
  */
 
 if (!defined('ABSPATH')) exit;
@@ -31,7 +31,7 @@ $email       = $user->user_email;
 $reg_date    = mysql2date('Y-m-d', $user->user_registered);
 $bio         = get_user_meta($uid, 'description', true);
 
-// 頭像：優先讀自訂上傳，其次 UM，最後 Gravatar
+// 頭像：自訂上傳 > UM > Gravatar
 $avatar_url = '';
 $custom_aid = (int) get_user_meta($uid, 'smacg_avatar_id', true);
 if ($custom_aid && wp_attachment_is_image($custom_aid)) {
@@ -47,34 +47,24 @@ if (!$avatar_url) {
     $avatar_url = get_avatar_url($uid, ['size' => 200]);
 }
 
-// UM 帳號頁（fallback 用，例如關閉 JS 時可導向）
-$account_url = function_exists('um_get_core_page') && um_get_core_page('account')
-    ? um_get_core_page('account')
-    : admin_url('profile.php');
+// fallback：noscript 用，已改為自家會員頁（不再導向 /account/）
+$account_url = get_permalink();
 
 // ---------- 點數 / 等級 ----------
 $points      = (int) get_user_meta($uid, 'smacg_points', true);
-$lvl_info    = smacg_calc_level($points);   // [level, current, next, percent, title]
+$lvl_info    = smacg_calc_level($points);
 
 // ---------- 會員方案 ----------
 $plan_label  = smacg_get_plan_label($user);
 
-// ---------- 清單 / 評分 / 點數紀錄 / 留言 ----------
-$watchlist   = smacg_build_watchlist($uid);              // 已整合 favorited 顯示
-$ratings     = smacg_get_user_ratings($uid);             // 批次預載 post 資料
+// ---------- 清單 / 評分 / 點數 / 留言 ----------
+$watchlist   = smacg_build_watchlist($uid);
+$ratings     = smacg_get_user_ratings($uid);
 $points_log  = smacg_get_points_log($uid, 50);
 $recent_cmt  = smacg_get_recent_comments($uid, 5);
 
 // ---------- 統計 ----------
 $stats       = smacg_calc_member_stats($watchlist, $ratings);
-/* $stats 結構：
-   ['counts' => ['all','watching','completed','want','favorited','dropped'],
-    'watch_time' => ['minutes','days','hours'],
-    'rating' => ['count','avg','distribution'=>[1..10],'top3','bottom3'],
-    'genres' => [['name','count','percent'],...],
-    'studios'=> [['name','count'],...],
-    'years'  => [['year','count'],...]]
-*/
 
 get_header(); ?>
 
@@ -99,7 +89,7 @@ get_header(); ?>
             </label>
             <div id="mc-avatar-msg" class="mc-avatar-msg" hidden></div>
             <noscript>
-                <a href="<?php echo esc_url($account_url); ?>" class="mc-avatar-fallback">前往帳號頁修改</a>
+                <a href="<?php echo esc_url($account_url); ?>" class="mc-avatar-fallback">請啟用 JavaScript 修改頭像</a>
             </noscript>
         </div>
 
