@@ -1077,6 +1077,12 @@ add_action('wp_enqueue_scripts', function () {
             'ajax'  => admin_url('admin-ajax.php'),
             'nonce' => wp_create_nonce('smacg_member_nonce'),
         ]);
+
+        // P0-2: 呼叫 /wp-json/weixiaoacg/v1/user-status/ 用
+        wp_localize_script('smacg-member', 'wpApiSettings', [
+            'root'  => esc_url_raw(rest_url()),
+            'nonce' => wp_create_nonce('wp_rest'),
+        ]);
     }
 
     if (file_exists($css_path)) {
@@ -1088,6 +1094,7 @@ add_action('wp_enqueue_scripts', function () {
         );
     }
 }, 20);
+
 
 /* AJAX：載入更多清單／評分 */
 add_action('wp_ajax_smacg_member_loadmore', function () {
