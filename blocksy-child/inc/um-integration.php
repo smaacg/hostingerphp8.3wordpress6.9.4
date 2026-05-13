@@ -1,10 +1,18 @@
 <?php
 /**
  * Ultimate Member 整合：enqueue / template_include / 中文字典 / JS 翻譯 /
- * 登入後跳轉 / template 防護 (single.php → page.php)
+ * 登入後跳轉 / template 防護 (single.php → page.php) /
+ * /user/ 404 自動重導
  *
  * @package weixiaoacg
  * @subpackage UM
+ *
+ * Changelog:
+ * - v1.1.0 (2026-05-13)：
+ *   新增 smacg_um_user_404_redirect()
+ *   攔截 /user/{找不到的 username}/ → 自動 302 重導到會員中心 (/mc/)，
+ *   徹底解決 "We are sorry. We cannot find any users..." 英文錯誤頁。
+ *   priority 5，比 UM 自己的 profile 渲染 hook 更早。
  */
 defined( 'ABSPATH' ) || exit;
 
@@ -49,6 +57,91 @@ add_action('admin_notices', function() {
 }, 1);
 
 add_filter( 'um_login_allow_nonce_verification', '__return_false' );
+
+/* ============================================================
+   v1.1.0：/user/ 找不到使用者 → 自動重導
+   ------------------------------------------------------------
+   觸發條件：
+     1) 當前是 UM user 頁（um_is_core_page('user') 或 query_var um_user 存在）
+     2) 但 URL 中的 profile slug 找不到對應使用者
+   行為：
+     - 已登入 → 302 重導到 /mc/（自家會員中心）
+     - 未登入 → 302 重導到首頁
+   priority 5，比 UM 內部 profile 渲染（通常 priority 10+）更早觸發。
+   ============================================================ */
+if ( ! function_exists( 'smacg_um_user_404_redirect' ) ) {
+    function smacg_um_user_404_redirect() {
+
+        // 後台、AJAX、REST、Cron 一律跳過
+        if ( is_admin() || wp_doing_ajax() || wp_doing_cron() ) return;
+        if ( defined( 'REST_REQUEST' ) && REST_REQUEST ) return;
+
+        // UM 沒啟用就不處理
+        if ( ! function_exists( 'um_is_core_page' ) ) return;
+
+        // 不是 UM user 頁就不處理（/login/、/register/ 等不影響）
+        $is_user_page = um_is_core_page( 'user' ) || get_query_var( 'um_user' );
+        if ( ! $is_user_page ) return;
+
+        /**
+         * 偵測「找不到使用者」的條件：
+         *   1) URL 帶了 profile slug 但 UM 沒解析出有效 user
+         *   2) 或 query_var um_user 存在但對應不到 user_id
+         */
+        $um_user_slug = get_query_var( 'um_user' );
+        $needs_redirect = false;
+
+        if ( $um_user_slug ) {
+            // 嘗試各種方式解析 username → user
+            $u = get_user_by( 'slug',  $um_user_slug );
+            if ( ! $u ) $u = get_user_by( 'login', $um_user_slug );
+            if ( ! $u ) $u = get_user_by( 'email', str_replace( '-', '.', $um_user_slug ) );
+
+            // UM 可能用 meta_key 'um_user_profile_url_slug_{base}' 儲存自訂 slug
+            if ( ! $u ) {
+                $users = get_users( array(
+                    'meta_key'    => 'um_user_profile_url_slug_user_login',
+                    'meta_value'  => $um_user_slug,
+                    'number'      => 1,
+                    'count_total' => false,
+                ) );
+                if ( ! empty( $users ) ) $u = $users[0];
+            }
+            if ( ! $u ) {
+                $users = get_users( array(
+                    'meta_key'    => 'um_user_profile_url_slug_username',
+                    'meta_value'  => $um_user_slug,
+                    'number'      => 1,
+                    'count_total' => false,
+                ) );
+                if ( ! empty( $users ) ) $u = $users[0];
+            }
+
+            if ( ! $u ) $needs_redirect = true;
+        } else {
+            // 是 user core page 但 query_var 完全空 → 也視為無效
+            $needs_redirect = true;
+        }
+
+        if ( ! $needs_redirect ) return;
+
+        // 決定目的地
+        $target = '';
+        if ( is_user_logged_in() && function_exists( 'smacg_get_member_center_url' ) ) {
+            $target = smacg_get_member_center_url();
+        }
+        if ( ! $target ) {
+            $target = home_url( '/' );
+        }
+
+        // 加 query 參數方便除錯（可選，未來不需要可拿掉）
+        $target = add_query_arg( 'from', 'um-404', $target );
+
+        wp_safe_redirect( $target, 302 );
+        exit;
+    }
+    add_action( 'template_redirect', 'smacg_um_user_404_redirect', 5 );
+}
 
 /* ============================================================
    UM 中文化字典
