@@ -1,10 +1,10 @@
 <?php
 /**
  * Template Name: 會員中心
- * Version: 2.3.0 (2026-05-13)
+ * Version: 2.4.0 (2026-05-13)
  *
  * 架構：本檔僅負責登入檢查 + 框架，資料統計交給 inc/member-stats.php，
- *      各 tab render 交給 inc/member-render.php。
+ *      各 tab render 交給 inc/member-render.php / inc/notifications-render.php。
  *
  * v2.0.1：<main> 改回 <div>，避免 Blocksy 雙欄 grid 觸發空白
  * v2.0.2：頭像改為 <label> + 隱藏 <input type="file">，支援即時上傳
@@ -19,6 +19,9 @@
  *   - Hero plan badge 旁新增「公開頁」連結
  * v2.3.0：Batch 1B-3 追蹤系統 UI
  *   - Hero 區新增「粉絲 / 追蹤中」數字顯示
+ * v2.4.0：Batch 1C-3 通知中心
+ *   - 載入 inc/notifications-render.php
+ *   - 新增「🔔 通知」tab + panel
  */
 
 if (!defined('ABSPATH')) exit;
@@ -32,6 +35,11 @@ if (!is_user_logged_in()) {
 // 載入模組
 require_once get_stylesheet_directory() . '/inc/member-stats.php';
 require_once get_stylesheet_directory() . '/inc/member-render.php';
+
+// v2.4.0: 通知中心 render（如存在）
+if ( file_exists( get_stylesheet_directory() . '/inc/notifications-render.php' ) ) {
+    require_once get_stylesheet_directory() . '/inc/notifications-render.php';
+}
 
 // ---------- 基本資料 ----------
 $user        = wp_get_current_user();
@@ -195,13 +203,14 @@ get_header(); ?>
     <nav class="mc-tabs" role="tablist">
         <?php
         $tabs = [
-            'dashboard' => '📊 總覽',
-            'watchlist' => '🎬 我的清單',
-            'stats'     => '📈 統計',
-            'ratings'   => '⭐ 我的評分',
-            'comments'  => '💬 留言',
-            'points'    => '🪙 點數',
-            'settings'  => '⚙️ 設定',
+            'dashboard'     => '📊 總覽',
+            'watchlist'     => '🎬 我的清單',
+            'stats'         => '📈 統計',
+            'ratings'       => '⭐ 我的評分',
+            'notifications' => '🔔 通知',
+            'comments'      => '💬 留言',
+            'points'        => '🪙 點數',
+            'settings'      => '⚙️ 設定',
         ];
         foreach ($tabs as $k => $label):
             $active = $k === 'dashboard' ? ' active' : '';
@@ -226,6 +235,16 @@ get_header(); ?>
 
         <section class="mc-panel" data-panel="ratings">
             <?php smacg_render_ratings($ratings, $stats['rating']); ?>
+        </section>
+
+        <section class="mc-panel" data-panel="notifications">
+            <?php
+            if ( function_exists( 'smacg_render_notifications_tab' ) ) {
+                smacg_render_notifications_tab();
+            } else {
+                echo '<p class="mc-empty">通知模組尚未載入</p>';
+            }
+            ?>
         </section>
 
         <section class="mc-panel" data-panel="comments">
