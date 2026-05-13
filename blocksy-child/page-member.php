@@ -1,7 +1,7 @@
 <?php
 /**
  * Template Name: 會員中心
- * Version: 2.0.4 (2026-05-12)
+ * Version: 2.1.0 (2026-05-13)
  *
  * 架構：本檔僅負責登入檢查 + 框架，資料統計交給 inc/member-stats.php，
  *      各 tab render 交給 inc/member-render.php。
@@ -10,6 +10,11 @@
  * v2.0.2：頭像改為 <label> + 隱藏 <input type="file">，支援即時上傳
  * v2.0.3：移除 /account/ 依賴；fallback URL 改為自家會員頁
  * v2.0.4：P1-2 新增 Continue Watching 橫向列（Hero 下方、Tab 上方）
+ * v2.1.0：頭像上傳優化 - A/B/E/G
+ *   - A: 頭像上傳區新增格式/大小提示文字
+ *   - B: <input accept> 移除 image/gif（後端原本就拒絕）
+ *   - E+G: 新增 Cropper.js 裁切 Modal DOM（#mc-cropper-modal）
+ *   - 新增進度條 DOM（#mc-avatar-progress）
  */
 
 if (!defined('ABSPATH')) exit;
@@ -91,12 +96,29 @@ get_header(); ?>
                     <i class="fa-solid fa-camera"></i>
                     <span>更換頭像</span>
                 </div>
+                <?php /* v2.1.0 B：accept 移除 image/gif */ ?>
                 <input type="file"
                        id="mc-avatar-input"
-                       accept="image/jpeg,image/png,image/webp,image/gif"
+                       accept="image/jpeg,image/png,image/webp"
                        hidden>
             </label>
+
+            <?php /* v2.1.0 A：頭像格式 / 大小提示 */ ?>
+            <div class="mc-avatar-hint">
+                <i class="fa-solid fa-circle-info"></i>
+                支援 JPG / PNG / WebP，最大 5 MB，建議方形圖片
+            </div>
+
+            <?php /* v2.1.0：上傳進度條（預設隱藏，JS 控制顯示） */ ?>
+            <div id="mc-avatar-progress" class="mc-avatar-progress" hidden>
+                <div class="mc-avatar-progress-bar">
+                    <div class="mc-avatar-progress-fill" style="width:0%"></div>
+                </div>
+                <span class="mc-avatar-progress-text">0%</span>
+            </div>
+
             <div id="mc-avatar-msg" class="mc-avatar-msg" hidden></div>
+
             <noscript>
                 <a href="<?php echo esc_url($account_url); ?>" class="mc-avatar-fallback">請啟用 JavaScript 修改頭像</a>
             </noscript>
@@ -185,6 +207,46 @@ get_header(); ?>
         </section>
     </div>
 
+</div>
+
+<?php /* ============================================================
+       v2.1.0：Cropper.js 裁切 Modal（E + G）
+       ------------------------------------------------------------
+       - 預設隱藏，使用者選檔後由 member.js 顯示
+       - Cropper.js 會把 #mc-cropper-image 變成可裁切的 canvas
+       - 「確定」會把裁切後的 blob 用 XHR 上傳（顯示進度條）
+       - 「取消」關閉 modal、清掉 input
+       ============================================================ */ ?>
+<div id="mc-cropper-modal" class="mc-cropper-modal" hidden aria-hidden="true" role="dialog">
+    <div class="mc-cropper-backdrop"></div>
+    <div class="mc-cropper-dialog" role="document">
+        <div class="mc-cropper-header">
+            <h3><i class="fa-solid fa-crop-simple"></i> 裁切頭像</h3>
+            <button type="button" class="mc-cropper-close" id="mc-cropper-close" aria-label="關閉">
+                <i class="fa-solid fa-xmark"></i>
+            </button>
+        </div>
+
+        <div class="mc-cropper-body">
+            <div class="mc-cropper-canvas">
+                <img id="mc-cropper-image" src="" alt="裁切預覽">
+            </div>
+
+            <div class="mc-cropper-tips">
+                <i class="fa-solid fa-lightbulb"></i>
+                拖曳調整裁切框，滾輪縮放。輸出為 400×400 方形頭像。
+            </div>
+        </div>
+
+        <div class="mc-cropper-footer">
+            <button type="button" class="mc-btn mc-btn-secondary" id="mc-cropper-cancel">
+                <i class="fa-solid fa-rotate-left"></i> 取消
+            </button>
+            <button type="button" class="mc-btn mc-btn-primary" id="mc-cropper-confirm">
+                <i class="fa-solid fa-check"></i> 確認上傳
+            </button>
+        </div>
+    </div>
 </div>
 
 <?php get_footer(); ?>
