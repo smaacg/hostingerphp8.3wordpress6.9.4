@@ -1,29 +1,34 @@
 /* ==========================================================
- * Member Center v2.3.0 (2026-05-13)
+ * Member Center v2.4.0 (2026-05-13)
  * Dark theme + glass-morphism, fully responsive
  *
- * 變更紀錄：
- * v2.3.0 (2026-05-13) — Batch B：完成率卡 + 留言分頁樣式
+ * 變更紀錄:
+ * v2.4.0 (2026-05-13) — Batch C #9 + #14 + #6:
+ *   - 新增 .mc-widget--timeline / .mc-timeline / .mc-timeline-item 樣式（#9）
+ *   - 新增 .mc-yr-entry 年度回顧入口卡（#14 入口）
+ *   - 新增 .smacg-picture 包裝樣式（#6 WebP picture tag）
+ *
+ * v2.3.0 (2026-05-13) — Batch B:完成率卡 + 留言分頁樣式
  *   - 新增 .mc-stats-card--completion 完成率卡片（含漸層進度條、評語）
  *   - 新增 .mc-comments-wrap / .mc-comments-meta / .mc-loadmore-comments
  *
- * v2.2.0 (2026-05-13) — Batch A：UX 微調
- *   - #1  等級條：文字移到條外，bar 高度 22px → 12px，避免文字壓縮
+ * v2.2.0 (2026-05-13) — Batch A:UX 微調
+ *   - #1  等級條:文字移到條外,bar 高度 22px → 12px,避免文字壓縮
  *   - #2  Continue Watching 卡片高度統一（標題 2 行、進度條貼底）
- *   - #3  手機版 tab 列右側漸層遮罩，暗示可橫向滑動
+ *   - #3  手機版 tab 列右側漸層遮罩,暗示可橫向滑動
  *   - #4  圓餅圖手機 160→120px、legend 移到下方
  *   - #10 toggle 切換時整列短暫綠色高亮
  *   - #11 所有可聚焦元件 :focus-visible 統一描邊（toggle / tab / button / arrow / filter）
  *
- * v2.1.1 ：P0-1 隱私 toggle、P0-2 卡片快速操作、P1-2 Continue Watching
- * v2.1.0 (2026-05-12)：
+ * v2.1.1 :P0-1 隱私 toggle、P0-2 卡片快速操作、P1-2 Continue Watching
+ * v2.1.0 (2026-05-12):
  *   - 整合 v2.0.1 / v2.0.2 / v2.0.3 散落補丁
- *   - 移除 !important 過度使用，改用 CSS 變數
+ *   - 移除 !important 過度使用,改用 CSS 變數
  *   - 補齊未定義變數 (--mc-text-2 / --mc-text-3)
  *   - 統一 RWD 斷點與 Settings 卡片按鈕樣式
  *   - 新增 prefers-reduced-motion 支援
- *   - 統計卡文字提亮整合到主規則，不再覆寫
- * v2.0.2：Layout fix 統一為 um-page-user + page-template-page-member
+ *   - 統計卡文字提亮整合到主規則,不再覆寫
+ * v2.0.2:Layout fix 統一為 um-page-user + page-template-page-member
  * ========================================================== */
 
 /* ==========================================================
@@ -80,7 +85,7 @@
 .mc-wrap *::after { box-sizing: border-box; }
 
 /* ==========================================================
- *  Hero（含頭像上傳 UI，整合自 v2.0.2）
+ *  Hero（含頭像上傳 UI,整合自 v2.0.2)
  * ========================================================== */
 .mc-hero {
   display: grid;
@@ -199,7 +204,7 @@
 }
 
 /* ----------------------------------------------------------
- *  等級進度條（v2.2.1 fix：bar + 文字分離）
+ *  等級進度條（v2.2.1 fix:bar + 文字分離）
  * ---------------------------------------------------------- */
 .mc-level-bar {
   position: relative;
@@ -249,7 +254,7 @@
 .mc-hero-stats span { font-size: 12px; color: var(--mc-text-dim); }
 
 /* ==========================================================
- *  Tabs（v2.2.0 #3：手機右側漸層遮罩）
+ *  Tabs（v2.2.0 #3:手機右側漸層遮罩）
  * ========================================================== */
 .mc-tabs {
   position: relative;
@@ -467,6 +472,21 @@
   justify-content: center;
   font-size: 40px;
   background: linear-gradient(135deg, #1a1f26, #2a3038);
+}
+
+/* v2.4.0:picture 包裝層樣式（#6 image-optimizer 整合） */
+.mc-card-thumb .smacg-picture,
+.mc-card-thumb picture {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+.mc-card-thumb .smacg-picture img,
+.mc-card-thumb picture img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
 }
 
 .mc-card-heart {
@@ -843,7 +863,7 @@
 .mc-rank-count { color: var(--mc-text-3); font-size: 13px; }
 
 /* ==========================================================
- *  Comments Tab（v2.3.0：加入分頁標頭與按鈕樣式）
+ *  Comments Tab（v2.3.0:加入分頁標頭與按鈕樣式）
  * ========================================================== */
 .mc-comments-wrap {
   display: flex;
@@ -867,7 +887,7 @@
   border: 1px solid var(--mc-border);
   border-radius: var(--mc-radius-sm);
   margin-bottom: 12px;
-  /* v2.3.0：新載入的 li 淡入動畫 */
+  /* v2.3.0:新載入的 li 淡入動畫 */
   animation: mc-cmt-fade .3s ease;
 }
 @keyframes mc-cmt-fade {
@@ -885,7 +905,7 @@
 .mc-cmt-fulllist p     { margin: 0 0 6px; color: var(--mc-text-dim); font-size: 14px; }
 .mc-cmt-fulllist small { color: var(--mc-text-dim); font-size: 11px; }
 
-/* 留言專用 load-more 樣式微調（與 watchlist/ratings 共享主體，但顏色用 accent-2） */
+/* 留言專用 load-more 樣式微調（與 watchlist/ratings 共享主體,但顏色用 accent-2） */
 .mc-loadmore-comments:hover {
   background: var(--mc-accent-2);
   border-color: var(--mc-accent-2);
@@ -1173,7 +1193,7 @@ body.page-template-page-member .mc-wrap {
   .mc-pie-wrap       { grid-template-columns: 1fr; justify-items: center; }
   .mc-points-summary { grid-template-columns: 1fr; }
 
-  /* 完成率卡：手機字級略縮 */
+  /* 完成率卡:手機字級略縮 */
   .mc-completion-big b    { font-size: 44px; }
   .mc-completion-big span { font-size: 20px; }
 }
@@ -1224,7 +1244,7 @@ body.page-template-page-member .mc-wrap {
   .mc-set-actions { flex-direction: column; align-items: stretch; }
   .mc-set-msg     { text-align: center; }
 
-  /* 完成率卡：超窄屏進一步縮小 */
+  /* 完成率卡:超窄屏進一步縮小 */
   .mc-completion-big b    { font-size: 38px; }
   .mc-completion-big span { font-size: 18px; }
 }
@@ -1245,14 +1265,16 @@ body.page-template-page-member .mc-wrap {
   .mc-set-msg,
   .mc-cmt-fulllist li,
   .mc-hero-avatar-overlay,
-  .mc-hero-avatar-link img {
+  .mc-hero-avatar-link img,
+  .mc-timeline-item,
+  .mc-yr-entry {
     animation: none !important;
     transition: none !important;
   }
 }
 
 /* ==========================================================
- *  v2.2.0 #11：統一鍵盤聚焦樣式（:focus-visible）
+ *  v2.2.0 #11:統一鍵盤聚焦樣式（:focus-visible）
  * ========================================================== */
 .mc-tab:focus-visible,
 .mc-filter-btn:focus-visible,
@@ -1261,7 +1283,8 @@ body.page-template-page-member .mc-wrap {
 .mc-card-btn:focus-visible,
 .mc-btn-primary:focus-visible,
 .mc-btn-secondary:focus-visible,
-.mc-btn-danger:focus-visible {
+.mc-btn-danger:focus-visible,
+.mc-yr-entry:focus-visible {
   outline: 2px solid var(--mc-accent);
   outline-offset: 2px;
 }
@@ -1451,4 +1474,269 @@ body.page-template-page-member .mc-wrap {
 }
 @media (max-width: 480px) {
   .mc-continue-card { flex-basis: 140px; }
+}
+
+/* ==========================================================
+ *  v2.4.0 — Batch C #9:最近活動時間軸
+ * ========================================================== */
+.mc-widget--timeline {
+  margin-top: 20px;
+}
+
+.mc-timeline {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  position: relative;
+}
+
+/* 垂直時間線（dot 左側的豎線） */
+.mc-timeline::before {
+  content: "";
+  position: absolute;
+  left: 17px;
+  top: 8px;
+  bottom: 8px;
+  width: 2px;
+  background: linear-gradient(180deg,
+    rgba(255, 107, 174, .35),
+    rgba(107, 182, 255, .2),
+    transparent);
+  border-radius: 1px;
+}
+
+.mc-timeline-item {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  padding: 10px 0 10px 0;
+  animation: mc-timeline-fade .3s ease;
+}
+@keyframes mc-timeline-fade {
+  from { opacity: 0; transform: translateX(-4px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+
+.mc-timeline-dot {
+  position: relative;
+  z-index: 1;
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+  display: grid;
+  place-items: center;
+  background: var(--mc-surface-hi);
+  border: 2px solid var(--mc-border);
+  border-radius: 50%;
+  transition: transform .15s, border-color .15s, box-shadow .15s;
+}
+.mc-timeline-item:hover .mc-timeline-dot {
+  transform: scale(1.08);
+}
+.mc-timeline-icon {
+  font-size: 16px;
+  line-height: 1;
+}
+
+/* 顏色變體（color 對應 stats-card 配色） */
+.mc-timeline-item--completed .mc-timeline-dot {
+  border-color: rgba(52, 211, 153, .5);
+  background: rgba(52, 211, 153, .12);
+  box-shadow: 0 0 12px rgba(52, 211, 153, .2);
+}
+.mc-timeline-item--watching .mc-timeline-dot {
+  border-color: rgba(107, 182, 255, .5);
+  background: rgba(107, 182, 255, .12);
+  box-shadow: 0 0 12px rgba(107, 182, 255, .2);
+}
+.mc-timeline-item--want .mc-timeline-dot {
+  border-color: rgba(251, 191, 36, .5);
+  background: rgba(251, 191, 36, .12);
+  box-shadow: 0 0 12px rgba(251, 191, 36, .2);
+}
+.mc-timeline-item--dropped .mc-timeline-dot {
+  border-color: rgba(148, 163, 184, .5);
+  background: rgba(148, 163, 184, .12);
+}
+.mc-timeline-item--accent-2 .mc-timeline-dot {
+  border-color: rgba(167, 139, 250, .5);
+  background: rgba(167, 139, 250, .12);
+  box-shadow: 0 0 12px rgba(167, 139, 250, .2);
+}
+
+.mc-timeline-body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--mc-border);
+}
+.mc-timeline-item:last-child .mc-timeline-body {
+  border-bottom: 0;
+}
+
+.mc-timeline-main {
+  flex: 1;
+  min-width: 0;
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--mc-text);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px;
+}
+.mc-timeline-action {
+  color: var(--mc-text-dim);
+  font-weight: 500;
+}
+.mc-timeline-target {
+  color: var(--mc-text);
+  font-weight: 600;
+  text-decoration: none;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 280px;
+}
+a.mc-timeline-target:hover {
+  color: var(--mc-accent);
+  text-decoration: underline;
+}
+.mc-timeline-meta {
+  display: inline-block;
+  padding: 1px 8px;
+  font-size: 12px;
+  background: var(--mc-surface);
+  border: 1px solid var(--mc-border);
+  border-radius: 999px;
+  color: var(--mc-text-2);
+  font-weight: 500;
+}
+.mc-timeline-time {
+  flex-shrink: 0;
+  font-size: 12px;
+  color: var(--mc-text-3);
+  white-space: nowrap;
+  padding-top: 2px;
+}
+
+@media (max-width: 640px) {
+  .mc-timeline-body {
+    flex-direction: column;
+    gap: 4px;
+  }
+  .mc-timeline-time { padding-top: 0; }
+  .mc-timeline-target { max-width: 100%; white-space: normal; }
+}
+
+/* ==========================================================
+ *  v2.4.0 — Batch C #14:年度回顧入口卡
+ * ========================================================== */
+.mc-yr-entry {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 18px 22px;
+  margin: 20px 0;
+  background: linear-gradient(135deg,
+    rgba(244, 114, 182, .15),
+    rgba(167, 139, 250, .15),
+    rgba(96, 165, 250, .12));
+  border: 1px solid rgba(167, 139, 250, .3);
+  border-radius: var(--mc-radius);
+  color: var(--mc-text);
+  text-decoration: none;
+  position: relative;
+  overflow: hidden;
+  transition: transform .2s, box-shadow .2s, border-color .2s;
+}
+.mc-yr-entry::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at 20% 50%,
+    rgba(244, 114, 182, .2), transparent 60%);
+  opacity: 0;
+  transition: opacity .3s;
+}
+.mc-yr-entry:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 30px rgba(167, 139, 250, .3);
+  border-color: rgba(244, 114, 182, .5);
+}
+.mc-yr-entry:hover::before {
+  opacity: 1;
+}
+
+.mc-yr-entry-icon {
+  position: relative;
+  z-index: 1;
+  flex-shrink: 0;
+  width: 56px;
+  height: 56px;
+  display: grid;
+  place-items: center;
+  font-size: 28px;
+  background: linear-gradient(135deg, var(--mc-accent), var(--mc-accent-3));
+  border-radius: 50%;
+  box-shadow: 0 4px 16px rgba(244, 114, 182, .4);
+  animation: mc-yr-pulse 3s ease-in-out infinite;
+}
+@keyframes mc-yr-pulse {
+  0%, 100% { box-shadow: 0 4px 16px rgba(244, 114, 182, .4); }
+  50%      { box-shadow: 0 4px 24px rgba(167, 139, 250, .55); }
+}
+
+.mc-yr-entry-body {
+  flex: 1;
+  min-width: 0;
+  position: relative;
+  z-index: 1;
+}
+.mc-yr-entry-title {
+  font-size: 17px;
+  font-weight: 700;
+  margin-bottom: 4px;
+  background: linear-gradient(90deg, var(--mc-accent), var(--mc-accent-3));
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: var(--mc-accent); /* fallback */
+}
+.mc-yr-entry-sub {
+  font-size: 13px;
+  color: var(--mc-text-2);
+}
+
+.mc-yr-entry-arrow {
+  position: relative;
+  z-index: 1;
+  flex-shrink: 0;
+  font-size: 28px;
+  color: var(--mc-accent-3);
+  font-weight: 300;
+  transition: transform .2s;
+}
+.mc-yr-entry:hover .mc-yr-entry-arrow {
+  transform: translateX(4px);
+}
+
+@media (max-width: 640px) {
+  .mc-yr-entry {
+    padding: 14px 16px;
+    gap: 12px;
+  }
+  .mc-yr-entry-icon {
+    width: 44px;
+    height: 44px;
+    font-size: 22px;
+  }
+  .mc-yr-entry-title { font-size: 15px; }
+  .mc-yr-entry-sub   { font-size: 12px; }
+  .mc-yr-entry-arrow { font-size: 22px; }
 }
