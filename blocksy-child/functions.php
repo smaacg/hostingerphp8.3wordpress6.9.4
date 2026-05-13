@@ -3,7 +3,9 @@
  * 微笑動漫 Child Theme — functions.php
  *
  * @package weixiaoacg
- * @version 2.4.2
+ * @version 2.4.3
+ *  * v2.4.3（2026-05-13）— Batch 1C-4 完工:
+ *   - [新增] inc/notifications-email.php（每日 / 每週 Email 摘要 cron + 偏好 AJAX）
  *  * v2.4.2（2026-05-13）— Batch 1C-3：載入 notifications-render.php
  *  * v2.4.1（2026-05-13）— Batch 1C-2：
  *   - [新增] inc/notifications-events.php（5 種事件監聽）
@@ -116,6 +118,10 @@ if ( file_exists( $inc_dir . 'notifications-ajax.php' ) ) {
 // 13. 通知中心 Render（Batch 1C-3）
 if ( file_exists( $inc_dir . 'notifications-render.php' ) ) {
     require_once $inc_dir . 'notifications-render.php';
+}
+// 14. 通知中心 Email + Cron（Batch 1C-4 - 2026-05-13）
+if ( file_exists( $inc_dir . 'notifications-email.php' ) ) {
+    require_once $inc_dir . 'notifications-email.php';
 }
 
 
