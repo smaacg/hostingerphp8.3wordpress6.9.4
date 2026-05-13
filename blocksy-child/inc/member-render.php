@@ -1,29 +1,18 @@
 <?php
 /**
  * Member Center - Render Layer
- * Version: 2.1.0 (2026-05-13)
+ * Version: 2.2.0 (2026-05-13)
  *
  * 各 tab 的 HTML 輸出。所有清單一律「先渲染前 N 筆」,其餘由 AJAX 載入。
  * 桌機 20 / 行動 12（前端 JS 偵測,PHP 預設輸出 20）
  *
  * v2.0.1:設定 tab 三張卡片連結重寫
- *   - 基本資料:改為 inline 編輯（顯示名稱/簡介）,不再跳 /account/
- *   - 重設密碼:改用 /password-reset/ 自訂頁
- *   - 登出帳號:維持 wp_logout_url()
- *
- * v2.0.5 (2026-05-13):
- *   - 移除「暱稱」欄位
- *   - 隱私卡片新增「顯示繼續觀看」toggle（P1-2）
- *
- * v2.0.6 (2026-05-13) — Batch B:
- *   - smacg_render_stats() 在 banner 後插入「完成率」卡（讀 $s['completion_rate']）
- *   - smacg_render_comments() 改用分頁,首頁伺服端渲染 20 筆 + 載入更多按鈕
- *
- * v2.1.0 (2026-05-13) — Batch C #9 + #14:
- *   - smacg_render_dashboard() 簽章新增 $uid 參數（向下相容,預設 0）
- *   - Dashboard 新增「最近活動時間軸」widget（在留言之後）
- *   - Dashboard 新增「年度回顧入口卡」（在快速概覽之後)
- *   - 新增 smacg_render_activity_timeline($events) 渲染函式
+ * v2.0.5 (2026-05-13):移除「暱稱」、新增「顯示繼續觀看」toggle
+ * v2.0.6 (2026-05-13) — Batch B:完成率卡 + 留言分頁
+ * v2.1.0 (2026-05-13) — Batch C #9 + #14:時間軸 + 年度回顧入口
+ * v2.2.0 (2026-05-13) — Batch 1C-4:
+ *   - 新增 smacg_render_notification_prefs_card()（通知偏好卡片）
+ *   - smacg_render_settings() 卡片 2 之後插入通知偏好卡
  */
 if (!defined('ABSPATH')) exit;
 
@@ -57,7 +46,6 @@ function smacg_render_anime_card($pid, $extra = []) {
         <a href="<?php echo esc_url($permalink); ?>" class="mc-card-thumb">
             <?php if ($thumb): ?>
                 <?php
-                // v2.1.0:若有 image-optimizer,改用 picture tag（WebP + srcset)
                 if ( function_exists( 'smacg_picture_tag' ) && has_post_thumbnail( $pid ) ) {
                     echo smacg_picture_tag( $pid, 'medium', $title );
                 } else { ?>
@@ -104,13 +92,11 @@ function smacg_get_card_thumb_url($pid) {
 
 /* =====================================================
  *  Tab 1:總覽 Dashboard
- *  v2.1.0 — Batch C:新增 $uid 參數,並插入時間軸 + 年度回顧入口
  * ===================================================== */
 function smacg_render_dashboard($watchlist, $stats, $recent_cmt, $points_log, $plan_label, $uid = 0) {
     $watching = array_filter($watchlist, fn($w) => $w['status'] === 'watching');
     $watching = array_slice($watching, 0, 6);
 
-    // v2.1.0:取得最近活動（最多 15 筆）
     $activity = [];
     if ( $uid > 0 && function_exists( 'smacg_get_recent_activity' ) ) {
         $activity = smacg_get_recent_activity( $uid, 15 );
@@ -171,7 +157,6 @@ function smacg_render_dashboard($watchlist, $stats, $recent_cmt, $points_log, $p
         </div>
     </div>
 
-    <?php /* v2.1.0:年度回顧入口卡 */ ?>
     <?php if ( $uid > 0 ): ?>
         <a href="<?php echo esc_url( home_url( '/year-review/?year=' . $current_year ) ); ?>" class="mc-yr-entry" aria-label="查看 <?php echo $current_year; ?> 年度回顧">
             <div class="mc-yr-entry-icon">✨</div>
@@ -183,7 +168,6 @@ function smacg_render_dashboard($watchlist, $stats, $recent_cmt, $points_log, $p
         </a>
     <?php endif; ?>
 
-    <?php /* v2.1.0:最近活動時間軸 */ ?>
     <?php if ( ! empty( $activity ) ): ?>
         <div class="mc-widget mc-widget--timeline">
             <h3>📜 最近活動 <small>（最新 15 筆）</small></h3>
@@ -194,10 +178,7 @@ function smacg_render_dashboard($watchlist, $stats, $recent_cmt, $points_log, $p
 }
 
 /* =====================================================
- *  v2.1.0 — Batch C #9:最近活動時間軸渲染
- *
- *  $events 來自 smacg_get_recent_activity()
- *  每筆格式:[type, subtype, time, time_human, post_id, title, meta, icon, color, link]
+ *  最近活動時間軸渲染
  * ===================================================== */
 function smacg_render_activity_timeline( $events ) {
     if ( empty( $events ) ) {
@@ -281,11 +262,9 @@ function smacg_render_watchlist($watchlist, $counts) {
 
 /* =====================================================
  *  Tab 3:統計
- *  v2.0.6:banner 後插入「完成率」卡（讀 $s['completion_rate']）
  * ===================================================== */
 function smacg_render_stats($s) {
     $r = $s['rating'];
-    // v2.0.6:完成率（向下相容,若舊版 stats 沒有此欄位則跳過）
     $completion_rate = isset($s['completion_rate']) ? (float) $s['completion_rate'] : null;
     ?>
     <div class="mc-stats-grid">
@@ -303,9 +282,7 @@ function smacg_render_stats($s) {
         </div>
 
         <?php if ($completion_rate !== null):
-            // 計算分子分母給 hover/說明用
             $denom = $s['counts']['completed'] + $s['counts']['dropped'] + $s['counts']['watching'];
-            // 評語
             if      ($completion_rate >= 80) { $emoji = '🏆'; $remark = '超強毅力,幾乎部部追完!'; }
             elseif  ($completion_rate >= 60) { $emoji = '✨'; $remark = '完成率不錯,繼續保持!'; }
             elseif  ($completion_rate >= 40) { $emoji = '👀'; $remark = '加油,可以多看完幾部!'; }
@@ -484,7 +461,6 @@ function smacg_render_comments( $uid ) {
     $uid = (int) $uid;
     if ( $uid <= 0 ) { echo '<p class="mc-empty">尚無留言</p>'; return; }
 
-    // 先取總數
     $total = (int) get_comments( [
         'user_id' => $uid,
         'status'  => 'approve',
@@ -496,7 +472,6 @@ function smacg_render_comments( $uid ) {
         return;
     }
 
-    // 抓首頁 20 筆
     $cmts = get_comments( [
         'user_id' => $uid,
         'status'  => 'approve',
@@ -577,7 +552,7 @@ function smacg_render_points($points, $lvl, $log) { ?>
 <?php }
 
 /* =====================================================
- *  Tab 7:設定（v2.0.5）
+ *  Tab 7:設定（v2.2.0:卡片 2 後插入「通知偏好」卡）
  * ===================================================== */
 function smacg_render_settings( $user, $privacy = null, $is_owner = true ) {
     if ( $privacy === null && function_exists( 'smacg_get_user_privacy' ) ) {
@@ -666,6 +641,9 @@ function smacg_render_settings( $user, $privacy = null, $is_owner = true ) {
             </div>
         </div>
 
+        <?php /* v2.2.0:通知偏好卡片 */ ?>
+        <?php smacg_render_notification_prefs_card( $user->ID ); ?>
+
         <!-- 卡片 3:帳號安全 -->
         <div class="mc-set-card">
             <h3 class="mc-set-title"><i class="fa-solid fa-key"></i> 帳號安全</h3>
@@ -694,12 +672,111 @@ function smacg_render_settings( $user, $privacy = null, $is_owner = true ) {
 }
 
 /* =====================================================
+ *  v2.2.0 — Batch 1C-4:通知偏好卡片
+ *
+ *  讀 user_meta `smacg_notification_prefs`(陣列),前端透過 AJAX
+ *  `smacg_notif_save_prefs` 儲存。包含 5 種類型 × 站內/Email,以及
+ *  Email 摘要頻率(off/daily/weekly)。
+ * ===================================================== */
+function smacg_render_notification_prefs_card( $uid ) {
+    $uid = (int) $uid;
+    if ( $uid <= 0 ) return;
+
+    // 讀取偏好（若 helper 存在則用,否則直接讀 user_meta）
+    if ( function_exists( 'smacg_get_notification_prefs' ) ) {
+        $prefs = smacg_get_notification_prefs( $uid );
+    } else {
+        $prefs = get_user_meta( $uid, 'smacg_notification_prefs', true );
+        if ( ! is_array( $prefs ) ) $prefs = [];
+    }
+
+    // 預設值
+    $defaults = [
+        'follow_site'        => 1, 'follow_email'        => 1,
+        'comment_reply_site' => 1, 'comment_reply_email' => 1,
+        'rating_site'        => 1, 'rating_email'        => 0,
+        'level_up_site'      => 1, 'level_up_email'      => 0,
+        'badge_site'         => 1, 'badge_email'         => 0,
+        'system_site'        => 1, 'system_email'        => 1,
+        'email_digest'       => 'daily', // off|daily|weekly
+    ];
+    $prefs = wp_parse_args( $prefs, $defaults );
+    $nonce = wp_create_nonce( 'smacg_notif_save_prefs' );
+
+    // 通知類型清單
+    $types = [
+        'follow'        => [ 'icon' => '👥', 'name' => '有人追蹤我',            'desc' => '當有用戶開始追蹤你時通知' ],
+        'comment_reply' => [ 'icon' => '💬', 'name' => '留言被回覆',            'desc' => '當有人回覆你的留言時通知' ],
+        'rating'        => [ 'icon' => '⭐', 'name' => '收藏的動畫有人評分',    'desc' => '當你收藏的作品收到新評分時通知' ],
+        'level_up'      => [ 'icon' => '🎖', 'name' => '等級提升',              'desc' => '當你升級時通知' ],
+        'badge'         => [ 'icon' => '🏅', 'name' => '獲得徽章',              'desc' => '當你解鎖新徽章時通知' ],
+        'system'        => [ 'icon' => '📢', 'name' => '系統公告',              'desc' => '網站重要更新與公告' ],
+    ];
+    ?>
+    <div class="mc-set-card mc-set-card--notif-prefs"
+         data-uid="<?php echo $uid; ?>"
+         data-nonce="<?php echo esc_attr( $nonce ); ?>">
+        <h3 class="mc-set-title"><i class="fa-solid fa-bell"></i> 通知偏好</h3>
+        <p class="mc-set-hint">選擇你想收到哪些類型的通知。「站內」會顯示在鈴鐺/通知頁,「Email」會依下方摘要頻率寄送。</p>
+
+        <div class="mc-notif-prefs-table">
+            <div class="mc-notif-prefs-head">
+                <span class="mc-notif-col-name">通知類型</span>
+                <span class="mc-notif-col-toggle">站內</span>
+                <span class="mc-notif-col-toggle">Email</span>
+            </div>
+
+            <?php foreach ( $types as $key => $t ):
+                $site_key  = $key . '_site';
+                $email_key = $key . '_email';
+            ?>
+                <div class="mc-notif-prefs-row">
+                    <div class="mc-notif-col-name">
+                        <span class="mc-notif-type-icon"><?php echo $t['icon']; ?></span>
+                        <div class="mc-notif-type-text">
+                            <div class="mc-notif-type-name"><?php echo esc_html( $t['name'] ); ?></div>
+                            <div class="mc-notif-type-desc"><?php echo esc_html( $t['desc'] ); ?></div>
+                        </div>
+                    </div>
+                    <div class="mc-notif-col-toggle">
+                        <label class="mc-toggle mc-toggle--sm">
+                            <input type="checkbox" class="mc-notif-pref" data-key="<?php echo esc_attr( $site_key ); ?>" <?php checked( ! empty( $prefs[ $site_key ] ) ); ?>>
+                            <span class="mc-toggle-slider"></span>
+                        </label>
+                    </div>
+                    <div class="mc-notif-col-toggle">
+                        <label class="mc-toggle mc-toggle--sm">
+                            <input type="checkbox" class="mc-notif-pref" data-key="<?php echo esc_attr( $email_key ); ?>" <?php checked( ! empty( $prefs[ $email_key ] ) ); ?>>
+                            <span class="mc-toggle-slider"></span>
+                        </label>
+                    </div>
+                </div>
+            <?php endforeach; ?>
+        </div>
+
+        <div class="mc-notif-digest-row">
+            <label class="mc-set-label mc-set-label--inline">
+                <span><i class="fa-solid fa-envelope"></i> Email 摘要頻率</span>
+                <select class="mc-notif-digest" data-key="email_digest">
+                    <option value="off"    <?php selected( $prefs['email_digest'], 'off' ); ?>>不寄送</option>
+                    <option value="daily"  <?php selected( $prefs['email_digest'], 'daily' ); ?>>每日 20:00（推薦）</option>
+                    <option value="weekly" <?php selected( $prefs['email_digest'], 'weekly' ); ?>>每週日 20:00</option>
+                </select>
+            </label>
+            <p class="mc-set-hint">摘要會把過去 24 小時（或 7 天）的所有通知整理成一封信寄出,而不是每則發一封。</p>
+        </div>
+
+        <div id="mc-notif-prefs-msg" class="mc-set-msg" style="display:none"></div>
+    </div>
+    <?php
+}
+
+/* =====================================================
  *  Continue Watching - 繼續觀看橫向列（P1-2）
  * ===================================================== */
 function smacg_render_continue_watching( $watchlist ) {
     if ( empty( $watchlist ) || ! is_array( $watchlist ) ) return;
 
-    // 篩選:watching + 進度未滿
     $continue = [];
     foreach ( $watchlist as $w ) {
         if ( ( $w['status'] ?? '' ) !== 'watching' ) continue;
@@ -710,7 +787,6 @@ function smacg_render_continue_watching( $watchlist ) {
         $total = (int) get_post_meta( $pid, 'anime_episodes', true );
         $prog  = (int) ( $w['progress'] ?? 0 );
 
-        // 已知總集數且已追完 → 跳過
         if ( $total > 0 && $prog >= $total ) continue;
 
         $w['_total']   = $total;
@@ -719,7 +795,6 @@ function smacg_render_continue_watching( $watchlist ) {
         if ( count( $continue ) >= 10 ) break;
     }
 
-    // 空狀態:顯示 CTA
     if ( empty( $continue ) ) {
         ?>
         <section class="mc-continue-section mc-continue-empty">
@@ -761,7 +836,6 @@ function smacg_render_continue_watching( $watchlist ) {
                          data-status="watching"
                          data-title="<?php echo esc_attr( mb_strtolower( $title ) ); ?>">
 
-                    <!-- 重用 P0-2 既有的快速操作工具列 -->
                     <div class="mc-card-actions"
                          data-anime="<?php echo $pid; ?>"
                          data-progress="<?php echo $prog; ?>"
@@ -777,7 +851,6 @@ function smacg_render_continue_watching( $watchlist ) {
                     <a href="<?php echo esc_url( $permalink ); ?>" class="mc-card-thumb">
                         <?php if ( $thumb ): ?>
                             <?php
-                            // v2.1.0:若有 image-optimizer,改用 picture tag
                             if ( function_exists( 'smacg_picture_tag' ) && has_post_thumbnail( $pid ) ) {
                                 echo smacg_picture_tag( $pid, 'medium', $title );
                             } else { ?>
@@ -803,98 +876,3 @@ function smacg_render_continue_watching( $watchlist ) {
     </section>
     <?php
 }
-
-/* =====================================================
- *  v2.2.0 — Batch 1C-4:通知偏好區塊
- *  (供 smacg_render_settings 呼叫)
- * ===================================================== */
-function smacg_render_notification_prefs_card( $uid ) {
-    if ( ! $uid || ! function_exists( 'smacg_get_notification_prefs' ) ) return;
-
-    $prefs = smacg_get_notification_prefs( $uid );
-
-    // 通知類型定義
-    $types = [
-        'follow'        => [ '👥', '新增粉絲',        '有人開始追蹤你' ],
-        'comment_reply' => [ '💬', '留言回覆',        '有人回覆了你的留言' ],
-        'rating'        => [ '⭐', '收藏動畫被評分',  '你收藏的動畫被其他人評分' ],
-        'badge'         => [ '🏆', '徽章解鎖',        '達成成就獲得徽章' ],
-        'level_up'      => [ '🚀', '等級提升',        '會員等級升等通知' ],
-        'system'        => [ '📢', '系統公告',        '網站重要訊息與公告' ],
-    ];
-
-    $digest = $prefs['email_digest'] ?? 'daily';
-    ?>
-    <div class="mc-settings-card mc-settings-card--notif">
-        <h3>🔔 通知偏好</h3>
-        <p class="mc-settings-card-desc">設定哪些事件要通知你,以及收到 Email 的頻率。</p>
-
-        <div class="mc-notif-prefs" data-uid="<?php echo (int) $uid; ?>">
-
-            <table class="mc-notif-prefs-table">
-                <thead>
-                    <tr>
-                        <th>事件類型</th>
-                        <th class="mc-notif-col-toggle">站內</th>
-                        <th class="mc-notif-col-toggle">Email</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <?php foreach ( $types as $type => $info ) :
-                        [ $icon, $label, $desc ] = $info;
-                        $site_key  = $type . '_site';
-                        $email_key = $type . '_email';
-                        $site_on   = ! empty( $prefs[ $site_key ] );
-                        $email_on  = ! empty( $prefs[ $email_key ] );
-                    ?>
-                        <tr>
-                            <td>
-                                <div class="mc-notif-type">
-                                    <span class="mc-notif-type-icon"><?php echo $icon; ?></span>
-                                    <div>
-                                        <b><?php echo esc_html( $label ); ?></b>
-                                        <small><?php echo esc_html( $desc ); ?></small>
-                                    </div>
-                                </div>
-                            </td>
-                            <td class="mc-notif-col-toggle">
-                                <label class="mc-switch">
-                                    <input type="checkbox"
-                                           data-pref="<?php echo esc_attr( $site_key ); ?>"
-                                           <?php checked( $site_on ); ?>>
-                                    <span class="mc-switch-slider"></span>
-                                </label>
-                            </td>
-                            <td class="mc-notif-col-toggle">
-                                <label class="mc-switch">
-                                    <input type="checkbox"
-                                           data-pref="<?php echo esc_attr( $email_key ); ?>"
-                                           <?php checked( $email_on ); ?>>
-                                    <span class="mc-switch-slider"></span>
-                                </label>
-                            </td>
-                        </tr>
-                    <?php endforeach; ?>
-                </tbody>
-            </table>
-
-            <div class="mc-notif-digest">
-                <label>
-                    <b>Email 摘要頻率</b>
-                    <select data-pref="email_digest">
-                        <option value="off"    <?php selected( $digest, 'off' ); ?>>關閉（不收 Email）</option>
-                        <option value="daily"  <?php selected( $digest, 'daily' ); ?>>每日摘要（晚上 20:00 寄送）</option>
-                        <option value="weekly" <?php selected( $digest, 'weekly' ); ?>>每週摘要（週日晚上 20:00）</option>
-                    </select>
-                </label>
-                <p class="mc-notif-digest-tip">
-                    💡 即使 Email 摘要關閉,站內鈴鐺通知仍會運作（依上方各項開關)。
-                </p>
-            </div>
-
-            <div class="mc-notif-prefs-status" data-status hidden></div>
-        </div>
-    </div>
-    <?php
-}
-
