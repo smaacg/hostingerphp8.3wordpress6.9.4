@@ -805,3 +805,24 @@ a.pp-timeline-target:hover {
     grid-template-columns: repeat(2, 1fr);
   }
 }
+/* ============================================================
+   v1.0.1 (2026-05-13) - Hero 名稱可讀性修正
+   ============================================================ */
+.pp-wrap .pp-hero-name,
+.pp-wrap .pp-hero-name a {
+  color: #ffffff !important;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, .35);
+}
+
+/* Hero meta（註冊日、追蹤數等）也順便加亮一階 */
+.pp-wrap .pp-hero-meta {
+  color: #d4d8e8 !important;
+}
+.pp-wrap .pp-hero-meta i {
+  color: #b9c0d4 !important;
+}
+
+/* Bio 文字提亮 */
+.pp-wrap .pp-hero-bio {
+  color: #e6e9f2 !important;
+}
