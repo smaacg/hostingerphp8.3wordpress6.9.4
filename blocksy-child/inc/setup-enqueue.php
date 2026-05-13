@@ -21,6 +21,10 @@
  *   - 全站載入 follow.js / follow.css
  *   - 注入 smacgFollow（ajax / nonce / loggedIn / loginUrl）
  *   - 在 functions.php 載入 inc/follow-ajax.php
+ *  * v2.5.0 變更 — Batch 1C-3 通知中心 UI：
+ *   - 全站載入 notifications.js / notifications.css（僅登入使用者）
+ *   - 注入 smacgNotif（ajax / nonce / loggedIn / mcUrl / pollInterval）
+
 
  */
 defined( 'ABSPATH' ) || exit;
@@ -382,3 +386,48 @@ add_action( 'wp_enqueue_scripts', function () {
         ] );
     }
 }, 22 );
+
+/* ============================================================
+   Notifications 通知中心（v2.5.0 - 2026-05-13）
+   ------------------------------------------------------------
+   - 僅在登入後載入
+   - 全站載入（鈴鐺需要存在於任何頁面）
+   - 注入 smacgNotif（給 notifications.js 用）
+   ============================================================ */
+add_action( 'wp_enqueue_scripts', function () {
+    if ( ! is_user_logged_in() ) return;
+
+    $base_dir = weixiaoacg_THEME_DIR;
+    $base_url = weixiaoacg_THEME_URL;
+
+    // CSS
+    $css_path = $base_dir . '/assets/css/notifications.css';
+    if ( file_exists( $css_path ) ) {
+        wp_enqueue_style(
+            'smacg-notifications',
+            $base_url . '/assets/css/notifications.css',
+            [ 'weixiaoacg-fa6' ],
+            filemtime( $css_path )
+        );
+    }
+
+    // JS
+    $js_path = $base_dir . '/assets/js/notifications.js';
+    if ( file_exists( $js_path ) ) {
+        wp_enqueue_script(
+            'smacg-notifications',
+            $base_url . '/assets/js/notifications.js',
+            [],
+            filemtime( $js_path ),
+            true
+        );
+        wp_localize_script( 'smacg-notifications', 'smacgNotif', [
+            'ajax'         => admin_url( 'admin-ajax.php' ),
+            'nonce'        => wp_create_nonce( 'smacg_notif_nonce' ),
+            'loggedIn'     => true,
+            'mcUrl'        => home_url( '/mc/' ),
+            'pollInterval' => 60,  // 秒
+        ] );
+    }
+}, 23 );
+
