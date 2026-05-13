@@ -1,7 +1,7 @@
 <?php
 /**
  * Template Name: 會員中心
- * Version: 2.1.0 (2026-05-13)
+ * Version: 2.2.0 (2026-05-13)
  *
  * 架構：本檔僅負責登入檢查 + 框架，資料統計交給 inc/member-stats.php，
  *      各 tab render 交給 inc/member-render.php。
@@ -15,6 +15,8 @@
  *   - B: <input accept> 移除 image/gif（後端原本就拒絕）
  *   - E+G: 新增 Cropper.js 裁切 Modal DOM（#mc-cropper-modal）
  *   - 新增進度條 DOM（#mc-avatar-progress）
+ * v2.2.0：Batch 1A 公開個人頁
+ *   - Hero plan badge 旁新增「公開頁」連結
  */
 
 if (!defined('ABSPATH')) exit;
@@ -52,7 +54,6 @@ if (!$avatar_url && function_exists('um_get_user_avatar_url')) {
 if (!$avatar_url) {
     $avatar_url = get_avatar_url($uid, ['size' => 200]);
 }
-// fallback：noscript 用，已改為自家會員頁（不再導向 /account/）
 $account_url = get_permalink();
 
 // ---------- 點數 / 等級 ----------
@@ -62,10 +63,9 @@ $lvl_info    = smacg_calc_level($points);
 // ---------- 會員方案 ----------
 $plan_label  = smacg_get_plan_label($user);
 
-// ---------- v2.0.4: 隱私設定 + Email 遮罩（P0-1） ----------
+// ---------- 隱私設定 + Email 遮罩 ----------
 $privacy  = smacg_get_user_privacy( $uid );
 
-// 觀看者是否為本人；非本人時依隱私決定 email 顯示
 $is_owner      = ( get_current_user_id() === $uid );
 $display_email = $is_owner
     ? $user->user_email
@@ -79,6 +79,11 @@ $recent_cmt  = smacg_get_recent_comments($uid, 5);
 
 // ---------- 統計 ----------
 $stats       = smacg_calc_member_stats($watchlist, $ratings);
+
+// ---------- v2.2.0: 公開頁 URL ----------
+$public_profile_url = function_exists('smacg_get_public_profile_url')
+    ? smacg_get_public_profile_url($uid)
+    : '';
 
 get_header(); ?>
 
@@ -96,20 +101,17 @@ get_header(); ?>
                     <i class="fa-solid fa-camera"></i>
                     <span>更換頭像</span>
                 </div>
-                <?php /* v2.1.0 B：accept 移除 image/gif */ ?>
                 <input type="file"
                        id="mc-avatar-input"
                        accept="image/jpeg,image/png,image/webp"
                        hidden>
             </label>
 
-            <?php /* v2.1.0 A：頭像格式 / 大小提示 */ ?>
             <div class="mc-avatar-hint">
                 <i class="fa-solid fa-circle-info"></i>
                 支援 JPG / PNG / WebP，最大 5 MB，建議方形圖片
             </div>
 
-            <?php /* v2.1.0：上傳進度條（預設隱藏，JS 控制顯示） */ ?>
             <div id="mc-avatar-progress" class="mc-avatar-progress" hidden>
                 <div class="mc-avatar-progress-bar">
                     <div class="mc-avatar-progress-fill" style="width:0%"></div>
@@ -127,7 +129,18 @@ get_header(); ?>
         <div class="mc-hero-info">
             <h1 class="mc-hero-name"><?php echo esc_html($display); ?>
                 <span class="mc-plan-badge"><?php echo esc_html($plan_label); ?></span>
+
+                <?php /* v2.2.0：公開頁入口 */ ?>
+                <?php if ( $public_profile_url ) : ?>
+                    <a href="<?php echo esc_url( $public_profile_url ); ?>"
+                       class="mc-public-link"
+                       title="查看公開個人頁（其他人看到的樣子）">
+                        <i class="fa-solid fa-eye"></i>
+                        <span>公開頁</span>
+                    </a>
+                <?php endif; ?>
             </h1>
+
             <p class="mc-hero-meta">
                 <span>📧 <?php echo esc_html($display_email); ?></span>
                 <span>📅 <?php echo esc_html($reg_date); ?></span>
@@ -152,7 +165,7 @@ get_header(); ?>
         </div>
     </section>
 
-    <?php /* === Continue Watching - P1-2 繼續觀看橫向列（可由設定開關） === */ ?>
+    <?php /* === Continue Watching - P1-2 === */ ?>
     <?php if ( ! empty( $privacy['show_continue_watching'] ) ) : ?>
         <?php smacg_render_continue_watching( $watchlist ); ?>
     <?php endif; ?>
@@ -209,14 +222,7 @@ get_header(); ?>
 
 </div>
 
-<?php /* ============================================================
-       v2.1.0：Cropper.js 裁切 Modal（E + G）
-       ------------------------------------------------------------
-       - 預設隱藏，使用者選檔後由 member.js 顯示
-       - Cropper.js 會把 #mc-cropper-image 變成可裁切的 canvas
-       - 「確定」會把裁切後的 blob 用 XHR 上傳（顯示進度條）
-       - 「取消」關閉 modal、清掉 input
-       ============================================================ */ ?>
+<?php /* Cropper.js 裁切 Modal */ ?>
 <div id="mc-cropper-modal" class="mc-cropper-modal" hidden aria-hidden="true" role="dialog">
     <div class="mc-cropper-backdrop"></div>
     <div class="mc-cropper-dialog" role="document">
