@@ -39,6 +39,10 @@
 <body <?php body_class(); ?>>
 <?php wp_body_open(); ?>
 
+<!-- 引入 Google Fonts：主標題用快樂體，副標題用思源黑體 -->
+ <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@500;900&display=swap" rel="stylesheet">
+  <?php wp_head(); ?>
+  
 <!-- ══════════════════════════════════════════
      登入 Modal（訪客才輸出 HTML）
 ══════════════════════════════════════════ -->
@@ -51,7 +55,7 @@
     </button>
 
     <div class="lm-logo">
-      <span class="logo-icon-box" aria-hidden="true"><img src="https://dev.weixiaoacg.com/wp-content/uploads/2026/04/Remove_background-1777296587273.png" alt="weixiaoacg" style="height:38px;width:auto;vertical-align:middle;display:inline-block;" /></span>
+      <span class="logo-icon-box" aria-hidden="true"><img src="https://darkcyan-alpaca-757238.hostingersite.com/wp-content/uploads/2026/05/DHBdKsLa-scaled-e1778709031191.jpg" alt="weixiaoacg" style="height:38px;width:auto;vertical-align:middle;display:inline-block;" /></span>
       <span class="logo-text">微笑動漫<span class="logo-plus">+</span></span>
     </div>
 
@@ -146,10 +150,10 @@
 
     <!-- Logo -->
     <a href="<?php echo esc_url( home_url('/') ); ?>" class="site-logo" aria-label="微笑動漫首頁">
-      <span class="logo-icon-box" aria-hidden="true"><img src="https://dev.weixiaoacg.com/wp-content/uploads/2026/04/Remove_background-1777296587273.png" alt="weixiaoacg" style="height:38px;width:auto;vertical-align:middle;display:inline-block;" /></span>
+      <span class="logo-icon-box" aria-hidden="true"><img src="https://darkcyan-alpaca-757238.hostingersite.com/wp-content/uploads/2026/05/DHBdKsLa.png" alt="weixiaoacg" style="height:38px;width:auto;vertical-align:middle;display:inline-block;" /></span>
       <div class="logo-text-wrap">
-        <span class="logo-text">微笑動漫<span class="logo-plus">+</span></span>
-        <span class="logo-tagline">動漫的便利商店</span>
+        <span class="logo-text">微笑動漫<span class="logo-plus"></span></span>
+        <span class="logo-tagline">&nbsp&nbsp動漫的便利商店</span>
       </div>
     </a>
 
