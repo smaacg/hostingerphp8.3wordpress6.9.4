@@ -826,3 +826,33 @@ a.pp-timeline-target:hover {
 .pp-wrap .pp-hero-bio {
   color: #e6e9f2 !important;
 }
+/* ============================================================
+   v1.1.0 (2026-05-13) Batch 1B-3：追蹤數顯示
+   ============================================================ */
+.pp-hero-follow-meta {
+	display: flex;
+	gap: 24px;
+	margin: 10px 0 0;
+	padding: 0;
+	font-size: 14px;
+}
+.pp-follow-stat {
+	display: inline-flex;
+	align-items: baseline;
+	gap: 6px;
+	color: var(--mc-text-2, #b9c0d4);
+}
+.pp-follow-stat b {
+	font-size: 18px;
+	font-weight: 700;
+	color: var(--mc-text, #e6e9f2);
+}
+.pp-follow-stat em {
+	font-style: normal;
+	font-size: 13px;
+	color: var(--mc-text-3, #8b91a8);
+}
+@media (max-width: 480px) {
+	.pp-hero-follow-meta { gap: 16px; }
+	.pp-follow-stat b { font-size: 16px; }
+}
