@@ -3,7 +3,10 @@
  * 微笑動漫 Child Theme — functions.php
  *
  * @package weixiaoacg
- * @version 2.1.0
+ * @version 2.2.0
+ *
+ * v2.2.0 變更（2026-05-13）— Batch 1A：公開個人頁
+ * - [新增] inc/public-profile.php（/u/{username}/ rewrite + 資料準備）
  *
  * v2.1.0 變更（2026-05-13）— Batch C：
  * - [新增] inc/image-optimizer.php（#6 WebP/srcset 處理）
@@ -20,7 +23,7 @@ defined( 'ABSPATH' ) || exit;
 /* ============================================================
    常數
    ============================================================ */
-define( 'weixiaoacg_VERSION',   '2.1.0' );
+define( 'weixiaoacg_VERSION',   '2.2.0' );
 define( 'weixiaoacg_THEME_URL', get_stylesheet_directory_uri() );
 define( 'weixiaoacg_THEME_DIR', get_stylesheet_directory() );
 
@@ -65,7 +68,13 @@ require_once $inc_dir . 'um-integration.php';     // Ultimate Member
 require_once $inc_dir . 'content-slug.php';       // Gemini slug
 require_once $inc_dir . 'external-links.php';     // 外部連結 target=_blank
 
-// 7. 影像優化（Batch C #6 - 2026-05-13 新增）
+// 7. 影像優化（Batch C #6 - 2026-05-13）
 if ( file_exists( $inc_dir . 'image-optimizer.php' ) ) {
     require_once $inc_dir . 'image-optimizer.php';  // WebP / srcset / picture tag
+}
+
+// 8. 公開個人頁（Batch 1A - 2026-05-13 新增）
+//    用 file_exists 防呆，這樣你可以分批 push 而不會在中間狀態壞站
+if ( file_exists( $inc_dir . 'public-profile.php' ) ) {
+    require_once $inc_dir . 'public-profile.php';   // /u/{username}/ rewrite + 資料準備
 }
