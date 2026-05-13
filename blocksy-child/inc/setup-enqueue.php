@@ -4,6 +4,11 @@
  *
  * @package weixiaoacg
  * @subpackage Enqueue
+ * @version 2.1.0 (2026-05-13)
+ *
+ * v2.1.0 變更 — Batch C #14：
+ *   - 新增 page-year-review.php 範本的條件式 CSS/JS 載入
+ *   - 新增 smacgYearReview localize（ajax / nonce / user_id / year）
  */
 defined( 'ABSPATH' ) || exit;
 
@@ -179,3 +184,51 @@ add_action( 'wp_enqueue_scripts', function () {
         wp_enqueue_style( 'smacg-columns', $base_url . 'columns.css', ['smacg-news'], $ver('columns.css') );
     }
 }, 20 );
+
+/* ============================================================
+   Year Review 頁面（Batch C #14 - 2026-05-13 新增）
+   ------------------------------------------------------------
+   - 只在 page-year-review.php 範本載入專用 CSS + JS
+   - localize smacgYearReview: ajax / nonce / user_id / year
+   ============================================================ */
+add_action( 'wp_enqueue_scripts', function () {
+    if ( ! is_page_template( 'page-year-review.php' ) ) {
+        return;
+    }
+
+    $base_dir = weixiaoacg_THEME_DIR;
+    $base_url = weixiaoacg_THEME_URL;
+
+    // CSS
+    $css_path = $base_dir . '/assets/css/year-review.css';
+    if ( file_exists( $css_path ) ) {
+        wp_enqueue_style(
+            'smacg-year-review',
+            $base_url . '/assets/css/year-review.css',
+            [ 'weixiaoacg-fa6' ],
+            filemtime( $css_path )
+        );
+    }
+
+    // JS
+    $js_path = $base_dir . '/assets/js/year-review.js';
+    if ( file_exists( $js_path ) ) {
+        wp_enqueue_script(
+            'smacg-year-review',
+            $base_url . '/assets/js/year-review.js',
+            [],
+            filemtime( $js_path ),
+            true
+        );
+
+        // localize
+        $year = isset( $_GET['year'] ) ? max( 2020, min( (int) date( 'Y' ), (int) $_GET['year'] ) ) : (int) date( 'Y' );
+        wp_localize_script( 'smacg-year-review', 'smacgYearReview', [
+            'ajax'    => admin_url( 'admin-ajax.php' ),
+            'nonce'   => wp_create_nonce( 'smacg_year_review' ),
+            'userId'  => get_current_user_id(),
+            'year'    => $year,
+            'siteUrl' => home_url(),
+        ] );
+    }
+}, 15 );
