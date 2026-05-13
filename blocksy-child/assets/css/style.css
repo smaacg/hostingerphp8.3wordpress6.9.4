@@ -58,68 +58,79 @@
 .header-top {
   display: flex;
   align-items: center;
-  gap: 16px;
-  height: 64px;
+  gap: 30px;
+  height: 82px;
 }
-
 /* ── Logo ── */
 .site-logo {
   display: flex;
   align-items: center;
-  gap: 0;
+  gap: 26px;           /* 增加間距，徹底拉開圖片與文字 */
   flex-shrink: 0;
   text-decoration: none;
+  height: 64px;
+  overflow: visible;   /* 確保發光特效不被裁切 */
+}
+/* 圖片縮小控制 */
+.logo-icon-box {
+  margin-right: 8px;    /* 建議給一點間距，避免文字緊貼圖片 */
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;          /* 容器寬度 */
+  flex-shrink: 0;
 }
 
-.logo-icon-box {
-  margin-right: -4px !important;
-}
+.logo-icon-box img,
 .site-logo-img {
-  height: 40px;
+  /* 關鍵修改點：將 0px 改為你想要的尺寸 */
+  height: 30px !important; 
   width: auto;
   display: block;
   object-fit: contain;
 }
-.logo-icon-box {
-  width: auto;
-  height: auto;
-  border-radius: 0;
-  background: none;
-  box-shadow: none;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 0;
-  font-weight: 800;
-  color: #fff;
-  flex-shrink: 0;
-}
+
 .logo-text-wrap {
   display: flex;
   flex-direction: column;
-  line-height: 1.2;
+  line-height: 1.1;
   align-items: flex-start;
+  justify-content: center;
 }
+
+/* 「微笑動漫」主標題：極大化處理 */
 .logo-text {
-  font-size: 28px;
+  font-size: 34px;     /* 保持 34px 大字體 */
   font-weight: 800;
-  letter-spacing: 3px;
-  background: linear-gradient(135deg, #FFFFFF 0%, #D8E8FF 40%, #B0C8F0 100%);
+  letter-spacing: 1px; /* 縮減字距讓視覺更緊湊強悍 */
+  background: linear-gradient(135deg, #FFFFFF 0%, #D8E8FF 45%, #A5C2F5 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
-  filter: drop-shadow(0 0 4px rgba(255,255,255,0.25));
-  line-height: 1;
+  /* 增加文字發光質感 */
+  filter: drop-shadow(0 0 8px rgba(99,168,255,0.3)); 
+  line-height: 0.95;   /* 壓縮行高，讓副標題更貼合 */
   white-space: nowrap;
 }
-.logo-plus    { font-size: 22px; font-weight: 900; }
+
+
+/* 「動漫的便利商店」副標題：增加精緻度 */
 .logo-tagline {
-  font-size: 11px;
-  font-weight: 400;
-  letter-spacing: 3px;
-  color: rgba(220,230,245,.50);
-  margin-top: 3px;
-  padding-left: 1em;
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: 3.5px; /* 高級感的大字距 */
+  color: rgba(220,230,245,0.7);
+  margin-top: 4px;      /* 調整上方間距 */
+  padding-left: 2px;
+  white-space: nowrap;
+  text-transform: uppercase;
+}
+
+/* 響應式：防止手機版撐爆導航欄 */
+@media (max-width: 992px) {
+  .logo-text { font-size: 28px; }
+  .logo-plus { font-size: 22px; }
+  .logo-icon-box img { height: 26px !important; }
 }
 
 /* ── 搜尋框 ── */
@@ -1594,3 +1605,4 @@ h1.page-title, h1.entry-title, h2.entry-title,
         height: 56px !important;
     }
 }
+
