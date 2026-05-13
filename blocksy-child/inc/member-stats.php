@@ -1,7 +1,7 @@
 <?php
 /**
  * Member Center - Stats & Data Layer
- * Version: 2.0.1 (2026-05-11)
+ * Version: 2.0.3 (2026-05-13)
  *
  * 所有資料抓取 / 統計計算集中於此。重點：
  * - 一律批次預載 post（解 N+1）
@@ -14,6 +14,15 @@
  *   - 對外仍以 overall_score 等命名回傳，下游程式碼無需改動
  *   - 評分表存在性檢查（避免表不存在時 SQL fatal）
  *   - 會員方案 (smacg_get_plan_label) 加入 smaacg_vvip / smaacg_vip / vvip / vip 等 role
+ *
+ * v2.0.2 變更：
+ *   - 新增 smacg_get_user_privacy() / smacg_mask_email()
+ *
+ * v2.0.3 變更 (Batch B)：
+ *   - smacg_calc_member_stats() 加入 5 分鐘 transient cache
+ *     key: smacg_stats_{uid}，由 Anime_Sync_User_Status_Manager::flush_cache() 失效
+ *   - 新增 completion_rate 欄位（完成率）
+ *   - 函式簽章新增第三個參數 $uid（cache key 用）
  */
 if (!defined('ABSPATH')) exit;
 
@@ -177,9 +186,23 @@ function smacg_get_recent_comments($uid, $limit = 5) {
 
 /* ===========================================================
  *  統計核心：一次走訪 watchlist + ratings，產出所有圖表資料
+ *
+ *  v2.0.3：加入 5 分鐘 transient cache + 完成率
+ *  - $uid 為 0 時不使用 cache（向下相容舊呼叫端）
+ *  - cache 由 Anime_Sync_User_Status_Manager::flush_cache() 在
+ *    使用者新增/修改/刪除任何 watchlist 項目時自動失效
  * =========================================================== */
-function smacg_calc_member_stats($watchlist, $ratings) {
-    // 計數
+function smacg_calc_member_stats($watchlist, $ratings, $uid = 0) {
+    // ---- Cache 查詢 ----
+    $uid = (int) $uid;
+    if ($uid > 0) {
+        $cached = get_transient('smacg_stats_' . $uid);
+        if (is_array($cached) && !empty($cached['_cache_version']) && $cached['_cache_version'] === '2.0.3') {
+            return $cached;
+        }
+    }
+
+    // ---- 計數 ----
     $counts = ['all'=>0,'watching'=>0,'completed'=>0,'want'=>0,'favorited'=>0,'dropped'=>0];
     $genre_map = $studio_map = $year_map = [];
     $total_min = 0;
@@ -221,7 +244,15 @@ function smacg_calc_member_stats($watchlist, $ratings) {
         }
     }
 
-    // 評分統計
+    // ---- 完成率（v2.0.3 新增）----
+    // 公式：completed / (completed + dropped + watching) × 100
+    // 排除「想看」與純收藏，因為這些還沒開始追，不該影響完成率
+    $denominator = $counts['completed'] + $counts['dropped'] + $counts['watching'];
+    $completion_rate = $denominator > 0
+        ? round($counts['completed'] / $denominator * 100, 1)
+        : 0;
+
+    // ---- 評分統計 ----
     $rcount = count($ratings);
     $rsum = 0; $dist = array_fill(1, 10, 0);
     $score_rows = [];
@@ -236,7 +267,7 @@ function smacg_calc_member_stats($watchlist, $ratings) {
     $top3    = array_slice($score_rows, 0, 3);
     $bottom3 = array_slice(array_reverse($score_rows), 0, 3);
 
-    // 排序 genre / studio / year
+    // ---- 排序 genre / studio / year ----
     arsort($genre_map); arsort($studio_map); ksort($year_map);
 
     $genre_total = array_sum($genre_map) ?: 1;
@@ -251,8 +282,9 @@ function smacg_calc_member_stats($watchlist, $ratings) {
     $years_arr = [];
     foreach ($year_map as $y => $c) $years_arr[] = ['year'=>$y, 'count'=>$c];
 
-    return [
-        'counts'     => $counts,
+    $result = [
+        'counts'          => $counts,
+        'completion_rate' => $completion_rate, // v2.0.3
         'watch_time' => [
             'minutes' => $total_min,
             'hours'   => floor($total_min / 60),
@@ -265,15 +297,24 @@ function smacg_calc_member_stats($watchlist, $ratings) {
             'top3'         => $top3,
             'bottom3'      => $bottom3,
         ],
-        'genres'  => $genres_top,
-        'studios' => $studios_top,
-        'years'   => $years_arr,
+        'genres'         => $genres_top,
+        'studios'        => $studios_top,
+        'years'          => $years_arr,
+        '_cache_version' => '2.0.3',
+        '_cached_at'     => time(),
     ];
+
+    // ---- 寫入 cache（5 分鐘）----
+    if ($uid > 0) {
+        set_transient('smacg_stats_' . $uid, $result, 5 * MINUTE_IN_SECONDS);
+    }
+
+    return $result;
 }
 
 /**
  * 取得使用者隱私設定（v2.0.2 新增）
- * 三個布林值：show_email, public_profile, public_watchlist
+ * 四個布林值：show_email, public_profile, public_watchlist, show_continue_watching
  */
 function smacg_get_user_privacy( $uid ) {
     $defaults = [
@@ -286,6 +327,7 @@ function smacg_get_user_privacy( $uid ) {
     if ( ! is_array( $saved ) ) $saved = [];
     return array_merge( $defaults, $saved );
 }
+
 /**
  * 遮罩 email：a***@gmail.com
  */
@@ -296,4 +338,3 @@ function smacg_mask_email( $email ) {
     if ( $len <= 1 ) return $name . '***@' . $domain;
     return mb_substr( $name, 0, 1 ) . str_repeat( '*', min( 3, $len - 1 ) ) . '@' . $domain;
 }
-
