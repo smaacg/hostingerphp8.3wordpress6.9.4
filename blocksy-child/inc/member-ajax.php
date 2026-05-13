@@ -5,6 +5,9 @@
  * @package weixiaoacg
  * @subpackage Member
  *
+ * Version: 2.1.0 (2026-05-13)
+ *  - Batch B: 新增 wp_ajax_smacg_load_more_comments（留言分頁載入）
+ *
  * 註：此檔案未來會整檔搬到 plugin（anime-sync-pro/public/）。
  */
 defined( 'ABSPATH' ) || exit;
@@ -331,7 +334,7 @@ add_action( 'wp_ajax_smacg_update_privacy', function () {
     check_ajax_referer( 'smacg_privacy', 'nonce' );
     $uid = get_current_user_id();
 
-    $allowed = [ 'show_email', 'public_profile', 'public_watchlist', 'show_continue_watching' ]; // ← 加最後一個
+    $allowed = [ 'show_email', 'public_profile', 'public_watchlist', 'show_continue_watching' ];
     $current = function_exists( 'smacg_get_user_privacy' )
         ? smacg_get_user_privacy( $uid )
         : [];
@@ -344,6 +347,67 @@ add_action( 'wp_ajax_smacg_update_privacy', function () {
 
     update_user_meta( $uid, 'smacg_privacy', $current );
     wp_send_json_success( [ 'msg' => '已儲存 ✓', 'privacy' => $current ] );
+} );
+
+/* ============================================================
+   Batch B (v2.1.0)：留言分頁載入
+   - 由 smacg_render_comments() 產生的按鈕觸發
+   - 每次回傳 SMACG_COMMENT_PAGE_SIZE 筆（預設 20）
+   - 回傳純 <li> HTML 片段，前端 append 進 #mc-cmt-list
+   ============================================================ */
+add_action( 'wp_ajax_smacg_load_more_comments', function () {
+    if ( ! is_user_logged_in() ) {
+        wp_send_json_error( [ 'msg' => '請先登入' ], 401 );
+    }
+    check_ajax_referer( 'smacg_load_more_comments', 'nonce' );
+
+    $uid    = get_current_user_id();
+    $offset = max( 0, (int) ( $_POST['offset'] ?? 0 ) );
+
+    // 頁面大小：與 render 層一致
+    if ( ! defined( 'SMACG_COMMENT_PAGE_SIZE' ) ) {
+        define( 'SMACG_COMMENT_PAGE_SIZE', 20 );
+    }
+    $limit = SMACG_COMMENT_PAGE_SIZE;
+
+    // 總數（供前端更新進度文字）
+    $total = (int) get_comments( [
+        'user_id' => $uid,
+        'status'  => 'approve',
+        'count'   => true,
+    ] );
+
+    // 取下一批
+    $cmts = get_comments( [
+        'user_id' => $uid,
+        'status'  => 'approve',
+        'number'  => $limit,
+        'offset'  => $offset,
+        'orderby' => 'comment_date',
+        'order'   => 'DESC',
+    ] );
+
+    ob_start();
+    foreach ( $cmts as $c ) {
+        printf(
+            '<li><a href="%s"><b>%s</b><p>%s</p><small>%s</small></a></li>',
+            esc_url( get_comment_link( $c ) ),
+            esc_html( get_the_title( $c->comment_post_ID ) ),
+            esc_html( wp_trim_words( $c->comment_content, 40 ) ),
+            esc_html( mysql2date( 'Y-m-d H:i', $c->comment_date ) )
+        );
+    }
+    $html = ob_get_clean();
+
+    $loaded   = $offset + count( $cmts );
+    $has_more = $loaded < $total;
+
+    wp_send_json_success( [
+        'html'     => $html,
+        'loaded'   => $loaded,
+        'total'    => $total,
+        'has_more' => $has_more,
+    ] );
 } );
 
 /* ============================================================
