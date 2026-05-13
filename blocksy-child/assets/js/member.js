@@ -257,6 +257,7 @@
 $wrap.on('change', '.mc-privacy-form input[type=checkbox]', function(){
     const $box   = $(this);
     const $form  = $box.closest('.mc-privacy-form');
+    const $row   = $box.closest('.mc-toggle-row');   // ← 新增
     const $msg   = $('#mc-privacy-msg');
     const key    = $box.data('key');
     const value  = $box.is(':checked') ? 1 : 0;
@@ -273,8 +274,12 @@ $wrap.on('change', '.mc-privacy-form input[type=checkbox]', function(){
         if (r.success) {
             $msg.text(r.data.msg).attr('class','mc-set-msg mc-set-msg--ok').show();
             setTimeout(()=>$msg.fadeOut(),1800);
+
+            // ↓ 新增：整列高亮 1.2 秒
+            $row.addClass('is-saved');
+            setTimeout(()=>$row.removeClass('is-saved'), 1200);
         } else {
-            $box.prop('checked', !value); // 還原
+            $box.prop('checked', !value);
             $msg.text(r.data.msg || '儲存失敗').attr('class','mc-set-msg mc-set-msg--err').show();
         }
     })
