@@ -5,8 +5,14 @@
  * @package weixiaoacg
  * @subpackage Member
  *
- * Version: 2.1.0 (2026-05-13)
+ * Version: 2.2.0 (2026-05-13)
  *  - Batch B: 新增 wp_ajax_smacg_load_more_comments（留言分頁載入）
+ *  - v2.2.0: 頭像上傳優化
+ *    - 拿掉新帳號 24 小時鎖定（信任使用者）
+ *    - 冷卻時間 5 分鐘 → 2 分鐘
+ *    - 每日上限 3 次 → 5 次
+ *    - 檔案大小 1 MB → 5 MB（前端會以 Cropper.js 壓縮至 ~400 KB 再上傳）
+ *    - 新增 error_log() 上傳事件記錄
  *
  * 註：此檔案未來會整檔搬到 plugin（anime-sync-pro/public/）。
  */
@@ -411,10 +417,11 @@ add_action( 'wp_ajax_smacg_load_more_comments', function () {
 } );
 
 /* ============================================================
-   頭像上傳 AJAX（業界標準版）
-   - 1 MB 上限 / 強制 400x400 / 85% 品質
-   - 5 分鐘冷卻 / 每日 3 次 / 新帳號 24 小時
+   頭像上傳 AJAX（業界標準版 v2.2.0）
+   - 5 MB 上限（前端 Cropper.js 壓縮至 ~400 KB）/ 強制 400x400 / 85% 品質
+   - 2 分鐘冷卻 / 每日 5 次（信任使用者，無新帳號鎖）
    - hash 檔名 / getimagesize 真實圖片驗證
+   - error_log 事件記錄
    ============================================================ */
 add_action('wp_ajax_smacg_upload_avatar', function () {
     check_ajax_referer('smacg_member_nonce', 'nonce');
@@ -423,26 +430,21 @@ add_action('wp_ajax_smacg_upload_avatar', function () {
     if (!$uid) wp_send_json_error(['msg' => '請先登入'], 401);
 
     /* ===== 防濫用 ===== */
-    // ① 5 分鐘冷卻
+    // ① 2 分鐘冷卻（v2.2.0）
     $last = (int) get_user_meta($uid, 'smacg_avatar_last_upload', true);
-    if ($last && (time() - $last) < 300) {
-        $wait = 300 - (time() - $last);
-        $min  = ceil($wait / 60);
-        wp_send_json_error(['msg' => "更換頻率過高，請於 {$min} 分鐘後再試"], 429);
+    if ($last && (time() - $last) < 120) {
+        $wait = 120 - (time() - $last);
+        wp_send_json_error(['msg' => "更換太頻繁，請於 {$wait} 秒後再試"], 429);
     }
 
-    // ② 每日上限 3 次
+    // ② 每日上限 5 次（v2.2.0）
     $today_key   = 'smacg_avatar_count_' . date('Ymd');
     $today_count = (int) get_user_meta($uid, $today_key, true);
-    if ($today_count >= 3) {
-        wp_send_json_error(['msg' => '今日更換次數已達上限（3 次），請明天再試'], 429);
+    if ($today_count >= 5) {
+        wp_send_json_error(['msg' => '今日更換次數已達上限（5 次），請明天再試'], 429);
     }
 
-    // ③ 新帳號 24 小時內禁止上傳
-    $user = get_userdata($uid);
-    if ($user && strtotime($user->user_registered) > time() - 86400) {
-        wp_send_json_error(['msg' => '新註冊帳號需等待 24 小時後才能更換頭像'], 403);
-    }
+    // ③ v2.2.0：拿掉新帳號鎖定（信任使用者）
 
     /* ===== 檔案驗證 ===== */
     if (empty($_FILES['avatar']) || $_FILES['avatar']['error'] !== UPLOAD_ERR_OK) {
@@ -450,8 +452,9 @@ add_action('wp_ajax_smacg_upload_avatar', function () {
     }
     $file = $_FILES['avatar'];
 
-    if ($file['size'] > 1024 * 1024) {
-        wp_send_json_error(['msg' => '檔案過大（上限 1 MB）'], 400);
+    // v2.2.0：5 MB 上限（前端會壓縮，理論上不會逼近）
+    if ($file['size'] > 5 * 1024 * 1024) {
+        wp_send_json_error(['msg' => '檔案過大（上限 5 MB）'], 400);
     }
 
     $allowed = ['image/jpeg', 'image/png', 'image/webp'];
@@ -517,6 +520,17 @@ add_action('wp_ajax_smacg_upload_avatar', function () {
         update_user_meta($uid, 'profile_photo', basename($url));
         update_user_meta($uid, 'synced_profile_photo', $url);
     }
+
+    /* ===== v2.2.0：error_log 記錄上傳事件 ===== */
+    error_log(sprintf(
+        '[SMACG Avatar] uid=%d attach_id=%d size=%d mime=%s today_count=%d ip=%s',
+        $uid,
+        $attach_id,
+        (int) $file['size'],
+        $mime,
+        $today_count + 1,
+        $_SERVER['REMOTE_ADDR'] ?? '-'
+    ));
 
     wp_send_json_success([
         'url' => $url,
