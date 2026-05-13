@@ -1,8 +1,9 @@
 /**
- * Member Center JS v2.0.3 (2026-05-12)
+ * Member Center JS v2.1.0 (2026-05-13)
  * - v2.0.1: 收藏分頁改用 data-favorited 判斷
  * - v2.0.2: 新增頭像即時上傳（AJAX）
  * - v2.0.3: 支援 URL ?tab= / ?profiletab= / #hash 自動切換分頁；切換時同步 hash
+ * - v2.1.0 (Batch B): 留言分頁載入（.mc-loadmore-comments）
  */
 (function ($) {
   'use strict';
@@ -107,8 +108,11 @@
     reloadList($(this).data('target'), { sort: $(this).val(), offset: 0, replace: true });
   });
 
-  /* ===== Load more ===== */
+  /* ===== Load more（watchlist / ratings） ===== */
   $wrap.on('click', '.mc-loadmore', function () {
+    // 留言的 load more 由獨立 handler 處理（避免衝突）
+    if ($(this).hasClass('mc-loadmore-comments')) return;
+
     const $btn = $(this);
     if ($btn.prop('disabled')) return;
     reloadList($btn.data('type'), {
@@ -146,6 +150,70 @@
     }).fail(() => alert('網路錯誤，請稍後再試'))
       .always(() => $btn.removeClass('loading').prop('disabled', false));
   }
+
+  /* =========================================================
+   * Batch B (v2.1.0)：留言載入更多
+   * 對應 PHP：wp_ajax_smacg_load_more_comments
+   * 按鈕由 smacg_render_comments() 產生，class="mc-loadmore mc-loadmore-comments"
+   * data-loaded / data-total / data-nonce
+   * ========================================================= */
+  $wrap.on('click', '.mc-loadmore-comments', function () {
+    const $btn = $(this);
+    if ($btn.prop('disabled')) return;
+
+    const loaded = parseInt($btn.data('loaded'), 10) || 0;
+    const total  = parseInt($btn.data('total'), 10) || 0;
+    const nonce  = $btn.data('nonce');
+
+    if (loaded >= total) {
+      $btn.closest('.mc-loadmore-wrap').remove();
+      return;
+    }
+
+    $btn.addClass('loading').prop('disabled', true);
+    const originalLabel = $btn.html();
+    $btn.text('載入中…');
+
+    $.ajax({
+      url: smacgMember.ajax,
+      method: 'POST',
+      dataType: 'json',
+      data: {
+        action: 'smacg_load_more_comments',
+        nonce:  nonce,
+        offset: loaded
+      }
+    })
+    .done(function (res) {
+      if (!res || !res.success) {
+        alert((res && res.data && res.data.msg) || '載入失敗');
+        $btn.html(originalLabel);
+        return;
+      }
+
+      // append 新留言
+      $('#mc-cmt-list').append(res.data.html);
+
+      // 更新按鈕狀態
+      $btn.data('loaded', res.data.loaded);
+
+      if (res.data.has_more) {
+        const remain = res.data.total - res.data.loaded;
+        $btn.html('載入更多（剩 <span>' + remain + '</span>）');
+      } else {
+        $btn.closest('.mc-loadmore-wrap').fadeOut(200, function () {
+          $(this).remove();
+        });
+      }
+    })
+    .fail(function () {
+      alert('網路錯誤，請稍後再試');
+      $btn.html(originalLabel);
+    })
+    .always(function () {
+      $btn.removeClass('loading').prop('disabled', false);
+    });
+  });
 
   /* ===== Avatar Upload (v2.0.2) ===== */
   const $avatarInput = $('#mc-avatar-input');
@@ -257,7 +325,7 @@
 $wrap.on('change', '.mc-privacy-form input[type=checkbox]', function(){
     const $box   = $(this);
     const $form  = $box.closest('.mc-privacy-form');
-    const $row   = $box.closest('.mc-toggle-row');   // ← 新增
+    const $row   = $box.closest('.mc-toggle-row');
     const $msg   = $('#mc-privacy-msg');
     const key    = $box.data('key');
     const value  = $box.is(':checked') ? 1 : 0;
@@ -275,7 +343,7 @@ $wrap.on('change', '.mc-privacy-form input[type=checkbox]', function(){
             $msg.text(r.data.msg).attr('class','mc-set-msg mc-set-msg--ok').show();
             setTimeout(()=>$msg.fadeOut(),1800);
 
-            // ↓ 新增：整列高亮 1.2 秒
+            // 整列高亮 1.2 秒
             $row.addClass('is-saved');
             setTimeout(()=>$row.removeClass('is-saved'), 1200);
         } else {
