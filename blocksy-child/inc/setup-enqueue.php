@@ -4,7 +4,7 @@
  *
  * @package weixiaoacg
  * @subpackage Enqueue
- * @version 2.3.0 (2026-05-13)
+ * @version 2.4.0 (2026-05-13)
  *
  * v2.1.0 變更 — Batch C #14：
  *   - 新增 page-year-review.php 範本的條件式 CSS/JS 載入
@@ -17,6 +17,11 @@
  *
  * v2.3.0 變更 — Batch 1A 公開個人頁：
  *   - 新增公開個人頁 CSS/JS 條件式載入（僅在 smacg_is_public_profile_page() 為 true 時）
+ * v2.4.0 變更 — Batch 1B-2 追蹤系統：
+ *   - 全站載入 follow.js / follow.css
+ *   - 注入 smacgFollow（ajax / nonce / loggedIn / loginUrl）
+ *   - 在 functions.php 載入 inc/follow-ajax.php
+
  */
 defined( 'ABSPATH' ) || exit;
 
@@ -336,3 +341,44 @@ add_action( 'wp_enqueue_scripts', function () {
         );
     }
 }, 20 );
+/* ============================================================
+   Follow System 追蹤按鈕（v2.4.0 - 2026-05-13）
+   ------------------------------------------------------------
+   - 全站載入（任何頁面都可能出現 .smacg-follow-btn）
+   - 體積小，且只在頁面有按鈕時實際發 AJAX
+   ============================================================ */
+add_action( 'wp_enqueue_scripts', function () {
+    $base_dir = weixiaoacg_THEME_DIR;
+    $base_url = weixiaoacg_THEME_URL;
+
+    // CSS
+    $css_path = $base_dir . '/assets/css/follow.css';
+    if ( file_exists( $css_path ) ) {
+        wp_enqueue_style(
+            'smacg-follow',
+            $base_url . '/assets/css/follow.css',
+            [ 'weixiaoacg-fa6' ],
+            filemtime( $css_path )
+        );
+    }
+
+    // JS
+    $js_path = $base_dir . '/assets/js/follow.js';
+    if ( file_exists( $js_path ) ) {
+        wp_enqueue_script(
+            'smacg-follow',
+            $base_url . '/assets/js/follow.js',
+            [],
+            filemtime( $js_path ),
+            true
+        );
+        wp_localize_script( 'smacg-follow', 'smacgFollow', [
+            'ajax'     => admin_url( 'admin-ajax.php' ),
+            'nonce'    => wp_create_nonce( 'smacg_follow_nonce' ),
+            'loggedIn' => is_user_logged_in(),
+            'loginUrl' => function_exists( 'um_get_core_page' )
+                ? um_get_core_page( 'login' )
+                : wp_login_url(),
+        ] );
+    }
+}, 22 );
