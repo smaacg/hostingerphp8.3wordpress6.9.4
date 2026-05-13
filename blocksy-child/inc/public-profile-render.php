@@ -17,6 +17,10 @@
  *   smacg_pp_render_activity( $activity )
  *
  * 共用卡片：reuse smacg_render_anime_card()（member-render.php 已定義）
+ * v1.1.0 (2026-05-13) Batch 1B-3：
+ *   - hero 加入粉絲數 / 追蹤中顯示
+ *   - 「追蹤」佔位按鈕替換為 .smacg-follow-btn（由 follow.js 接管）
+
  */
 
 defined( 'ABSPATH' ) || exit;
@@ -25,7 +29,20 @@ defined( 'ABSPATH' ) || exit;
    Hero
    ============================================================ */
 function smacg_pp_render_hero( $user, $args ) {
-    $a = $args;
+    $a   = $args;
+    $uid = (int) $user->ID;
+
+    // Batch 1B-3：取追蹤數
+    $followers_count = function_exists( 'smacg_get_followers_count' )
+        ? smacg_get_followers_count( $uid ) : 0;
+    $following_count = function_exists( 'smacg_get_following_count' )
+        ? smacg_get_following_count( $uid ) : 0;
+
+    // 訪客 vs. 目標 的追蹤狀態
+    $is_following = false;
+    if ( $a['is_logged_in'] && ! $a['is_owner'] && function_exists( 'smacg_is_following' ) ) {
+        $is_following = smacg_is_following( get_current_user_id(), $uid );
+    }
     ?>
     <section class="pp-hero">
         <div class="pp-hero-avatar">
@@ -48,6 +65,18 @@ function smacg_pp_render_hero( $user, $args ) {
                 <span><i class="fa-solid fa-coins"></i> <?php echo number_format( $a['points'] ); ?> 點</span>
             </p>
 
+            <?php /* Batch 1B-3：追蹤數顯示 */ ?>
+            <p class="pp-hero-follow-meta">
+                <span class="pp-follow-stat">
+                    <b class="pp-followers-count" data-followers-of="<?php echo $uid; ?>"><?php echo number_format( $followers_count ); ?></b>
+                    <em>粉絲</em>
+                </span>
+                <span class="pp-follow-stat">
+                    <b><?php echo number_format( $following_count ); ?></b>
+                    <em>追蹤中</em>
+                </span>
+            </p>
+
             <?php if ( ! empty( $a['bio'] ) ) : ?>
                 <p class="pp-hero-bio"><?php echo esc_html( $a['bio'] ); ?></p>
             <?php endif; ?>
@@ -60,15 +89,20 @@ function smacg_pp_render_hero( $user, $args ) {
                 </span>
             </div>
 
-            <?php /* 互動按鈕區（Phase 1B 會啟用「追蹤」） */ ?>
+            <?php /* 互動按鈕區 */ ?>
             <div class="pp-hero-actions">
                 <?php if ( $a['is_owner'] ) : ?>
                     <a href="<?php echo esc_url( home_url( '/mc/' ) ); ?>" class="pp-btn pp-btn-primary">
                         <i class="fa-solid fa-gear"></i> 編輯資料
                     </a>
                 <?php elseif ( $a['is_logged_in'] ) : ?>
-                    <button class="pp-btn pp-btn-primary pp-btn-follow" disabled title="即將推出">
-                        <i class="fa-solid fa-user-plus"></i> 追蹤
+                    <?php /* Batch 1B-3：真的能用的追蹤按鈕 */ ?>
+                    <button class="smacg-follow-btn <?php echo $is_following ? 'smacg-follow-btn--following' : 'smacg-follow-btn--idle'; ?>"
+                            data-user-id="<?php echo $uid; ?>"
+                            data-state="<?php echo $is_following ? 'following' : 'follow'; ?>"
+                            type="button">
+                        <i class="fa-solid <?php echo $is_following ? 'fa-user-check' : 'fa-user-plus'; ?>"></i>
+                        <span class="smacg-follow-label"><?php echo $is_following ? '追蹤中' : '追蹤'; ?></span>
                     </button>
                 <?php else : ?>
                     <a href="<?php echo esc_url( wp_login_url( get_permalink() ?: home_url( '/' ) ) ); ?>"
@@ -96,7 +130,6 @@ function smacg_pp_render_hero( $user, $args ) {
     </section>
     <?php
 }
-
 /* ============================================================
    Overview (總覽 tab)
    ============================================================ */
