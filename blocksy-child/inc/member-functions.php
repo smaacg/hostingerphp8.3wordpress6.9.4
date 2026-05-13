@@ -7,6 +7,11 @@
  *
  * 註：此檔案內函式未來會逐步搬到 plugin（anime-sync-pro/includes/）。
  * 目前留 theme 是因為 functions.php 重構期間先集中管理。
+ *
+ * Changelog:
+ * - v1.1.0 (2026-05-13)：新增 smacg_get_member_center_url()
+ *   動態解析「會員中心」頁面 URL（掛 page-member.php 模板的頁面），
+ *   完全繞開 Ultimate Member 的 /user/ 路徑，避免找不到 user 的錯誤。
  */
 defined( 'ABSPATH' ) || exit;
 
@@ -58,6 +63,72 @@ if (!function_exists('smacg_is_member_page')) {
             || get_query_var('um_user')
             || is_page_template('page-member.php');
     }
+}
+
+/* ============================================================
+   會員中心 URL 解析（v1.1.0 新增）
+   ------------------------------------------------------------
+   動態查找掛 page-member.php 模板的頁面，完全繞開 UM 的 /user/。
+   解析順序：
+     1) static / object cache（單 request 不重複查 DB）
+     2) 透過 _wp_page_template meta 找到掛模板的頁面
+     3) fallback 到首頁
+   過濾器：可用 smacg_member_center_url filter 強制覆寫。
+   ============================================================ */
+if (!function_exists('smacg_get_member_center_url')) {
+    function smacg_get_member_center_url(): string {
+        static $cached = null;
+        if ($cached !== null) return $cached;
+
+        $hit = wp_cache_get('smacg_mc_url', 'smacg');
+        if ($hit !== false && is_string($hit) && $hit !== '') {
+            $cached = $hit;
+            return apply_filters('smacg_member_center_url', $cached);
+        }
+
+        $url   = '';
+        $pages = get_posts([
+            'post_type'      => 'page',
+            'post_status'    => 'publish',
+            'posts_per_page' => 1,
+            'meta_key'       => '_wp_page_template',
+            'meta_value'     => 'page-member.php',
+            'fields'         => 'ids',
+            'no_found_rows'  => true,
+            'orderby'        => 'ID',
+            'order'          => 'ASC',
+        ]);
+
+        if (!empty($pages)) {
+            $url = get_permalink($pages[0]);
+        }
+
+        // fallback：首頁（不再走 UM 的 /user/）
+        if (!$url) {
+            $url = home_url('/');
+        }
+
+        wp_cache_set('smacg_mc_url', $url, 'smacg', HOUR_IN_SECONDS);
+        $cached = $url;
+
+        return apply_filters('smacg_member_center_url', $cached);
+    }
+}
+
+/**
+ * 當「會員中心」頁面被新增 / 修改 / 刪除時清掉快取。
+ */
+if (!function_exists('smacg_flush_member_center_url_cache')) {
+    function smacg_flush_member_center_url_cache($post_id = 0) {
+        if ($post_id) {
+            $tpl = get_post_meta($post_id, '_wp_page_template', true);
+            if ($tpl !== 'page-member.php' && get_post_type($post_id) !== 'page') return;
+        }
+        wp_cache_delete('smacg_mc_url', 'smacg');
+    }
+    add_action('save_post_page',   'smacg_flush_member_center_url_cache');
+    add_action('deleted_post',     'smacg_flush_member_center_url_cache');
+    add_action('switch_theme',     'smacg_flush_member_center_url_cache');
 }
 
 /* ============================================================
