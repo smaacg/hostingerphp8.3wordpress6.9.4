@@ -1,7 +1,7 @@
 <?php
 /**
  * Template Name: 會員中心
- * Version: 2.2.0 (2026-05-13)
+ * Version: 2.3.0 (2026-05-13)
  *
  * 架構：本檔僅負責登入檢查 + 框架，資料統計交給 inc/member-stats.php，
  *      各 tab render 交給 inc/member-render.php。
@@ -17,6 +17,8 @@
  *   - 新增進度條 DOM（#mc-avatar-progress）
  * v2.2.0：Batch 1A 公開個人頁
  *   - Hero plan badge 旁新增「公開頁」連結
+ * v2.3.0：Batch 1B-3 追蹤系統 UI
+ *   - Hero 區新增「粉絲 / 追蹤中」數字顯示
  */
 
 if (!defined('ABSPATH')) exit;
@@ -85,6 +87,12 @@ $public_profile_url = function_exists('smacg_get_public_profile_url')
     ? smacg_get_public_profile_url($uid)
     : '';
 
+// ---------- v2.3.0: 追蹤數 ----------
+$mc_followers = function_exists('smacg_get_followers_count')
+    ? smacg_get_followers_count($uid) : 0;
+$mc_following = function_exists('smacg_get_following_count')
+    ? smacg_get_following_count($uid) : 0;
+
 get_header(); ?>
 
 <div class="mc-wrap" data-uid="<?php echo (int)$uid; ?>">
@@ -145,6 +153,19 @@ get_header(); ?>
                 <span>📧 <?php echo esc_html($display_email); ?></span>
                 <span>📅 <?php echo esc_html($reg_date); ?></span>
             </p>
+
+            <?php /* v2.3.0：追蹤數 */ ?>
+            <p class="mc-follow-meta">
+                <span class="mc-follow-stat">
+                    <b><?php echo number_format( $mc_followers ); ?></b>
+                    <em>粉絲</em>
+                </span>
+                <span class="mc-follow-stat">
+                    <b><?php echo number_format( $mc_following ); ?></b>
+                    <em>追蹤中</em>
+                </span>
+            </p>
+
             <?php if ($bio): ?><p class="mc-hero-bio"><?php echo esc_html($bio); ?></p><?php endif; ?>
 
             <div class="mc-level-bar" title="Lv.<?php echo $lvl_info['level']; ?>　<?php echo $points; ?> 點">
