@@ -2107,3 +2107,37 @@ a.mc-timeline-target:hover {
 body.mc-cropper-open {
   overflow: hidden;
 }
+
+/* ==========================================================
+ *  v2.2.0 — 會員中心 → 公開頁連結（Batch 1A）
+ * ========================================================== */
+.mc-public-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-left: 8px;
+  padding: 3px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--mc-text-2, #b9c0d4);
+  background: var(--mc-surface, rgba(255,255,255,.04));
+  border: 1px solid var(--mc-border, rgba(255,255,255,.1));
+  border-radius: 999px;
+  text-decoration: none;
+  vertical-align: middle;
+  transition: color .15s, border-color .15s, background .15s;
+}
+.mc-public-link:hover {
+  color: var(--mc-accent, #f472b6);
+  border-color: var(--mc-accent, #f472b6);
+  background: rgba(244, 114, 182, .08);
+}
+.mc-public-link i {
+  font-size: 11px;
+}
+@media (max-width: 640px) {
+  .mc-public-link {
+    margin-left: 0;
+    margin-top: 6px;
+  }
+}
