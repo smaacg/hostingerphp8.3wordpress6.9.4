@@ -3,7 +3,9 @@
  * 微笑動漫 Child Theme — functions.php
  *
  * @package weixiaoacg
- * @version 2.3.0
+ * @version 2.4.0
+ *  * v2.4.0 變更（2026-05-13）— Batch 1C-1 通知中心資料層：
+ *   - [新增] inc/notifications-system.php（wp_smacg_notifications 資料表 + helpers）
  * v2.3.1 變更（2026-05-13）— Batch 1B-2：載入 inc/follow-ajax.php
  * v2.3.0 變更（2026-05-13）— Batch 1B-1：追蹤系統
  * - [新增] inc/follow-system.php（wp_smacg_follows 資料表 + 核心 helpers）
@@ -95,3 +97,8 @@ if ( file_exists( $inc_dir . 'follow-system.php' ) ) {
 if ( file_exists( $inc_dir . 'follow-ajax.php' ) ) {
     require_once $inc_dir . 'follow-ajax.php';
 }
+// 11. 通知中心（Batch 1C-1 - 2026-05-13）
+if ( file_exists( $inc_dir . 'notifications-system.php' ) ) {
+    require_once $inc_dir . 'notifications-system.php';
+}
+
