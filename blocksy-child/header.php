@@ -1,9 +1,17 @@
 <?php
 /**
  * 微笑動漫 Child Theme — header.php
- * v1.4.0 (2026-05-12)
+ * v1.5.0 (2026-05-13)
  *
  * 變更紀錄：
+ * - v1.5.0：
+ *   1. 「個人頁面」/「設定」連結改用 smacg_get_member_center_url()
+ *      動態解析掛 page-member.php 模板的頁面（例如 /mc/），
+ *      完全繞開 Ultimate Member 的 /user/{username}/ 路徑，
+ *      解決 "We are sorry. We cannot find any users..." 錯誤
+ *   2. 移除 um_user_profile_url() 與 /user/{user_login}/ fallback
+ *   3. helper 未載入時 fallback 到首頁，避免 fatal
+ *
  * - v1.4.0：
  *   1. 頭像下拉選單移除 /account/、/account/privacy/ 兩個項目
  *   2. 新增「設定」項目，使用 #settings hash 直接切到會員中心設定 tab
@@ -164,10 +172,16 @@
     <div class="header-actions">
 
       <?php if ( is_user_logged_in() ) :
-        $user        = wp_get_current_user();
-        $profile_url = function_exists( 'um_user_profile_url' )
-                       ? um_user_profile_url()
-                       : home_url( '/user/' . $user->user_login . '/' );
+        $user = wp_get_current_user();
+
+        /**
+         * v1.5.0：個人頁面 / 設定 一律指向自家會員中心（page-member.php 模板）
+         * 完全繞開 Ultimate Member 的 /user/{username}/ 路徑。
+         * helper 未載入時 fallback 到首頁，避免 fatal。
+         */
+        $profile_url = function_exists( 'smacg_get_member_center_url' )
+                       ? smacg_get_member_center_url()
+                       : home_url( '/' );
       ?>
 
         <!-- 已登入：頭像下拉選單（v1.4.0 簡化為三項） -->
