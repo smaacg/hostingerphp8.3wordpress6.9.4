@@ -6,8 +6,14 @@
  * 訪問 /year-review/ 或 /year-review/?year=2025
  *
  * @package Blocksy_Child
- * @version 1.0.0
+ * @version 1.0.1
  * @since   2026-05-13
+ *
+ * Changelog:
+ * - v1.0.1 (2026-05-13)：
+ *   兩處「回會員中心」按鈕改用 smacg_get_member_center_url()，
+ *   動態解析會員中心頁面 URL（例如 /mc/），不再寫死 /member/。
+ * - v1.0.0 (2026-05-13)：初版
  */
 
 if ( ! defined( 'ABSPATH' ) ) {
@@ -28,6 +34,11 @@ $year         = isset( $_GET['year'] ) ? max( 2020, min( $current_year, (int) $_
 
 $user = wp_get_current_user();
 $data = smacg_calc_year_review( $uid, $year );
+
+// v1.0.1：動態取得會員中心 URL（page-member.php 模板的頁面，例如 /mc/）
+$mc_url = function_exists( 'smacg_get_member_center_url' )
+          ? smacg_get_member_center_url()
+          : home_url( '/' );
 
 get_header();
 ?>
@@ -66,7 +77,7 @@ get_header();
             <div class="yr-empty-icon">🌱</div>
             <h2><?php echo esc_html( $year ); ?> 年還沒有觀影紀錄</h2>
             <p>開始追番後，這裡會自動產生你的年度回顧。</p>
-            <a href="<?php echo esc_url( home_url( '/member/' ) ); ?>" class="yr-btn">回到會員中心</a>
+            <a href="<?php echo esc_url( $mc_url ); ?>" class="yr-btn">回到會員中心</a>
         </section>
 
     <?php else : ?>
@@ -214,7 +225,7 @@ get_header();
                 <button type="button" class="yr-btn yr-btn-share" data-action="copy">
                     📋 複製分享連結
                 </button>
-                <a href="<?php echo esc_url( home_url( '/member/' ) ); ?>" class="yr-btn yr-btn-secondary">
+                <a href="<?php echo esc_url( $mc_url ); ?>" class="yr-btn yr-btn-secondary">
                     回會員中心
                 </a>
             </div>
