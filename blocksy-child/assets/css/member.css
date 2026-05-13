@@ -1,8 +1,12 @@
 /* ==========================================================
- * Member Center v2.2.0 (2026-05-13)
+ * Member Center v2.3.0 (2026-05-13)
  * Dark theme + glass-morphism, fully responsive
  *
  * 變更紀錄：
+ * v2.3.0 (2026-05-13) — Batch B：完成率卡 + 留言分頁樣式
+ *   - 新增 .mc-stats-card--completion 完成率卡片（含漸層進度條、評語）
+ *   - 新增 .mc-comments-wrap / .mc-comments-meta / .mc-loadmore-comments
+ *
  * v2.2.0 (2026-05-13) — Batch A：UX 微調
  *   - #1  等級條：文字移到條外，bar 高度 22px → 12px，避免文字壓縮
  *   - #2  Continue Watching 卡片高度統一（標題 2 行、進度條貼底）
@@ -33,10 +37,10 @@
   --mc-border:       rgba(255, 255, 255, .1);
 
   /* Text */
-  --mc-text:         #e6e8eb;       /* 主要文字 */
-  --mc-text-2:       #cbd5e1;       /* 次要文字（統計卡內提亮用） */
-  --mc-text-3:       #94a3b8;       /* 弱化文字 */
-  --mc-text-dim:     #9aa3ad;       /* 灰階補充說明 */
+  --mc-text:         #e6e8eb;
+  --mc-text-2:       #cbd5e1;
+  --mc-text-3:       #94a3b8;
+  --mc-text-dim:     #9aa3ad;
 
   /* Brand */
   --mc-accent:       #ff6bae;
@@ -56,7 +60,7 @@
   --mc-radius-sm:    8px;
   --mc-shadow:       0 8px 24px rgba(0, 0, 0, .25);
 
-  /* v2.2.0 focus ring（#11） */
+  /* v2.2.0 focus ring */
   --mc-focus-ring:   0 0 0 3px rgba(255, 107, 174, .35);
 }
 
@@ -94,7 +98,6 @@
   display: inline-block;
 }
 
-/* 頭像主體（label 包住整個區塊，承擔 hover/click） */
 .mc-hero-avatar-link {
   position: relative;
   display: block;
@@ -116,7 +119,6 @@
   transition: opacity .3s ease, filter .25s ease;
 }
 
-/* hover 遮罩 */
 .mc-hero-avatar-overlay {
   position: absolute;
   inset: 0;
@@ -138,7 +140,6 @@
 .mc-hero-avatar-link:focus-within .mc-hero-avatar-overlay { opacity: 1; }
 .mc-hero-avatar-link:hover img { filter: brightness(.85); }
 
-/* 上傳狀態訊息 */
 .mc-avatar-msg {
   margin-top: 10px;
   padding: 6px 12px;
@@ -159,7 +160,6 @@
   color: var(--mc-accent);
 }
 
-/* Hero 內容區 */
 .mc-hero-name {
   font-size: 28px;
   font-weight: 700;
@@ -206,8 +206,8 @@
   height: 12px;
   background: rgba(0, 0, 0, .35);
   border-radius: 999px;
-  overflow: visible;                  /* 讓文字露出 bar 下方 */
-  margin-bottom: 28px;                /* 為下方文字預留空間 */
+  overflow: visible;
+  margin-bottom: 28px;
 }
 .mc-level-fill {
   position: absolute;
@@ -252,7 +252,7 @@
  *  Tabs（v2.2.0 #3：手機右側漸層遮罩）
  * ========================================================== */
 .mc-tabs {
-  position: relative;            /* v2.2.0：作為遮罩定位錨點 */
+  position: relative;
   display: flex;
   gap: 4px;
   flex-wrap: wrap;
@@ -320,7 +320,6 @@
 }
 .mc-widget h3 small { color: var(--mc-text-dim); font-weight: 400; font-size: 12px; }
 
-/* 快速概覽列表 */
 .mc-quick-list { list-style: none; padding: 0; margin: 0 0 16px; }
 .mc-quick-list li {
   display: flex;
@@ -367,7 +366,7 @@
   font-size: 14px;
 }
 
-/* 最近留言 */
+/* 最近留言（Dashboard 用） */
 .mc-cmt-list { list-style: none; padding: 0; margin: 0; }
 .mc-cmt-list li { padding: 10px 0; border-bottom: 1px solid var(--mc-border); }
 .mc-cmt-list li:last-child { border: 0; }
@@ -594,7 +593,6 @@
   gap: 20px;
 }
 
-/* 觀看時數 banner */
 .mc-stats-banner {
   grid-column: 1 / -1;
   padding: 24px 28px;
@@ -607,7 +605,6 @@
 .mc-banner-unit  { font-size: 24px; margin-left: 6px; color: #fff; }
 .mc-banner-sub   { margin-top: 8px; color: var(--mc-text-2); font-size: 14px; }
 
-/* 統計卡 */
 .mc-stats-card {
   padding: 20px;
   background: var(--mc-surface);
@@ -629,7 +626,6 @@
   font-size: 12px;
 }
 
-/* 統計摘要 */
 .mc-stats-summary {
   display: flex;
   gap: 24px;
@@ -640,6 +636,97 @@
 .mc-stats-summary > div { text-align: center; }
 .mc-stats-summary b    { display: block; font-size: 28px; color: #fff; }
 .mc-stats-summary span { font-size: 12px; color: var(--mc-text-2); }
+
+/* ----------------------------------------------------------
+ *  完成率卡（v2.3.0 / Batch B）
+ * ---------------------------------------------------------- */
+.mc-stats-card--completion {
+  background: linear-gradient(135deg,
+    rgba(52, 211, 153, .08),
+    rgba(107, 182, 255, .08));
+  border-color: rgba(52, 211, 153, .25);
+}
+.mc-stats-card--completion h3 {
+  color: var(--mc-completed);
+}
+
+.mc-completion-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.mc-completion-big {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 4px;
+  margin: 4px 0 2px;
+  font-weight: 800;
+  text-shadow: 0 2px 12px rgba(52, 211, 153, .25);
+}
+.mc-completion-big b {
+  font-size: 56px;
+  line-height: 1;
+  background: linear-gradient(135deg, var(--mc-completed), var(--mc-watching));
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: var(--mc-completed); /* fallback */
+}
+.mc-completion-big span {
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--mc-completed);
+}
+
+.mc-completion-bar {
+  position: relative;
+  height: 10px;
+  background: rgba(0, 0, 0, .35);
+  border-radius: 999px;
+  overflow: hidden;
+}
+.mc-completion-fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 0;
+  background: linear-gradient(90deg, var(--mc-completed), var(--mc-watching));
+  border-radius: 999px;
+  transition: width .9s cubic-bezier(.4, 0, .2, 1);
+  box-shadow: 0 0 12px rgba(52, 211, 153, .4);
+}
+
+.mc-completion-meta {
+  font-size: 13px;
+  color: var(--mc-text-2);
+  text-align: center;
+  line-height: 1.6;
+}
+.mc-completion-meta b {
+  color: #fff;
+  font-weight: 700;
+  margin: 0 2px;
+}
+.mc-completion-meta small {
+  display: block;
+  margin-top: 4px;
+  color: var(--mc-text-3);
+  font-size: 11px;
+}
+
+.mc-completion-remark {
+  margin: 4px 0 0;
+  padding: 10px 14px;
+  text-align: center;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--mc-text);
+  background: rgba(255, 255, 255, .04);
+  border: 1px solid var(--mc-border);
+  border-radius: var(--mc-radius-sm);
+  letter-spacing: .02em;
+}
 
 /* 評分摘要 */
 .mc-rating-summary {
@@ -655,7 +742,7 @@
 .mc-rating-summary b    { display: block; font-size: 24px; color: var(--mc-accent); }
 .mc-rating-summary span { font-size: 12px; color: var(--mc-text-dim); }
 
-/* 長條圖列（評分分布 / 年代分布共用） */
+/* 長條圖列 */
 .mc-bar-row {
   display: grid;
   grid-template-columns: 50px 1fr 40px;
@@ -735,7 +822,7 @@
 .mc-pie-legend b     { color: #fff; margin-left: auto; font-weight: 700; }
 .mc-pie-legend small { color: var(--mc-text-3); }
 
-/* 排行榜（製作公司 Top 5） */
+/* 排行榜 */
 .mc-rank-list { list-style: none; padding: 0; margin: 0; }
 .mc-rank-list li {
   display: flex;
@@ -756,14 +843,36 @@
 .mc-rank-count { color: var(--mc-text-3); font-size: 13px; }
 
 /* ==========================================================
- *  Comments Tab
+ *  Comments Tab（v2.3.0：加入分頁標頭與按鈕樣式）
  * ========================================================== */
+.mc-comments-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.mc-comments-meta {
+  font-size: 13px;
+  color: var(--mc-text-2);
+  padding: 8px 4px;
+}
+.mc-comments-meta b {
+  color: var(--mc-accent);
+  font-size: 16px;
+  margin: 0 2px;
+}
+
 .mc-cmt-fulllist { list-style: none; padding: 0; margin: 0; }
 .mc-cmt-fulllist li {
   background: var(--mc-surface);
   border: 1px solid var(--mc-border);
   border-radius: var(--mc-radius-sm);
   margin-bottom: 12px;
+  /* v2.3.0：新載入的 li 淡入動畫 */
+  animation: mc-cmt-fade .3s ease;
+}
+@keyframes mc-cmt-fade {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: none; }
 }
 .mc-cmt-fulllist a {
   display: block;
@@ -775,6 +884,13 @@
 .mc-cmt-fulllist b     { display: block; margin-bottom: 6px; }
 .mc-cmt-fulllist p     { margin: 0 0 6px; color: var(--mc-text-dim); font-size: 14px; }
 .mc-cmt-fulllist small { color: var(--mc-text-dim); font-size: 11px; }
+
+/* 留言專用 load-more 樣式微調（與 watchlist/ratings 共享主體，但顏色用 accent-2） */
+.mc-loadmore-comments:hover {
+  background: var(--mc-accent-2);
+  border-color: var(--mc-accent-2);
+  color: #fff;
+}
 
 /* ==========================================================
  *  Points Tab
@@ -823,7 +939,7 @@
 .mc-pt-neg { color: var(--mc-danger);    font-weight: 600; }
 
 /* ==========================================================
- *  Settings Tab（v2.0.1 inline 編輯整合）
+ *  Settings Tab
  * ========================================================== */
 .mc-settings-grid {
   display: grid;
@@ -844,7 +960,6 @@
   background: linear-gradient(180deg, rgba(248, 113, 113, .05), var(--mc-surface));
 }
 
-/* inline 編輯表單 */
 .mc-set-form {
   display: flex;
   flex-direction: column;
@@ -920,8 +1035,7 @@
 }
 
 /* ==========================================================
- *  通用按鈕（Primary / Secondary / Danger）
- *  Settings 卡片內、Dashboard 升級按鈕等共用
+ *  通用按鈕
  * ========================================================== */
 .mc-btn-primary,
 .mc-btn-secondary,
@@ -981,13 +1095,8 @@
 .mc-empty a { color: var(--mc-accent); }
 
 /* ==========================================================
- *  Blocksy 容器接管（v2.0.2 整合）
- *  針對 /user/{username}/ 經 template_include filter 渲染
- *  body.um-page-user 為主要選擇器
- *  body.page-template-page-member 為備援
+ *  Blocksy 容器接管
  * ========================================================== */
-
-/* 1. 隱藏 Blocksy 注入的側欄 */
 body.um-page-user .ct-sidebar,
 body.um-page-user aside[class*="sidebar"],
 body.um-page-user [data-sidebar],
@@ -997,7 +1106,6 @@ body.page-template-page-member [data-sidebar] {
   display: none !important;
 }
 
-/* 2. 強制單欄佈局 */
 body.um-page-user .ct-container,
 body.page-template-page-member .ct-container {
   grid-template-columns: minmax(0, 1fr) !important;
@@ -1006,7 +1114,6 @@ body.page-template-page-member .ct-container {
   margin-inline: auto !important;
 }
 
-/* 3. 主內容區佔滿整列 */
 body.um-page-user main#main,
 body.um-page-user .entries,
 body.um-page-user .ct-main-styles,
@@ -1020,7 +1127,6 @@ body.page-template-page-member .entry-content {
   max-width: 100% !important;
 }
 
-/* 4. 隱藏 Blocksy hero */
 body.um-page-user .ct-hero,
 body.um-page-user .page-hero-section,
 body.page-template-page-member .ct-hero,
@@ -1028,7 +1134,6 @@ body.page-template-page-member .page-hero-section {
   display: none !important;
 }
 
-/* 5. .mc-wrap 撐滿並置中 */
 body.um-page-user .mc-wrap,
 body.page-template-page-member .mc-wrap {
   width: 100% !important;
@@ -1038,7 +1143,7 @@ body.page-template-page-member .mc-wrap {
 }
 
 /* ==========================================================
- *  RWD（統一斷點，整合所有原散落規則）
+ *  RWD
  * ========================================================== */
 @media (max-width: 900px) {
   .mc-hero {
@@ -1067,6 +1172,10 @@ body.page-template-page-member .mc-wrap {
 
   .mc-pie-wrap       { grid-template-columns: 1fr; justify-items: center; }
   .mc-points-summary { grid-template-columns: 1fr; }
+
+  /* 完成率卡：手機字級略縮 */
+  .mc-completion-big b    { font-size: 44px; }
+  .mc-completion-big span { font-size: 20px; }
 }
 
 @media (max-width: 640px) {
@@ -1076,7 +1185,6 @@ body.page-template-page-member .mc-wrap {
     margin-top: 16px !important;
   }
 
-  /* v2.2.0 #4：圓餅圖手機縮小 + legend 移到下方 */
   .mc-pie-wrap {
     grid-template-columns: 1fr;
     justify-items: center;
@@ -1095,7 +1203,6 @@ body.page-template-page-member .mc-wrap {
   .mc-tabs { overflow-x: auto; flex-wrap: nowrap; }
   .mc-tab  { white-space: nowrap; }
 
-  /* v2.2.0 #3：手機 tab 列右側漸層遮罩，暗示可滑動 */
   .mc-tabs::after {
     content: "";
     position: absolute;
@@ -1111,12 +1218,15 @@ body.page-template-page-member .mc-wrap {
   .mc-hero-stats > div { padding: 6px 4px; }
   .mc-hero-stats b     { font-size: 18px; }
 
-  /* Settings 卡片按鈕在窄屏全寬 */
   .mc-set-card .mc-btn-primary,
   .mc-set-card .mc-btn-secondary,
   .mc-set-card .mc-btn-danger { width: 100%; }
   .mc-set-actions { flex-direction: column; align-items: stretch; }
   .mc-set-msg     { text-align: center; }
+
+  /* 完成率卡：超窄屏進一步縮小 */
+  .mc-completion-big b    { font-size: 38px; }
+  .mc-completion-big span { font-size: 18px; }
 }
 
 /* ==========================================================
@@ -1127,11 +1237,13 @@ body.page-template-page-member .mc-wrap {
   .mc-level-fill,
   .mc-bar-fill,
   .mc-card-progress-fill,
+  .mc-completion-fill,
   .mc-anime-card,
   .mc-btn-primary,
   .mc-btn-secondary,
   .mc-btn-danger,
   .mc-set-msg,
+  .mc-cmt-fulllist li,
   .mc-hero-avatar-overlay,
   .mc-hero-avatar-link img {
     animation: none !important;
@@ -1155,12 +1267,12 @@ body.page-template-page-member .mc-wrap {
 }
 
 /* =========================================================
- * P0-1: 隱私 toggle 開關（v2.1.1）
+ * P0-1: 隱私 toggle 開關
  * ========================================================= */
 .mc-toggle-row{
   display:flex;align-items:center;gap:16px;
   padding:14px 8px;
-  margin:0 -8px;                    /* v2.2.0 #10：保留外觀同寬，高亮時整列著色 */
+  margin:0 -8px;
   border-bottom:1px solid rgba(255,255,255,.06);
   border-radius:6px;
   transition:background-color .4s ease;
@@ -1177,14 +1289,12 @@ body.page-template-page-member .mc-wrap {
 .mc-toggle input:checked + .mc-toggle-slider::before{transform:translateX(20px);}
 .mc-toggle input:disabled + .mc-toggle-slider{opacity:.5;cursor:not-allowed;}
 
-/* v2.2.0 #11：toggle 鍵盤聚焦時顯示外框（用 slider 接 outline） */
 .mc-toggle input:focus-visible + .mc-toggle-slider{
   outline:2px solid var(--mc-accent);
   outline-offset:3px;
   box-shadow:var(--mc-focus-ring);
 }
 
-/* v2.2.0 #10：儲存成功時整列短暫高亮 */
 .mc-toggle-row.is-saved{
   background-color:rgba(52,211,153,.14);
 }
@@ -1204,7 +1314,6 @@ body.page-template-page-member .mc-wrap {
 .mc-card-btn--done:hover{background:linear-gradient(135deg,#34d399,#10b981);}
 .mc-card-btn--remove:hover{background:linear-gradient(135deg,#f87171,#ef4444);}
 
-/* 手機版常駐顯示（無 hover） */
 @media (hover:none){
     .mc-card-actions{opacity:1;transform:none;pointer-events:auto;}
 }
@@ -1250,7 +1359,6 @@ body.page-template-page-member .mc-wrap {
   color: var(--mc-text-dim);
 }
 
-/* 左右捲動箭頭 */
 .mc-continue-nav {
   display: flex;
   gap: 6px;
@@ -1280,7 +1388,6 @@ body.page-template-page-member .mc-wrap {
   cursor: not-allowed;
 }
 
-/* 橫向 scroll 容器 */
 .mc-continue-scroll {
   display: flex;
   gap: 14px;
@@ -1300,9 +1407,6 @@ body.page-template-page-member .mc-wrap {
   background: var(--mc-accent);
 }
 
-/* 單張卡片：寬度固定，重用 .mc-anime-card 樣式
- * v2.2.0 #2：統一卡片高度（標題 2 行、進度條貼底）
- */
 .mc-continue-card {
   flex: 0 0 180px;
   scroll-snap-align: start;
@@ -1316,7 +1420,7 @@ body.page-template-page-member .mc-wrap {
   min-height: 78px;
 }
 .mc-continue-card .mc-card-title {
-  min-height: 2.8em;            /* 強制 2 行高度，避免長短不一 */
+  min-height: 2.8em;
   line-height: 1.4;
   margin: 0 0 8px;
   display: -webkit-box;
@@ -1325,10 +1429,9 @@ body.page-template-page-member .mc-wrap {
   overflow: hidden;
 }
 .mc-continue-card .mc-card-progress {
-  margin-top: auto;             /* 進度條固定貼底 */
+  margin-top: auto;
 }
 
-/* 空狀態 */
 .mc-continue-empty-box {
   text-align: center;
   padding: 24px 16px;
@@ -1339,7 +1442,6 @@ body.page-template-page-member .mc-wrap {
   font-size: 14px;
 }
 
-/* RWD */
 @media (max-width: 640px) {
   .mc-continue-section {
     padding: 16px 14px;
