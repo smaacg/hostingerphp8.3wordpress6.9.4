@@ -157,7 +157,7 @@ get_header(); ?>
     <?php /* === Panels === */ ?>
     <div class="mc-panels">
         <section class="mc-panel active" data-panel="dashboard">
-            <?php smacg_render_dashboard($watchlist, $stats, $recent_cmt, $points_log, $plan_label); ?>
+            <?php smacg_render_dashboard($watchlist, $stats, $recent_cmt, $points_log, $plan_label, $uid); ?>
         </section>
 
         <section class="mc-panel" data-panel="watchlist">
