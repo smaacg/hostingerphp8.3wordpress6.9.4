@@ -2141,3 +2141,29 @@ body.mc-cropper-open {
     margin-top: 6px;
   }
 }
+/* Batch 1B-3：會員中心 hero 追蹤數 */
+.mc-follow-meta {
+	display: flex;
+	gap: 24px;
+	margin: 10px 0 0;
+	font-size: 14px;
+}
+.mc-follow-stat {
+	display: inline-flex;
+	align-items: baseline;
+	gap: 6px;
+	color: var(--mc-text-2, #b9c0d4);
+	text-decoration: none;
+}
+.mc-follow-stat:hover b { color: var(--mc-accent, #f472b6); }
+.mc-follow-stat b {
+	font-size: 18px;
+	font-weight: 700;
+	color: var(--mc-text, #e6e9f2);
+	transition: color .15s;
+}
+.mc-follow-stat em {
+	font-style: normal;
+	font-size: 13px;
+	color: var(--mc-text-3, #8b91a8);
+}
