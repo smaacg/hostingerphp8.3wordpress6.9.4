@@ -1740,3 +1740,370 @@ a.mc-timeline-target:hover {
   .mc-yr-entry-sub   { font-size: 12px; }
   .mc-yr-entry-arrow { font-size: 22px; }
 }
+
+
+/* ==========================================================
+ *  v2.5.0 — 頭像上傳優化 (2026-05-13)
+ *  - 提示文字 (.mc-avatar-hint)
+ *  - 進度條 (.mc-avatar-progress)
+ *  - Cropper.js Modal (.mc-cropper-modal)
+ *  - 通用按鈕 (.mc-btn)
+ * ========================================================== */
+
+/* ---------- A. 頭像格式 / 大小提示 ---------- */
+.mc-avatar-hint {
+  margin-top: 10px;
+  padding: 6px 10px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--mc-text-3);
+  background: var(--mc-surface);
+  border: 1px solid var(--mc-border);
+  border-radius: 8px;
+  text-align: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  max-width: 220px;
+  margin-left: auto;
+  margin-right: auto;
+}
+.mc-avatar-hint i {
+  color: var(--mc-accent);
+  font-size: 11px;
+}
+
+@media (max-width: 640px) {
+  .mc-avatar-hint {
+    font-size: 11px;
+    max-width: 100%;
+  }
+}
+
+/* ---------- D. 上傳進度條 ---------- */
+.mc-avatar-progress {
+  margin-top: 10px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 220px;
+  margin-left: auto;
+  margin-right: auto;
+  animation: mc-progress-fade .2s ease;
+}
+@keyframes mc-progress-fade {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.mc-avatar-progress-bar {
+  flex: 1;
+  height: 6px;
+  background: var(--mc-surface);
+  border: 1px solid var(--mc-border);
+  border-radius: 999px;
+  overflow: hidden;
+  position: relative;
+}
+.mc-avatar-progress-fill {
+  height: 100%;
+  width: 0%;
+  background: linear-gradient(90deg, var(--mc-accent), var(--mc-accent-3));
+  border-radius: 999px;
+  transition: width .15s ease-out;
+  position: relative;
+}
+.mc-avatar-progress-fill::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg,
+    transparent,
+    rgba(255, 255, 255, .35),
+    transparent);
+  animation: mc-progress-shine 1.2s linear infinite;
+}
+@keyframes mc-progress-shine {
+  from { transform: translateX(-100%); }
+  to   { transform: translateX(100%);  }
+}
+
+.mc-avatar-progress-text {
+  flex-shrink: 0;
+  min-width: 34px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--mc-text-2);
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+/* 完成狀態 */
+.mc-avatar-progress.is-done .mc-avatar-progress-fill {
+  background: linear-gradient(90deg, #34d399, #10b981);
+}
+.mc-avatar-progress.is-done .mc-avatar-progress-fill::after {
+  display: none;
+}
+
+/* 錯誤狀態 */
+.mc-avatar-progress.is-error .mc-avatar-progress-fill {
+  background: linear-gradient(90deg, #f87171, #ef4444);
+}
+.mc-avatar-progress.is-error .mc-avatar-progress-fill::after {
+  display: none;
+}
+
+/* ---------- E + G. Cropper.js 裁切 Modal ---------- */
+.mc-cropper-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 99999;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  animation: mc-modal-fade .2s ease;
+}
+.mc-cropper-modal[hidden] {
+  display: none;
+}
+@keyframes mc-modal-fade {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+.mc-cropper-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(8, 12, 24, .72);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+
+.mc-cropper-dialog {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  max-width: 560px;
+  max-height: calc(100vh - 40px);
+  display: flex;
+  flex-direction: column;
+  background: var(--mc-surface-hi);
+  border: 1px solid var(--mc-border);
+  border-radius: var(--mc-radius);
+  box-shadow: 0 20px 60px rgba(0, 0, 0, .5);
+  overflow: hidden;
+  animation: mc-modal-slide .25s cubic-bezier(.16, 1, .3, 1);
+}
+@keyframes mc-modal-slide {
+  from { opacity: 0; transform: translateY(20px) scale(.96); }
+  to   { opacity: 1; transform: translateY(0)    scale(1);    }
+}
+
+/* Header */
+.mc-cropper-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--mc-border);
+  background: linear-gradient(135deg,
+    rgba(244, 114, 182, .08),
+    rgba(167, 139, 250, .08));
+}
+.mc-cropper-header h3 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--mc-text);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.mc-cropper-header h3 i {
+  color: var(--mc-accent);
+}
+.mc-cropper-close {
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  background: transparent;
+  border: 1px solid var(--mc-border);
+  border-radius: 50%;
+  color: var(--mc-text-2);
+  cursor: pointer;
+  transition: background .15s, color .15s, transform .15s;
+}
+.mc-cropper-close:hover {
+  background: var(--mc-surface);
+  color: var(--mc-accent);
+  transform: rotate(90deg);
+}
+
+/* Body */
+.mc-cropper-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 18px;
+  gap: 12px;
+  overflow: auto;
+}
+
+.mc-cropper-canvas {
+  flex: 1;
+  min-height: 280px;
+  max-height: 60vh;
+  background: #0a0e1a;
+  border-radius: 12px;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.mc-cropper-canvas img {
+  display: block;
+  max-width: 100%;
+  /* Cropper.js 會接管這個 <img>，這裡只是初始樣式 */
+}
+
+/* Cropper.js 內建元件主題微調 */
+.mc-cropper-canvas .cropper-view-box {
+  outline-color: var(--mc-accent, #f472b6);
+  box-shadow: 0 0 0 1px var(--mc-accent, #f472b6);
+  border-radius: 50%; /* 圓形預覽框 */
+}
+.mc-cropper-canvas .cropper-face {
+  background-color: transparent;
+}
+.mc-cropper-canvas .cropper-line,
+.mc-cropper-canvas .cropper-point {
+  background-color: var(--mc-accent, #f472b6);
+}
+.mc-cropper-canvas .cropper-point.point-se,
+.mc-cropper-canvas .cropper-point.point-sw,
+.mc-cropper-canvas .cropper-point.point-ne,
+.mc-cropper-canvas .cropper-point.point-nw {
+  width: 8px;
+  height: 8px;
+}
+.mc-cropper-canvas .cropper-dashed {
+  border-color: rgba(244, 114, 182, .4);
+}
+
+.mc-cropper-tips {
+  font-size: 12px;
+  color: var(--mc-text-3);
+  background: var(--mc-surface);
+  border: 1px solid var(--mc-border);
+  border-radius: 8px;
+  padding: 8px 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  line-height: 1.5;
+}
+.mc-cropper-tips i {
+  color: #fbbf24;
+}
+
+/* Footer */
+.mc-cropper-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 14px 18px;
+  border-top: 1px solid var(--mc-border);
+  background: var(--mc-surface);
+}
+
+/* ---------- 通用 mc-btn（若 member.css 已有則此處會覆蓋） ---------- */
+.mc-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 9px 18px;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.2;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: transform .12s, background .15s, border-color .15s, box-shadow .15s;
+  user-select: none;
+  white-space: nowrap;
+}
+.mc-btn:active {
+  transform: translateY(1px);
+}
+.mc-btn:disabled,
+.mc-btn[aria-busy="true"] {
+  opacity: .6;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+.mc-btn-primary {
+  background: linear-gradient(135deg, var(--mc-accent), var(--mc-accent-3));
+  color: #fff;
+  box-shadow: 0 4px 14px rgba(244, 114, 182, .35);
+}
+.mc-btn-primary:hover {
+  box-shadow: 0 6px 20px rgba(244, 114, 182, .5);
+  filter: brightness(1.05);
+}
+
+.mc-btn-secondary {
+  background: var(--mc-surface-hi);
+  color: var(--mc-text);
+  border-color: var(--mc-border);
+}
+.mc-btn-secondary:hover {
+  background: var(--mc-surface);
+  border-color: var(--mc-accent);
+  color: var(--mc-accent);
+}
+
+/* ---------- 手機版 ---------- */
+@media (max-width: 640px) {
+  .mc-cropper-modal {
+    padding: 0;
+  }
+  .mc-cropper-dialog {
+    max-width: 100%;
+    max-height: 100vh;
+    height: 100vh;
+    border-radius: 0;
+    border: 0;
+  }
+  .mc-cropper-header {
+    padding: 12px 14px;
+  }
+  .mc-cropper-header h3 {
+    font-size: 15px;
+  }
+  .mc-cropper-body {
+    padding: 14px;
+  }
+  .mc-cropper-canvas {
+    min-height: 260px;
+  }
+  .mc-cropper-footer {
+    padding: 12px 14px;
+    flex-direction: column-reverse;
+  }
+  .mc-cropper-footer .mc-btn {
+    width: 100%;
+    justify-content: center;
+    padding: 12px 18px;
+    font-size: 15px;
+  }
+}
+
+/* ---------- body lock（modal 開啟時禁止背景捲動） ---------- */
+body.mc-cropper-open {
+  overflow: hidden;
+}
