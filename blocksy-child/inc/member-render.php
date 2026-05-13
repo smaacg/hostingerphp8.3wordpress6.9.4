@@ -1,23 +1,29 @@
 <?php
 /**
  * Member Center - Render Layer
- * Version: 2.0.6 (2026-05-13)
+ * Version: 2.1.0 (2026-05-13)
  *
- * 各 tab 的 HTML 輸出。所有清單一律「先渲染前 N 筆」，其餘由 AJAX 載入。
- * 桌機 20 / 行動 12（前端 JS 偵測，PHP 預設輸出 20）
+ * 各 tab 的 HTML 輸出。所有清單一律「先渲染前 N 筆」,其餘由 AJAX 載入。
+ * 桌機 20 / 行動 12（前端 JS 偵測,PHP 預設輸出 20）
  *
- * v2.0.1：設定 tab 三張卡片連結重寫
- *   - 基本資料：改為 inline 編輯（顯示名稱/簡介），不再跳 /account/
- *   - 重設密碼：改用 /password-reset/ 自訂頁
- *   - 登出帳號：維持 wp_logout_url()
+ * v2.0.1:設定 tab 三張卡片連結重寫
+ *   - 基本資料:改為 inline 編輯（顯示名稱/簡介）,不再跳 /account/
+ *   - 重設密碼:改用 /password-reset/ 自訂頁
+ *   - 登出帳號:維持 wp_logout_url()
  *
- * v2.0.5 (2026-05-13)：
+ * v2.0.5 (2026-05-13):
  *   - 移除「暱稱」欄位
  *   - 隱私卡片新增「顯示繼續觀看」toggle（P1-2）
  *
- * v2.0.6 (2026-05-13) — Batch B：
+ * v2.0.6 (2026-05-13) — Batch B:
  *   - smacg_render_stats() 在 banner 後插入「完成率」卡（讀 $s['completion_rate']）
- *   - smacg_render_comments() 改用分頁，首頁伺服端渲染 20 筆 + 載入更多按鈕
+ *   - smacg_render_comments() 改用分頁,首頁伺服端渲染 20 筆 + 載入更多按鈕
+ *
+ * v2.1.0 (2026-05-13) — Batch C #9 + #14:
+ *   - smacg_render_dashboard() 簽章新增 $uid 參數（向下相容,預設 0）
+ *   - Dashboard 新增「最近活動時間軸」widget（在留言之後）
+ *   - Dashboard 新增「年度回顧入口卡」（在快速概覽之後)
+ *   - 新增 smacg_render_activity_timeline($events) 渲染函式
  */
 if (!defined('ABSPATH')) exit;
 
@@ -25,7 +31,7 @@ if (!defined('SMACG_PAGE_SIZE')) {
     define('SMACG_PAGE_SIZE', 20);
 }
 
-/* ========== 共用：單張 anime 卡片 ========== */
+/* ========== 共用:單張 anime 卡片 ========== */
 function smacg_render_anime_card($pid, $extra = []) {
     if (!$pid || get_post_status($pid) !== 'publish') return;
     $title     = get_the_title($pid);
@@ -50,7 +56,13 @@ function smacg_render_anime_card($pid, $extra = []) {
 
         <a href="<?php echo esc_url($permalink); ?>" class="mc-card-thumb">
             <?php if ($thumb): ?>
-                <img src="<?php echo esc_url($thumb); ?>" alt="<?php echo esc_attr($title); ?>" loading="lazy">
+                <?php
+                // v2.1.0:若有 image-optimizer,改用 picture tag（WebP + srcset)
+                if ( function_exists( 'smacg_picture_tag' ) && has_post_thumbnail( $pid ) ) {
+                    echo smacg_picture_tag( $pid, 'medium', $title );
+                } else { ?>
+                    <img src="<?php echo esc_url($thumb); ?>" alt="<?php echo esc_attr($title); ?>" loading="lazy">
+                <?php } ?>
             <?php else: ?>
                 <div class="mc-card-thumb-ph" aria-hidden="true">🎬</div>
             <?php endif; ?>
@@ -73,7 +85,7 @@ function smacg_render_anime_card($pid, $extra = []) {
                 </div>
             <?php endif; ?>
             <?php if ($user_score !== null): ?>
-                <div class="mc-card-userscore">我的評分：<b><?php echo number_format($user_score, 1); ?></b></div>
+                <div class="mc-card-userscore">我的評分:<b><?php echo number_format($user_score, 1); ?></b></div>
             <?php endif; ?>
         </div>
     </article>
@@ -91,11 +103,19 @@ function smacg_get_card_thumb_url($pid) {
 }
 
 /* =====================================================
- *  Tab 1：總覽 Dashboard
+ *  Tab 1:總覽 Dashboard
+ *  v2.1.0 — Batch C:新增 $uid 參數,並插入時間軸 + 年度回顧入口
  * ===================================================== */
-function smacg_render_dashboard($watchlist, $stats, $recent_cmt, $points_log, $plan_label) {
+function smacg_render_dashboard($watchlist, $stats, $recent_cmt, $points_log, $plan_label, $uid = 0) {
     $watching = array_filter($watchlist, fn($w) => $w['status'] === 'watching');
     $watching = array_slice($watching, 0, 6);
+
+    // v2.1.0:取得最近活動（最多 15 筆）
+    $activity = [];
+    if ( $uid > 0 && function_exists( 'smacg_get_recent_activity' ) ) {
+        $activity = smacg_get_recent_activity( $uid, 15 );
+    }
+    $current_year = (int) date( 'Y' );
     ?>
     <div class="mc-dash-grid">
         <div class="mc-widget mc-widget--watching">
@@ -105,7 +125,7 @@ function smacg_render_dashboard($watchlist, $stats, $recent_cmt, $points_log, $p
                     <?php foreach ($watching as $w) smacg_render_anime_card($w['post_id'], $w); ?>
                 </div>
             <?php else: ?>
-                <p class="mc-empty">尚未追番，<a href="<?php echo home_url('/anime/'); ?>">去找喜歡的作品</a> →</p>
+                <p class="mc-empty">尚未追番,<a href="<?php echo home_url('/anime/'); ?>">去找喜歡的作品</a> →</p>
             <?php endif; ?>
         </div>
 
@@ -150,11 +170,75 @@ function smacg_render_dashboard($watchlist, $stats, $recent_cmt, $points_log, $p
             <?php endif; ?>
         </div>
     </div>
+
+    <?php /* v2.1.0:年度回顧入口卡 */ ?>
+    <?php if ( $uid > 0 ): ?>
+        <a href="<?php echo esc_url( home_url( '/year-review/?year=' . $current_year ) ); ?>" class="mc-yr-entry" aria-label="查看 <?php echo $current_year; ?> 年度回顧">
+            <div class="mc-yr-entry-icon">✨</div>
+            <div class="mc-yr-entry-body">
+                <div class="mc-yr-entry-title">查看 <?php echo $current_year; ?> 年度回顧</div>
+                <div class="mc-yr-entry-sub">看看這一年你和動畫的故事 →</div>
+            </div>
+            <div class="mc-yr-entry-arrow">›</div>
+        </a>
+    <?php endif; ?>
+
+    <?php /* v2.1.0:最近活動時間軸 */ ?>
+    <?php if ( ! empty( $activity ) ): ?>
+        <div class="mc-widget mc-widget--timeline">
+            <h3>📜 最近活動 <small>（最新 15 筆）</small></h3>
+            <?php smacg_render_activity_timeline( $activity ); ?>
+        </div>
+    <?php endif; ?>
     <?php
 }
 
 /* =====================================================
- *  Tab 2：我的清單
+ *  v2.1.0 — Batch C #9:最近活動時間軸渲染
+ *
+ *  $events 來自 smacg_get_recent_activity()
+ *  每筆格式:[type, subtype, time, time_human, post_id, title, meta, icon, color, link]
+ * ===================================================== */
+function smacg_render_activity_timeline( $events ) {
+    if ( empty( $events ) ) {
+        echo '<p class="mc-empty">最近沒有活動,開始追番吧!</p>';
+        return;
+    }
+    ?>
+    <ul class="mc-timeline">
+        <?php foreach ( $events as $e ):
+            $color = $e['color'] ?? 'accent';
+            $link  = $e['link']  ?? '';
+            $post_title = $e['post_id'] ? get_the_title( $e['post_id'] ) : '';
+            ?>
+            <li class="mc-timeline-item mc-timeline-item--<?php echo esc_attr( $color ); ?>">
+                <div class="mc-timeline-dot" aria-hidden="true">
+                    <span class="mc-timeline-icon"><?php echo esc_html( $e['icon'] ?? '•' ); ?></span>
+                </div>
+                <div class="mc-timeline-body">
+                    <div class="mc-timeline-main">
+                        <span class="mc-timeline-action"><?php echo esc_html( $e['title'] ); ?></span>
+                        <?php if ( $post_title ): ?>
+                            <?php if ( $link ): ?>
+                                <a class="mc-timeline-target" href="<?php echo esc_url( $link ); ?>"><?php echo esc_html( $post_title ); ?></a>
+                            <?php else: ?>
+                                <span class="mc-timeline-target"><?php echo esc_html( $post_title ); ?></span>
+                            <?php endif; ?>
+                        <?php endif; ?>
+                        <?php if ( ! empty( $e['meta'] ) ): ?>
+                            <span class="mc-timeline-meta"><?php echo esc_html( $e['meta'] ); ?></span>
+                        <?php endif; ?>
+                    </div>
+                    <div class="mc-timeline-time"><?php echo esc_html( $e['time_human'] ?? '—' ); ?></div>
+                </div>
+            </li>
+        <?php endforeach; ?>
+    </ul>
+    <?php
+}
+
+/* =====================================================
+ *  Tab 2:我的清單
  * ===================================================== */
 function smacg_render_watchlist($watchlist, $counts) {
     $first = array_slice($watchlist, 0, SMACG_PAGE_SIZE);
@@ -196,12 +280,12 @@ function smacg_render_watchlist($watchlist, $counts) {
 }
 
 /* =====================================================
- *  Tab 3：統計
- *  v2.0.6：banner 後插入「完成率」卡（讀 $s['completion_rate']）
+ *  Tab 3:統計
+ *  v2.0.6:banner 後插入「完成率」卡（讀 $s['completion_rate']）
  * ===================================================== */
 function smacg_render_stats($s) {
     $r = $s['rating'];
-    // v2.0.6：完成率（向下相容，若舊版 stats 沒有此欄位則跳過）
+    // v2.0.6:完成率（向下相容,若舊版 stats 沒有此欄位則跳過）
     $completion_rate = isset($s['completion_rate']) ? (float) $s['completion_rate'] : null;
     ?>
     <div class="mc-stats-grid">
@@ -222,11 +306,11 @@ function smacg_render_stats($s) {
             // 計算分子分母給 hover/說明用
             $denom = $s['counts']['completed'] + $s['counts']['dropped'] + $s['counts']['watching'];
             // 評語
-            if      ($completion_rate >= 80) { $emoji = '🏆'; $remark = '超強毅力，幾乎部部追完！'; }
-            elseif  ($completion_rate >= 60) { $emoji = '✨'; $remark = '完成率不錯，繼續保持！'; }
-            elseif  ($completion_rate >= 40) { $emoji = '👀'; $remark = '加油，可以多看完幾部！'; }
-            elseif  ($completion_rate >= 20) { $emoji = '🤔'; $remark = '挑戰一下，把追番中的看完吧！'; }
-            else                             { $emoji = '🌱'; $remark = '剛開始，慢慢累積！'; }
+            if      ($completion_rate >= 80) { $emoji = '🏆'; $remark = '超強毅力,幾乎部部追完!'; }
+            elseif  ($completion_rate >= 60) { $emoji = '✨'; $remark = '完成率不錯,繼續保持!'; }
+            elseif  ($completion_rate >= 40) { $emoji = '👀'; $remark = '加油,可以多看完幾部!'; }
+            elseif  ($completion_rate >= 20) { $emoji = '🤔'; $remark = '挑戰一下,把追番中的看完吧!'; }
+            else                             { $emoji = '🌱'; $remark = '剛開始,慢慢累積!'; }
         ?>
             <div class="mc-stats-card mc-stats-card--completion">
                 <h3><?php echo $emoji; ?> 完成率</h3>
@@ -240,7 +324,7 @@ function smacg_render_stats($s) {
                     <div class="mc-completion-meta">
                         已看完 <b><?php echo $s['counts']['completed']; ?></b> /
                         計入 <b><?php echo $denom; ?></b> 部
-                        <small>（含追番中、已看完、棄番）</small>
+                        <small>（含追番中、已看完、棄番)</small>
                     </div>
                     <p class="mc-completion-remark"><?php echo esc_html($remark); ?></p>
                 </div>
@@ -291,7 +375,7 @@ function smacg_render_stats($s) {
                                 <span class="mc-pie-dot" style="background:<?php echo $colors[$i % 8]; ?>"></span>
                                 <?php echo esc_html($g['name']); ?>
                                 <b><?php echo $g['percent']; ?>%</b>
-                                <small>（<?php echo $g['count']; ?>）</small>
+                                <small>（<?php echo $g['count']; ?>)</small>
                             </li>
                         <?php endforeach; ?>
                     </ul>
@@ -350,7 +434,7 @@ function smacg_render_stats($s) {
 }
 
 /* =====================================================
- *  Tab 4：評分
+ *  Tab 4:評分
  * ===================================================== */
 function smacg_render_ratings($ratings, $rating_stats) {
     $total = count($ratings);
@@ -390,11 +474,7 @@ function smacg_render_ratings($ratings, $rating_stats) {
 }
 
 /* =====================================================
- *  Tab 5：留言（v2.0.6：改用分頁）
- *
- *  - 伺服端首頁渲染 SMACG_COMMENT_PAGE_SIZE 筆（預設 20）
- *  - 總筆數 > 該數時顯示「載入更多」按鈕
- *  - 按鈕帶 data-loaded / data-total / data-nonce，由 member.js + member-ajax.php 接手
+ *  Tab 5:留言（v2.0.6:改用分頁）
  * ===================================================== */
 if ( ! defined( 'SMACG_COMMENT_PAGE_SIZE' ) ) {
     define( 'SMACG_COMMENT_PAGE_SIZE', 20 );
@@ -462,7 +542,7 @@ function smacg_render_comments( $uid ) {
 }
 
 /* =====================================================
- *  Tab 6：點數
+ *  Tab 6:點數
  * ===================================================== */
 function smacg_render_points($points, $lvl, $log) { ?>
     <div class="mc-points-summary">
@@ -497,10 +577,7 @@ function smacg_render_points($points, $lvl, $log) { ?>
 <?php }
 
 /* =====================================================
- *  Tab 7：設定（v2.0.5）
- *  v2.0.5 (2026-05-13):
- *    - 移除「暱稱」欄位（與顯示名稱重複，徒增困惑）
- *    - 隱私卡片新增「顯示繼續觀看」toggle（P1-2）
+ *  Tab 7:設定（v2.0.5）
  * ===================================================== */
 function smacg_render_settings( $user, $privacy = null, $is_owner = true ) {
     if ( $privacy === null && function_exists( 'smacg_get_user_privacy' ) ) {
@@ -516,7 +593,7 @@ function smacg_render_settings( $user, $privacy = null, $is_owner = true ) {
     ?>
     <div class="mc-settings-grid">
 
-        <!-- 卡片 1：基本資料 -->
+        <!-- 卡片 1:基本資料 -->
         <div class="mc-set-card">
             <h3 class="mc-set-title"><i class="fa-solid fa-id-card"></i> 基本資料</h3>
             <form id="mc-profile-form" class="mc-set-form">
@@ -536,7 +613,7 @@ function smacg_render_settings( $user, $privacy = null, $is_owner = true ) {
             </form>
         </div>
 
-        <!-- 卡片 2：隱私 & 顯示設定 -->
+        <!-- 卡片 2:隱私 & 顯示設定 -->
         <div class="mc-set-card">
             <h3 class="mc-set-title"><i class="fa-solid fa-user-shield"></i> 隱私 & 顯示</h3>
             <div class="mc-privacy-form" data-nonce="<?php echo esc_attr( $nonce ); ?>">
@@ -589,10 +666,10 @@ function smacg_render_settings( $user, $privacy = null, $is_owner = true ) {
             </div>
         </div>
 
-        <!-- 卡片 3：帳號安全 -->
+        <!-- 卡片 3:帳號安全 -->
         <div class="mc-set-card">
             <h3 class="mc-set-title"><i class="fa-solid fa-key"></i> 帳號安全</h3>
-            <p class="mc-set-hint">若需變更密碼，請點下方按鈕，系統會寄送重設信件至你的 email。</p>
+            <p class="mc-set-hint">若需變更密碼,請點下方按鈕,系統會寄送重設信件至你的 email。</p>
             <div class="mc-set-actions">
                 <a class="mc-btn-secondary mc-settings-reset-pwd"
                    href="<?php echo esc_url( home_url( '/password-reset/' ) ); ?>">
@@ -601,7 +678,7 @@ function smacg_render_settings( $user, $privacy = null, $is_owner = true ) {
             </div>
         </div>
 
-        <!-- 卡片 4：登出 -->
+        <!-- 卡片 4:登出 -->
         <div class="mc-set-card mc-set-card--danger">
             <h3 class="mc-set-title"><i class="fa-solid fa-right-from-bracket"></i> 結束工作階段</h3>
             <p class="mc-set-hint">登出後將回到網站首頁。</p>
@@ -618,16 +695,11 @@ function smacg_render_settings( $user, $privacy = null, $is_owner = true ) {
 
 /* =====================================================
  *  Continue Watching - 繼續觀看橫向列（P1-2）
- *
- *  條件：status = watching 且 progress < total_episodes
- *  排序：updated_at DESC（重用 $watchlist 既有排序）
- *  顯示：最多 10 部
- *  按鈕：重用 P0-2 既有的 .mc-card-btn--plus（JS 已綁定）
  * ===================================================== */
 function smacg_render_continue_watching( $watchlist ) {
     if ( empty( $watchlist ) || ! is_array( $watchlist ) ) return;
 
-    // 篩選：watching + 進度未滿
+    // 篩選:watching + 進度未滿
     $continue = [];
     foreach ( $watchlist as $w ) {
         if ( ( $w['status'] ?? '' ) !== 'watching' ) continue;
@@ -647,7 +719,7 @@ function smacg_render_continue_watching( $watchlist ) {
         if ( count( $continue ) >= 10 ) break;
     }
 
-    // 空狀態：顯示 CTA
+    // 空狀態:顯示 CTA
     if ( empty( $continue ) ) {
         ?>
         <section class="mc-continue-section mc-continue-empty">
@@ -667,7 +739,7 @@ function smacg_render_continue_watching( $watchlist ) {
     ?>
     <section class="mc-continue-section" id="mc-continue-section">
         <div class="mc-continue-header">
-            <h2 class="mc-continue-title">🎬 繼續觀看 <small>（<?php echo count( $continue ); ?>）</small></h2>
+            <h2 class="mc-continue-title">🎬 繼續觀看 <small>（<?php echo count( $continue ); ?>)</small></h2>
             <div class="mc-continue-nav">
                 <button type="button" class="mc-continue-arrow" data-dir="prev" aria-label="向左捲動">‹</button>
                 <button type="button" class="mc-continue-arrow" data-dir="next" aria-label="向右捲動">›</button>
@@ -704,7 +776,13 @@ function smacg_render_continue_watching( $watchlist ) {
 
                     <a href="<?php echo esc_url( $permalink ); ?>" class="mc-card-thumb">
                         <?php if ( $thumb ): ?>
-                            <img src="<?php echo esc_url( $thumb ); ?>" alt="<?php echo esc_attr( $title ); ?>" loading="lazy">
+                            <?php
+                            // v2.1.0:若有 image-optimizer,改用 picture tag
+                            if ( function_exists( 'smacg_picture_tag' ) && has_post_thumbnail( $pid ) ) {
+                                echo smacg_picture_tag( $pid, 'medium', $title );
+                            } else { ?>
+                                <img src="<?php echo esc_url( $thumb ); ?>" alt="<?php echo esc_attr( $title ); ?>" loading="lazy">
+                            <?php } ?>
                         <?php else: ?>
                             <div class="mc-card-thumb-ph" aria-hidden="true">🎬</div>
                         <?php endif; ?>
