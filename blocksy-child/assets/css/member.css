@@ -2141,6 +2141,7 @@ body.mc-cropper-open {
     margin-top: 6px;
   }
 }
+
 /* Batch 1B-3：會員中心 hero 追蹤數 */
 .mc-follow-meta {
 	display: flex;
@@ -2167,3 +2168,4 @@ body.mc-cropper-open {
 	font-size: 13px;
 	color: var(--mc-text-3, #8b91a8);
 }
+
