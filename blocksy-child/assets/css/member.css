@@ -2169,3 +2169,179 @@ body.mc-cropper-open {
 	color: var(--mc-text-3, #8b91a8);
 }
 
+/* ============================================================
+   v2.6.0 (2026-05-13) - Batch 1C-4 通知偏好
+   ============================================================ */
+.mc-settings-card--notif {
+    margin-top: 18px;
+}
+.mc-settings-card-desc {
+    margin: 0 0 14px;
+    font-size: 13px;
+    color: var(--mc-text-3, #8b91a8);
+}
+
+.mc-notif-prefs-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 18px;
+}
+.mc-notif-prefs-table th {
+    text-align: left;
+    padding: 10px 8px;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--mc-text-3, #8b91a8);
+    text-transform: uppercase;
+    letter-spacing: .04em;
+    border-bottom: 1px solid var(--mc-border, rgba(255,255,255,.08));
+}
+.mc-notif-prefs-table th.mc-notif-col-toggle,
+.mc-notif-prefs-table td.mc-notif-col-toggle {
+    width: 70px;
+    text-align: center;
+}
+.mc-notif-prefs-table td {
+    padding: 12px 8px;
+    border-bottom: 1px solid rgba(255,255,255,.05);
+    vertical-align: middle;
+}
+.mc-notif-prefs-table tr:last-child td {
+    border-bottom: 0;
+}
+
+.mc-notif-type {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+}
+.mc-notif-type-icon {
+    font-size: 22px;
+    flex-shrink: 0;
+    width: 36px;
+    text-align: center;
+}
+.mc-notif-type b {
+    display: block;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--mc-text, #e6e9f2);
+}
+.mc-notif-type small {
+    display: block;
+    font-size: 12px;
+    color: var(--mc-text-3, #8b91a8);
+    margin-top: 2px;
+}
+
+/* Toggle switch */
+.mc-switch {
+    position: relative;
+    display: inline-block;
+    width: 42px;
+    height: 24px;
+    cursor: pointer;
+}
+.mc-switch input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+.mc-switch-slider {
+    position: absolute;
+    inset: 0;
+    background: rgba(255,255,255,.15);
+    border-radius: 999px;
+    transition: background .15s;
+}
+.mc-switch-slider::before {
+    content: '';
+    position: absolute;
+    left: 3px;
+    top: 3px;
+    width: 18px;
+    height: 18px;
+    background: #fff;
+    border-radius: 50%;
+    transition: transform .2s, background .15s;
+    box-shadow: 0 2px 4px rgba(0,0,0,.2);
+}
+.mc-switch input:checked + .mc-switch-slider {
+    background: linear-gradient(135deg, var(--mc-accent, #f472b6), var(--mc-accent-3, #a78bfa));
+}
+.mc-switch input:checked + .mc-switch-slider::before {
+    transform: translateX(18px);
+}
+.mc-switch input:disabled + .mc-switch-slider {
+    opacity: .5;
+    cursor: wait;
+}
+
+/* Digest 下拉 */
+.mc-notif-digest {
+    padding: 16px;
+    background: var(--mc-surface, rgba(255,255,255,.04));
+    border: 1px solid var(--mc-border, rgba(255,255,255,.08));
+    border-radius: 10px;
+}
+.mc-notif-digest label {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+.mc-notif-digest label b {
+    font-size: 14px;
+    color: var(--mc-text, #e6e9f2);
+}
+.mc-notif-digest select {
+    padding: 8px 12px;
+    font-size: 14px;
+    background: var(--mc-bg, #181a2e);
+    color: var(--mc-text, #e6e9f2);
+    border: 1px solid var(--mc-border, rgba(255,255,255,.15));
+    border-radius: 8px;
+    cursor: pointer;
+}
+.mc-notif-digest select:focus {
+    outline: none;
+    border-color: var(--mc-accent, #f472b6);
+}
+.mc-notif-digest-tip {
+    margin: 10px 0 0;
+    font-size: 12px;
+    color: var(--mc-text-3, #8b91a8);
+    line-height: 1.5;
+}
+
+/* 儲存狀態 */
+.mc-notif-prefs-status {
+    margin-top: 12px;
+    padding: 8px 14px;
+    font-size: 13px;
+    border-radius: 8px;
+}
+.mc-notif-prefs-status.is-ok {
+    background: rgba(52, 211, 153, .15);
+    color: #6ee7b7;
+    border: 1px solid rgba(52, 211, 153, .3);
+}
+.mc-notif-prefs-status.is-err {
+    background: rgba(239, 68, 68, .15);
+    color: #fca5a5;
+    border: 1px solid rgba(239, 68, 68, .3);
+}
+
+/* 手機 */
+@media (max-width: 600px) {
+    .mc-notif-prefs-table th,
+    .mc-notif-prefs-table td {
+        padding: 10px 4px;
+    }
+    .mc-notif-prefs-table th.mc-notif-col-toggle,
+    .mc-notif-prefs-table td.mc-notif-col-toggle {
+        width: 50px;
+    }
+    .mc-notif-type small {
+        display: none;  /* 手機隱藏描述,只留標題 */
+    }
+}
