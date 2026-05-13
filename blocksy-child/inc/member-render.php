@@ -1,7 +1,7 @@
 <?php
 /**
  * Member Center - Render Layer
- * Version: 2.0.1 (2026-05-12)
+ * Version: 2.0.6 (2026-05-13)
  *
  * 各 tab 的 HTML 輸出。所有清單一律「先渲染前 N 筆」，其餘由 AJAX 載入。
  * 桌機 20 / 行動 12（前端 JS 偵測，PHP 預設輸出 20）
@@ -10,6 +10,14 @@
  *   - 基本資料：改為 inline 編輯（顯示名稱/簡介），不再跳 /account/
  *   - 重設密碼：改用 /password-reset/ 自訂頁
  *   - 登出帳號：維持 wp_logout_url()
+ *
+ * v2.0.5 (2026-05-13)：
+ *   - 移除「暱稱」欄位
+ *   - 隱私卡片新增「顯示繼續觀看」toggle（P1-2）
+ *
+ * v2.0.6 (2026-05-13) — Batch B：
+ *   - smacg_render_stats() 在 banner 後插入「完成率」卡（讀 $s['completion_rate']）
+ *   - smacg_render_comments() 改用分頁，首頁伺服端渲染 20 筆 + 載入更多按鈕
  */
 if (!defined('ABSPATH')) exit;
 
@@ -189,9 +197,13 @@ function smacg_render_watchlist($watchlist, $counts) {
 
 /* =====================================================
  *  Tab 3：統計
+ *  v2.0.6：banner 後插入「完成率」卡（讀 $s['completion_rate']）
  * ===================================================== */
 function smacg_render_stats($s) {
-    $r = $s['rating']; ?>
+    $r = $s['rating'];
+    // v2.0.6：完成率（向下相容，若舊版 stats 沒有此欄位則跳過）
+    $completion_rate = isset($s['completion_rate']) ? (float) $s['completion_rate'] : null;
+    ?>
     <div class="mc-stats-grid">
 
         <div class="mc-stats-banner">
@@ -205,6 +217,35 @@ function smacg_render_stats($s) {
                 追完 <?php echo $s['counts']['completed']; ?> 部作品
             </div>
         </div>
+
+        <?php if ($completion_rate !== null):
+            // 計算分子分母給 hover/說明用
+            $denom = $s['counts']['completed'] + $s['counts']['dropped'] + $s['counts']['watching'];
+            // 評語
+            if      ($completion_rate >= 80) { $emoji = '🏆'; $remark = '超強毅力，幾乎部部追完！'; }
+            elseif  ($completion_rate >= 60) { $emoji = '✨'; $remark = '完成率不錯，繼續保持！'; }
+            elseif  ($completion_rate >= 40) { $emoji = '👀'; $remark = '加油，可以多看完幾部！'; }
+            elseif  ($completion_rate >= 20) { $emoji = '🤔'; $remark = '挑戰一下，把追番中的看完吧！'; }
+            else                             { $emoji = '🌱'; $remark = '剛開始，慢慢累積！'; }
+        ?>
+            <div class="mc-stats-card mc-stats-card--completion">
+                <h3><?php echo $emoji; ?> 完成率</h3>
+                <div class="mc-completion-wrap">
+                    <div class="mc-completion-big">
+                        <b><?php echo $completion_rate; ?></b><span>%</span>
+                    </div>
+                    <div class="mc-completion-bar">
+                        <div class="mc-completion-fill" style="width:<?php echo min(100, $completion_rate); ?>%"></div>
+                    </div>
+                    <div class="mc-completion-meta">
+                        已看完 <b><?php echo $s['counts']['completed']; ?></b> /
+                        計入 <b><?php echo $denom; ?></b> 部
+                        <small>（含追番中、已看完、棄番）</small>
+                    </div>
+                    <p class="mc-completion-remark"><?php echo esc_html($remark); ?></p>
+                </div>
+            </div>
+        <?php endif; ?>
 
         <div class="mc-stats-card">
             <h3>⭐ 評分分布</h3>
@@ -349,22 +390,75 @@ function smacg_render_ratings($ratings, $rating_stats) {
 }
 
 /* =====================================================
- *  Tab 5：留言
+ *  Tab 5：留言（v2.0.6：改用分頁）
+ *
+ *  - 伺服端首頁渲染 SMACG_COMMENT_PAGE_SIZE 筆（預設 20）
+ *  - 總筆數 > 該數時顯示「載入更多」按鈕
+ *  - 按鈕帶 data-loaded / data-total / data-nonce，由 member.js + member-ajax.php 接手
  * ===================================================== */
-function smacg_render_comments($uid) {
-    $cmts = get_comments(['user_id'=>$uid, 'status'=>'approve', 'number'=>50, 'orderby'=>'comment_date', 'order'=>'DESC']);
-    if (!$cmts) { echo '<p class="mc-empty">尚無留言</p>'; return; }
-    echo '<ul class="mc-cmt-fulllist">';
-    foreach ($cmts as $c) {
-        printf(
-            '<li><a href="%s"><b>%s</b><p>%s</p><small>%s</small></a></li>',
-            esc_url(get_comment_link($c)),
-            esc_html(get_the_title($c->comment_post_ID)),
-            esc_html(wp_trim_words($c->comment_content, 40)),
-            esc_html(mysql2date('Y-m-d H:i', $c->comment_date))
-        );
+if ( ! defined( 'SMACG_COMMENT_PAGE_SIZE' ) ) {
+    define( 'SMACG_COMMENT_PAGE_SIZE', 20 );
+}
+
+function smacg_render_comments( $uid ) {
+    $uid = (int) $uid;
+    if ( $uid <= 0 ) { echo '<p class="mc-empty">尚無留言</p>'; return; }
+
+    // 先取總數
+    $total = (int) get_comments( [
+        'user_id' => $uid,
+        'status'  => 'approve',
+        'count'   => true,
+    ] );
+
+    if ( $total === 0 ) {
+        echo '<p class="mc-empty">尚無留言</p>';
+        return;
     }
-    echo '</ul>';
+
+    // 抓首頁 20 筆
+    $cmts = get_comments( [
+        'user_id' => $uid,
+        'status'  => 'approve',
+        'number'  => SMACG_COMMENT_PAGE_SIZE,
+        'offset'  => 0,
+        'orderby' => 'comment_date',
+        'order'   => 'DESC',
+    ] );
+
+    $loaded = count( $cmts );
+    $nonce  = wp_create_nonce( 'smacg_load_more_comments' );
+    ?>
+    <div class="mc-comments-wrap">
+        <div class="mc-comments-meta">
+            共 <b><?php echo $total; ?></b> 則留言
+        </div>
+
+        <ul class="mc-cmt-fulllist" id="mc-cmt-list">
+            <?php foreach ( $cmts as $c ): ?>
+                <li>
+                    <a href="<?php echo esc_url( get_comment_link( $c ) ); ?>">
+                        <b><?php echo esc_html( get_the_title( $c->comment_post_ID ) ); ?></b>
+                        <p><?php echo esc_html( wp_trim_words( $c->comment_content, 40 ) ); ?></p>
+                        <small><?php echo esc_html( mysql2date( 'Y-m-d H:i', $c->comment_date ) ); ?></small>
+                    </a>
+                </li>
+            <?php endforeach; ?>
+        </ul>
+
+        <?php if ( $total > $loaded ): ?>
+            <div class="mc-loadmore-wrap">
+                <button type="button"
+                        class="mc-loadmore mc-loadmore-comments"
+                        data-loaded="<?php echo $loaded; ?>"
+                        data-total="<?php echo $total; ?>"
+                        data-nonce="<?php echo esc_attr( $nonce ); ?>">
+                    載入更多（剩 <span><?php echo $total - $loaded; ?></span>）
+                </button>
+            </div>
+        <?php endif; ?>
+    </div>
+    <?php
 }
 
 /* =====================================================
