@@ -55,8 +55,8 @@
     </button>
 
     <div class="lm-logo">
-      <span class="logo-icon-box" aria-hidden="true"><img src="https://darkcyan-alpaca-757238.hostingersite.com/wp-content/uploads/2026/05/DHBdKsLa-scaled-e1778709031191.jpg" alt="weixiaoacg" style="height:38px;width:auto;vertical-align:middle;display:inline-block;" /></span>
-      <span class="logo-text">微笑動漫<span class="logo-plus">+</span></span>
+      <span class="logo-icon-box" aria-hidden="true"><img src="https://darkcyan-alpaca-757238.hostingersite.com/wp-content/uploads/2026/05/DHBdKsLa.png" alt="weixiaoacg" style="height:38px;width:auto;vertical-align:middle;display:inline-block;" /></span>
+      <span class="logo-text">微笑動漫<span class="logo-plus"></span></span>
     </div>
 
     <p class="lm-subtitle">登入以解鎖完整功能</p>
