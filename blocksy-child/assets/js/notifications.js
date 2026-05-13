@@ -1,15 +1,19 @@
 /**
  * Notifications UI
- * Version: 1.0.0 (2026-05-13)
+ * Version: 1.0.1 (2026-05-13)
  *
  * 功能：
- * 1. 自動注入鈴鐺到 site nav
+ * 1. 自動注入鈴鐺（固定浮動於右上角）
  * 2. 點鈴鐺打開/關閉下拉面板
  * 3. 60 秒輪詢未讀數
  * 4. 通知列表載入、標記已讀、刪除、全部已讀
  * 5. 會員中心通知 tab 互動（filter、loadmore、delete）
+ * 6. 會員中心通知偏好 AJAX 儲存（IIFE #2）
  *
  * 依賴：window.smacgNotif = { ajax, nonce, loggedIn, mcUrl, pollInterval }
+ *
+ * v1.0.1: 鈴鐺改為右上角浮動定位 (position:fixed)，
+ *         避免被注入到 Blocksy <header> 內首個 <ul> 變成主選單項。
  */
 (function () {
 	'use strict';
@@ -47,7 +51,7 @@
 	}
 
 	/* =========================================================
-	   鈴鐺注入
+	   鈴鐺 HTML
 	   ========================================================= */
 	function buildBellHTML() {
 		return (
@@ -72,37 +76,19 @@
 		);
 	}
 
+	/* =========================================================
+	   鈴鐺注入 (v1.0.1：固定浮動，不再嘗試插入 header DOM)
+	   ========================================================= */
 	function injectBell() {
 		if (document.getElementById('smacg-bell-wrap')) return; // 已注入
-
-		// 嘗試找適合的容器（優先順序）
-		const candidates = [
-			'.ct-header-account',           // Blocksy 帳戶元素
-			'.ct-header-text-html',         // Blocksy 文字元素
-			'.header-account',
-			'header .ct-header [data-row="middle"]',
-			'header .ct-header',
-			'header nav',
-			'header',
-		];
-		let host = null;
-		for (let i = 0; i < candidates.length; i++) {
-			const el = document.querySelector(candidates[i]);
-			if (el) { host = el; break; }
-		}
 
 		const wrapper = document.createElement('div');
 		wrapper.innerHTML = buildBellHTML();
 		const bellEl = wrapper.firstElementChild;
 
-		if (host) {
-			// 插入到 host 的開頭（這樣會在登入按鈕左側）
-			host.insertBefore(bellEl, host.firstChild);
-		} else {
-			// fallback：固定右上角浮動
-			bellEl.classList.add('smacg-bell-floating');
-			document.body.appendChild(bellEl);
-		}
+		// 一律以浮動方式掛到 <body>，由 CSS 控制位置
+		bellEl.classList.add('smacg-bell-floating');
+		document.body.appendChild(bellEl);
 
 		bindBellEvents();
 	}
@@ -279,7 +265,7 @@
 		// 之後定時
 		pollTimer = setInterval(pollUnreadCount, POLL_MS);
 
-		// 頁面回到前台時立刻刷新（visibilitychange）
+		// 頁面回到前台時立刻刷新
 		document.addEventListener('visibilitychange', () => {
 			if (!document.hidden) pollUnreadCount();
 		});
