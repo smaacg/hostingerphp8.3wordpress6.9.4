@@ -403,16 +403,20 @@ function smacg_render_points($points, $lvl, $log) { ?>
 <?php }
 
 /* =====================================================
- *  Tab 7：設定（v2.0.1 重寫）
+ *  Tab 7：設定（v2.0.5）
+ *  v2.0.5 (2026-05-13):
+ *    - 移除「暱稱」欄位（與顯示名稱重複，徒增困惑）
+ *    - 隱私卡片新增「顯示繼續觀看」toggle（P1-2）
  * ===================================================== */
 function smacg_render_settings( $user, $privacy = null, $is_owner = true ) {
     if ( $privacy === null && function_exists( 'smacg_get_user_privacy' ) ) {
         $privacy = smacg_get_user_privacy( $user->ID );
     }
     $privacy = wp_parse_args( (array) $privacy, [
-        'show_email'       => 0,
-        'public_profile'   => 1,
-        'public_watchlist' => 1,
+        'show_email'             => 0,
+        'public_profile'         => 1,
+        'public_watchlist'       => 1,
+        'show_continue_watching' => 1,
     ] );
     $nonce = wp_create_nonce( 'smacg_privacy' );
     ?>
@@ -425,15 +429,11 @@ function smacg_render_settings( $user, $privacy = null, $is_owner = true ) {
                 <?php wp_nonce_field( 'smacg_update_profile', 'smacg_profile_nonce' ); ?>
                 <label class="mc-set-label">
                     <span>顯示名稱</span>
-                    <input type="text" name="display_name" value="<?php echo esc_attr( $user->display_name ); ?>" required>
-                </label>
-                <label class="mc-set-label">
-                    <span>暱稱</span>
-                    <input type="text" name="nickname" value="<?php echo esc_attr( get_user_meta( $user->ID, 'nickname', true ) ); ?>">
+                    <input type="text" name="display_name" value="<?php echo esc_attr( $user->display_name ); ?>" maxlength="40" required>
                 </label>
                 <label class="mc-set-label">
                     <span>個人簡介</span>
-                    <textarea name="description" rows="3"><?php echo esc_textarea( $user->description ); ?></textarea>
+                    <textarea name="description" rows="3" maxlength="300" placeholder="跟其他用戶介紹一下自己…"><?php echo esc_textarea( $user->description ); ?></textarea>
                 </label>
                 <div class="mc-set-actions">
                     <button type="submit" class="mc-btn-primary">儲存變更</button>
@@ -442,9 +442,9 @@ function smacg_render_settings( $user, $privacy = null, $is_owner = true ) {
             </form>
         </div>
 
-        <!-- 卡片 2：隱私設定（P0-1 新增） -->
+        <!-- 卡片 2：隱私 & 顯示設定 -->
         <div class="mc-set-card">
-            <h3 class="mc-set-title"><i class="fa-solid fa-user-shield"></i> 隱私設定</h3>
+            <h3 class="mc-set-title"><i class="fa-solid fa-user-shield"></i> 隱私 & 顯示</h3>
             <div class="mc-privacy-form" data-nonce="<?php echo esc_attr( $nonce ); ?>">
 
                 <div class="mc-toggle-row">
@@ -479,8 +479,8 @@ function smacg_render_settings( $user, $privacy = null, $is_owner = true ) {
                         <span class="mc-toggle-slider"></span>
                     </label>
                 </div>
-                
-                   <div class="mc-toggle-row">
+
+                <div class="mc-toggle-row">
                     <div class="mc-toggle-info">
                         <div class="mc-toggle-name">顯示「繼續觀看」</div>
                         <div class="mc-toggle-desc">關閉後會員頁不再顯示頂部的橫向追番列</div>
