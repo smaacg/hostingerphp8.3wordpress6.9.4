@@ -3,7 +3,10 @@
  * 微笑動漫 Child Theme — functions.php
  *
  * @package weixiaoacg
- * @version 2.2.0
+ * @version 2.3.0
+ *
+ * v2.3.0 變更（2026-05-13）— Batch 1B-1：追蹤系統
+ * - [新增] inc/follow-system.php（wp_smacg_follows 資料表 + 核心 helpers）
  *
  * v2.2.0 變更（2026-05-13）— Batch 1A：公開個人頁
  * - [新增] inc/public-profile.php（/u/{username}/ rewrite + 資料準備）
@@ -23,7 +26,7 @@ defined( 'ABSPATH' ) || exit;
 /* ============================================================
    常數
    ============================================================ */
-define( 'weixiaoacg_VERSION',   '2.2.0' );
+define( 'weixiaoacg_VERSION',   '2.3.0' );
 define( 'weixiaoacg_THEME_URL', get_stylesheet_directory_uri() );
 define( 'weixiaoacg_THEME_DIR', get_stylesheet_directory() );
 
@@ -36,6 +39,10 @@ define( 'SMACG_POINT_EPISODE',   1  );
 define( 'SMACG_POINT_READ',      2  );
 define( 'SMACG_POINT_COMMENT',   3  );
 define( 'SMACG_POINT_LOGIN',     1  );
+
+// Batch 1B-1: 追蹤系統參數
+define( 'SMACG_FOLLOW_DAILY_LIMIT', 200 );  // 單日追蹤上限
+define( 'SMACG_FOLLOW_COOLDOWN',    1   );  // 同一目標冷卻秒數（防連點）
 
 const WEIXIAOACG_ID_CATS  = [ 'announcement', 'news' ];
 const WEIXIAOACG_LLM_CATS = [ 'review', 'feature' ];
@@ -77,4 +84,10 @@ if ( file_exists( $inc_dir . 'image-optimizer.php' ) ) {
 //    用 file_exists 防呆，這樣你可以分批 push 而不會在中間狀態壞站
 if ( file_exists( $inc_dir . 'public-profile.php' ) ) {
     require_once $inc_dir . 'public-profile.php';   // /u/{username}/ rewrite + 資料準備
+}
+
+// 9. 追蹤系統（Batch 1B-1 - 2026-05-13 新增）
+//    提供 smacg_follow_user / smacg_unfollow_user / smacg_is_following / 計數 helpers
+if ( file_exists( $inc_dir . 'follow-system.php' ) ) {
+    require_once $inc_dir . 'follow-system.php';
 }
