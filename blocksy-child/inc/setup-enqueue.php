@@ -4,7 +4,7 @@
  *
  * @package weixiaoacg
  * @subpackage Enqueue
- * @version 2.2.0 (2026-05-13)
+ * @version 2.3.0 (2026-05-13)
  *
  * v2.1.0 變更 — Batch C #14：
  *   - 新增 page-year-review.php 範本的條件式 CSS/JS 載入
@@ -14,6 +14,9 @@
  *   - 新增 Cropper.js CDN（CSS + JS）條件式載入
  *   - 僅在 page-member.php 範本（或 UM user page）載入
  *   - LiteSpeed Cache 排除規則
+ *
+ * v2.3.0 變更 — Batch 1A 公開個人頁：
+ *   - 新增公開個人頁 CSS/JS 條件式載入（僅在 smacg_is_public_profile_page() 為 true 時）
  */
 defined( 'ABSPATH' ) || exit;
 
@@ -191,10 +194,7 @@ add_action( 'wp_enqueue_scripts', function () {
 }, 20 );
 
 /* ============================================================
-   Year Review 頁面（Batch C #14 - 2026-05-13 新增）
-   ------------------------------------------------------------
-   - 只在 page-year-review.php 範本載入專用 CSS + JS
-   - localize smacgYearReview: ajax / nonce / user_id / year
+   Year Review 頁面（Batch C #14 - 2026-05-13）
    ============================================================ */
 add_action( 'wp_enqueue_scripts', function () {
     if ( ! is_page_template( 'page-year-review.php' ) ) {
@@ -226,7 +226,6 @@ add_action( 'wp_enqueue_scripts', function () {
             true
         );
 
-        // localize
         $year = isset( $_GET['year'] ) ? max( 2020, min( (int) date( 'Y' ), (int) $_GET['year'] ) ) : (int) date( 'Y' );
         wp_localize_script( 'smacg-year-review', 'smacgYearReview', [
             'ajax'    => admin_url( 'admin-ajax.php' ),
@@ -239,20 +238,13 @@ add_action( 'wp_enqueue_scripts', function () {
 }, 15 );
 
 /* ============================================================
-   Cropper.js（v2.2.0 - 2026-05-13 新增）
-   ------------------------------------------------------------
-   - 僅在會員中心頁面載入（page-member.php 或 UM user page）
-   - 用於頭像上傳的預覽 + 裁切
-   - CDN 來源：jsdelivr（v1.6.1，穩定版）
-   - priority 25：在 member-ajax.php 的 smacg-member 腳本（20）之後
-   - LiteSpeed Cache 排除：避免被 JS 合併打壞
+   Cropper.js（v2.2.0 - 2026-05-13）
    ============================================================ */
 add_action( 'wp_enqueue_scripts', function () {
     if ( ! function_exists( 'smacg_is_member_page' ) || ! smacg_is_member_page() ) {
         return;
     }
 
-    // Cropper.js CSS
     wp_enqueue_style(
         'cropperjs',
         'https://cdn.jsdelivr.net/npm/cropperjs@1.6.1/dist/cropper.min.css',
@@ -260,7 +252,6 @@ add_action( 'wp_enqueue_scripts', function () {
         '1.6.1'
     );
 
-    // Cropper.js JS（in footer，無依賴）
     wp_enqueue_script(
         'cropperjs',
         'https://cdn.jsdelivr.net/npm/cropperjs@1.6.1/dist/cropper.min.js',
@@ -270,9 +261,6 @@ add_action( 'wp_enqueue_scripts', function () {
     );
 }, 25 );
 
-/* ============================================================
-   LiteSpeed Cache：排除 Cropper.js CDN（避免被合併壓縮搞壞）
-   ============================================================ */
 add_filter( 'litespeed_optimize_js_excludes', function ( $excludes ) {
     $excludes[] = 'cdn.jsdelivr.net/npm/cropperjs';
     $excludes[] = 'cropper.min.js';
@@ -283,3 +271,68 @@ add_filter( 'litespeed_optimize_css_excludes', function ( $excludes ) {
     $excludes[] = 'cropper.min.css';
     return $excludes;
 } );
+
+/* ============================================================
+   Public Profile 公開個人頁（v2.3.0 - 2026-05-13 新增）
+   ------------------------------------------------------------
+   - 僅在 smacg_is_public_profile_page() 為 true 時載入
+   - 不需 jQuery（純 vanilla JS）
+   - 同時注入 toast 內聯樣式（避免另開 CSS 檔）
+   ============================================================ */
+add_action( 'wp_enqueue_scripts', function () {
+    if ( ! function_exists( 'smacg_is_public_profile_page' ) || ! smacg_is_public_profile_page() ) {
+        return;
+    }
+
+    $base_dir = weixiaoacg_THEME_DIR;
+    $base_url = weixiaoacg_THEME_URL;
+
+    // CSS
+    $css_path = $base_dir . '/assets/css/public-profile.css';
+    if ( file_exists( $css_path ) ) {
+        wp_enqueue_style(
+            'smacg-public-profile',
+            $base_url . '/assets/css/public-profile.css',
+            [ 'weixiaoacg-fa6' ],
+            filemtime( $css_path )
+        );
+
+        // Toast 樣式（直接 inline，省去額外請求）
+        wp_add_inline_style( 'smacg-public-profile', '
+            .pp-toast {
+                position: fixed;
+                bottom: 30px;
+                left: 50%;
+                transform: translateX(-50%) translateY(20px);
+                padding: 10px 20px;
+                font-size: 14px;
+                font-weight: 600;
+                color: #fff;
+                border-radius: 999px;
+                box-shadow: 0 8px 24px rgba(0,0,0,.4);
+                opacity: 0;
+                pointer-events: none;
+                transition: opacity .2s, transform .2s;
+                z-index: 99999;
+            }
+            .pp-toast--show {
+                opacity: 1;
+                transform: translateX(-50%) translateY(0);
+            }
+            .pp-toast--ok  { background: linear-gradient(135deg, #34d399, #10b981); }
+            .pp-toast--err { background: linear-gradient(135deg, #f87171, #ef4444); }
+        ' );
+    }
+
+    // JS
+    $js_path = $base_dir . '/assets/js/public-profile.js';
+    if ( file_exists( $js_path ) ) {
+        wp_enqueue_script(
+            'smacg-public-profile',
+            $base_url . '/assets/js/public-profile.js',
+            [],
+            filemtime( $js_path ),
+            true
+        );
+    }
+}, 20 );
