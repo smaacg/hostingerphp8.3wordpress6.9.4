@@ -4,7 +4,7 @@
  *
  * @package weixiaoacg
  * @version 2.3.0
- *
+ * v2.3.1 變更（2026-05-13）— Batch 1B-2：載入 inc/follow-ajax.php
  * v2.3.0 變更（2026-05-13）— Batch 1B-1：追蹤系統
  * - [新增] inc/follow-system.php（wp_smacg_follows 資料表 + 核心 helpers）
  *
@@ -90,4 +90,8 @@ if ( file_exists( $inc_dir . 'public-profile.php' ) ) {
 //    提供 smacg_follow_user / smacg_unfollow_user / smacg_is_following / 計數 helpers
 if ( file_exists( $inc_dir . 'follow-system.php' ) ) {
     require_once $inc_dir . 'follow-system.php';
+}
+// 10. 追蹤系統 AJAX（Batch 1B-2 - 2026-05-13）
+if ( file_exists( $inc_dir . 'follow-ajax.php' ) ) {
+    require_once $inc_dir . 'follow-ajax.php';
 }
