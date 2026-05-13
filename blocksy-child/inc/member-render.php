@@ -803,3 +803,98 @@ function smacg_render_continue_watching( $watchlist ) {
     </section>
     <?php
 }
+
+/* =====================================================
+ *  v2.2.0 — Batch 1C-4:通知偏好區塊
+ *  (供 smacg_render_settings 呼叫)
+ * ===================================================== */
+function smacg_render_notification_prefs_card( $uid ) {
+    if ( ! $uid || ! function_exists( 'smacg_get_notification_prefs' ) ) return;
+
+    $prefs = smacg_get_notification_prefs( $uid );
+
+    // 通知類型定義
+    $types = [
+        'follow'        => [ '👥', '新增粉絲',        '有人開始追蹤你' ],
+        'comment_reply' => [ '💬', '留言回覆',        '有人回覆了你的留言' ],
+        'rating'        => [ '⭐', '收藏動畫被評分',  '你收藏的動畫被其他人評分' ],
+        'badge'         => [ '🏆', '徽章解鎖',        '達成成就獲得徽章' ],
+        'level_up'      => [ '🚀', '等級提升',        '會員等級升等通知' ],
+        'system'        => [ '📢', '系統公告',        '網站重要訊息與公告' ],
+    ];
+
+    $digest = $prefs['email_digest'] ?? 'daily';
+    ?>
+    <div class="mc-settings-card mc-settings-card--notif">
+        <h3>🔔 通知偏好</h3>
+        <p class="mc-settings-card-desc">設定哪些事件要通知你,以及收到 Email 的頻率。</p>
+
+        <div class="mc-notif-prefs" data-uid="<?php echo (int) $uid; ?>">
+
+            <table class="mc-notif-prefs-table">
+                <thead>
+                    <tr>
+                        <th>事件類型</th>
+                        <th class="mc-notif-col-toggle">站內</th>
+                        <th class="mc-notif-col-toggle">Email</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <?php foreach ( $types as $type => $info ) :
+                        [ $icon, $label, $desc ] = $info;
+                        $site_key  = $type . '_site';
+                        $email_key = $type . '_email';
+                        $site_on   = ! empty( $prefs[ $site_key ] );
+                        $email_on  = ! empty( $prefs[ $email_key ] );
+                    ?>
+                        <tr>
+                            <td>
+                                <div class="mc-notif-type">
+                                    <span class="mc-notif-type-icon"><?php echo $icon; ?></span>
+                                    <div>
+                                        <b><?php echo esc_html( $label ); ?></b>
+                                        <small><?php echo esc_html( $desc ); ?></small>
+                                    </div>
+                                </div>
+                            </td>
+                            <td class="mc-notif-col-toggle">
+                                <label class="mc-switch">
+                                    <input type="checkbox"
+                                           data-pref="<?php echo esc_attr( $site_key ); ?>"
+                                           <?php checked( $site_on ); ?>>
+                                    <span class="mc-switch-slider"></span>
+                                </label>
+                            </td>
+                            <td class="mc-notif-col-toggle">
+                                <label class="mc-switch">
+                                    <input type="checkbox"
+                                           data-pref="<?php echo esc_attr( $email_key ); ?>"
+                                           <?php checked( $email_on ); ?>>
+                                    <span class="mc-switch-slider"></span>
+                                </label>
+                            </td>
+                        </tr>
+                    <?php endforeach; ?>
+                </tbody>
+            </table>
+
+            <div class="mc-notif-digest">
+                <label>
+                    <b>Email 摘要頻率</b>
+                    <select data-pref="email_digest">
+                        <option value="off"    <?php selected( $digest, 'off' ); ?>>關閉（不收 Email）</option>
+                        <option value="daily"  <?php selected( $digest, 'daily' ); ?>>每日摘要（晚上 20:00 寄送）</option>
+                        <option value="weekly" <?php selected( $digest, 'weekly' ); ?>>每週摘要（週日晚上 20:00）</option>
+                    </select>
+                </label>
+                <p class="mc-notif-digest-tip">
+                    💡 即使 Email 摘要關閉,站內鈴鐺通知仍會運作（依上方各項開關)。
+                </p>
+            </div>
+
+            <div class="mc-notif-prefs-status" data-status hidden></div>
+        </div>
+    </div>
+    <?php
+}
+
