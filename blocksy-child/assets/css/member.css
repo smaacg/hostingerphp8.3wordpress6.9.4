@@ -1,8 +1,17 @@
 /* ==========================================================
- * Member Center v2.1.0 (2026-05-12)
+ * Member Center v2.2.0 (2026-05-13)
  * Dark theme + glass-morphism, fully responsive
  *
  * 變更紀錄：
+ * v2.2.0 (2026-05-13) — Batch A：UX 微調
+ *   - #1  等級條：文字移到條外，bar 高度 22px → 12px，避免文字壓縮
+ *   - #2  Continue Watching 卡片高度統一（標題 2 行、進度條貼底）
+ *   - #3  手機版 tab 列右側漸層遮罩，暗示可橫向滑動
+ *   - #4  圓餅圖手機 160→120px、legend 移到下方
+ *   - #10 toggle 切換時整列短暫綠色高亮
+ *   - #11 所有可聚焦元件 :focus-visible 統一描邊（toggle / tab / button / arrow / filter）
+ *
+ * v2.1.1 ：P0-1 隱私 toggle、P0-2 卡片快速操作、P1-2 Continue Watching
  * v2.1.0 (2026-05-12)：
  *   - 整合 v2.0.1 / v2.0.2 / v2.0.3 散落補丁
  *   - 移除 !important 過度使用，改用 CSS 變數
@@ -46,6 +55,9 @@
   --mc-radius:       14px;
   --mc-radius-sm:    8px;
   --mc-shadow:       0 8px 24px rgba(0, 0, 0, .25);
+
+  /* v2.2.0 focus ring（#11） */
+  --mc-focus-ring:   0 0 0 3px rgba(255, 107, 174, .35);
 }
 
 /* ==========================================================
@@ -186,32 +198,38 @@
   line-height: 1.6;
 }
 
-/* 等級進度條 */
+/* ----------------------------------------------------------
+ *  等級進度條（v2.2.1 fix：bar + 文字分離）
+ * ---------------------------------------------------------- */
 .mc-level-bar {
   position: relative;
-  height: 22px;
-  background: rgba(0, 0, 0, .3);
+  height: 12px;
+  background: rgba(0, 0, 0, .35);
   border-radius: 999px;
-  overflow: hidden;
-  margin-bottom: 16px;
+  overflow: visible;                  /* 讓文字露出 bar 下方 */
+  margin-bottom: 28px;                /* 為下方文字預留空間 */
 }
 .mc-level-fill {
   position: absolute;
-  inset: 0 auto 0 0;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  min-width: 0;
   background: linear-gradient(90deg, var(--mc-accent), var(--mc-accent-2));
   border-radius: 999px;
   transition: width .6s ease;
 }
 .mc-level-text {
   position: absolute;
-  inset: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 12px;
+  left: 0;
+  top: calc(100% + 6px);
+  display: block;
+  font-size: 13px;
   font-weight: 600;
-  color: #fff;
-  text-shadow: 0 1px 2px rgba(0, 0, 0, .5);
+  color: var(--mc-text-2);
+  letter-spacing: .02em;
+  text-shadow: none;
+  white-space: nowrap;
 }
 
 /* Hero 統計小格 */
@@ -231,9 +249,10 @@
 .mc-hero-stats span { font-size: 12px; color: var(--mc-text-dim); }
 
 /* ==========================================================
- *  Tabs
+ *  Tabs（v2.2.0 #3：手機右側漸層遮罩）
  * ========================================================== */
 .mc-tabs {
+  position: relative;            /* v2.2.0：作為遮罩定位錨點 */
   display: flex;
   gap: 4px;
   flex-wrap: wrap;
@@ -1056,6 +1075,15 @@ body.page-template-page-member .mc-wrap {
     padding-inline: 12px !important;
     margin-top: 16px !important;
   }
+
+  /* v2.2.0 #4：圓餅圖手機縮小 + legend 移到下方 */
+  .mc-pie-wrap {
+    grid-template-columns: 1fr;
+    justify-items: center;
+    gap: 16px;
+  }
+  .mc-pie { width: 120px; height: 120px; }
+  .mc-pie-legend { width: 100%; max-width: 280px; }
 }
 
 @media (max-width: 480px) {
@@ -1066,6 +1094,19 @@ body.page-template-page-member .mc-wrap {
 
   .mc-tabs { overflow-x: auto; flex-wrap: nowrap; }
   .mc-tab  { white-space: nowrap; }
+
+  /* v2.2.0 #3：手機 tab 列右側漸層遮罩，暗示可滑動 */
+  .mc-tabs::after {
+    content: "";
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: 32px;
+    pointer-events: none;
+    background: linear-gradient(to right, transparent, var(--mc-bg));
+    z-index: 1;
+  }
 
   .mc-hero-stats > div { padding: 6px 4px; }
   .mc-hero-stats b     { font-size: 18px; }
@@ -1097,21 +1138,56 @@ body.page-template-page-member .mc-wrap {
     transition: none !important;
   }
 }
+
+/* ==========================================================
+ *  v2.2.0 #11：統一鍵盤聚焦樣式（:focus-visible）
+ * ========================================================== */
+.mc-tab:focus-visible,
+.mc-filter-btn:focus-visible,
+.mc-loadmore:focus-visible,
+.mc-continue-arrow:focus-visible,
+.mc-card-btn:focus-visible,
+.mc-btn-primary:focus-visible,
+.mc-btn-secondary:focus-visible,
+.mc-btn-danger:focus-visible {
+  outline: 2px solid var(--mc-accent);
+  outline-offset: 2px;
+}
+
 /* =========================================================
  * P0-1: 隱私 toggle 開關（v2.1.1）
  * ========================================================= */
-.mc-toggle-row{display:flex;align-items:center;gap:16px;padding:14px 0;border-bottom:1px solid rgba(255,255,255,.06);}
+.mc-toggle-row{
+  display:flex;align-items:center;gap:16px;
+  padding:14px 8px;
+  margin:0 -8px;                    /* v2.2.0 #10：保留外觀同寬，高亮時整列著色 */
+  border-bottom:1px solid rgba(255,255,255,.06);
+  border-radius:6px;
+  transition:background-color .4s ease;
+}
 .mc-toggle-row:last-of-type{border-bottom:none;}
 .mc-toggle-info{flex:1;min-width:0;}
 .mc-toggle-name{font-size:14px;font-weight:600;color:var(--mc-text,#e8eaf2);margin-bottom:4px;}
 .mc-toggle-desc{font-size:12px;color:var(--mc-text-3,#6b7088);line-height:1.5;}
 .mc-toggle{position:relative;display:inline-block;width:44px;height:24px;flex-shrink:0;cursor:pointer;}
 .mc-toggle input{opacity:0;width:0;height:0;}
-.mc-toggle-slider{position:absolute;inset:0;background:rgba(255,255,255,.12);border-radius:24px;transition:background .2s;}
+.mc-toggle-slider{position:absolute;inset:0;background:rgba(255,255,255,.12);border-radius:24px;transition:background .2s,box-shadow .2s;}
 .mc-toggle-slider::before{content:"";position:absolute;width:18px;height:18px;left:3px;top:3px;background:#fff;border-radius:50%;transition:transform .2s,box-shadow .2s;box-shadow:0 1px 3px rgba(0,0,0,.3);}
 .mc-toggle input:checked + .mc-toggle-slider{background:linear-gradient(135deg,#ff6bae,#a78bfa);}
 .mc-toggle input:checked + .mc-toggle-slider::before{transform:translateX(20px);}
 .mc-toggle input:disabled + .mc-toggle-slider{opacity:.5;cursor:not-allowed;}
+
+/* v2.2.0 #11：toggle 鍵盤聚焦時顯示外框（用 slider 接 outline） */
+.mc-toggle input:focus-visible + .mc-toggle-slider{
+  outline:2px solid var(--mc-accent);
+  outline-offset:3px;
+  box-shadow:var(--mc-focus-ring);
+}
+
+/* v2.2.0 #10：儲存成功時整列短暫高亮 */
+.mc-toggle-row.is-saved{
+  background-color:rgba(52,211,153,.14);
+}
 
 /* =========================================================
  * P0-2: 卡片快速操作工具列
@@ -1224,10 +1300,32 @@ body.page-template-page-member .mc-wrap {
   background: var(--mc-accent);
 }
 
-/* 單張卡片：寬度固定，重用 .mc-anime-card 樣式 */
+/* 單張卡片：寬度固定，重用 .mc-anime-card 樣式
+ * v2.2.0 #2：統一卡片高度（標題 2 行、進度條貼底）
+ */
 .mc-continue-card {
   flex: 0 0 180px;
   scroll-snap-align: start;
+  display: flex;
+  flex-direction: column;
+}
+.mc-continue-card .mc-card-body {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 78px;
+}
+.mc-continue-card .mc-card-title {
+  min-height: 2.8em;            /* 強制 2 行高度，避免長短不一 */
+  line-height: 1.4;
+  margin: 0 0 8px;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.mc-continue-card .mc-card-progress {
+  margin-top: auto;             /* 進度條固定貼底 */
 }
 
 /* 空狀態 */
