@@ -299,27 +299,25 @@ add_action('wp_ajax_smacg_update_profile', function () {
 
     $uid     = get_current_user_id();
     $display = sanitize_text_field($_POST['display_name'] ?? '');
-    $nick    = sanitize_text_field($_POST['nickname']     ?? '');
     $bio     = sanitize_textarea_field($_POST['description'] ?? '');
 
     if ($display === '') {
         wp_send_json_error(['msg' => '顯示名稱不可為空']);
     }
-    if (mb_strlen($display) > 40 || mb_strlen($nick) > 40 || mb_strlen($bio) > 300) {
+    if (mb_strlen($display) > 40 || mb_strlen($bio) > 300) {
         wp_send_json_error(['msg' => '欄位長度超出限制']);
     }
 
     $r = wp_update_user([
         'ID'           => $uid,
         'display_name' => $display,
-        'nickname'     => $nick !== '' ? $nick : $display,
+        'nickname'     => $display,  // 自動同步暱稱 = 顯示名稱
         'description'  => $bio,
     ]);
 
     if (is_wp_error($r)) {
         wp_send_json_error(['msg' => $r->get_error_message()]);
     }
-    // 清 UM 快取
     if (function_exists('UM')) UM()->user()->remove_cache($uid);
 
     wp_send_json_success(['msg' => '已儲存 ✓']);
