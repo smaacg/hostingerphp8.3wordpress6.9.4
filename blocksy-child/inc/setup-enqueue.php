@@ -4,11 +4,16 @@
  *
  * @package weixiaoacg
  * @subpackage Enqueue
- * @version 2.1.0 (2026-05-13)
+ * @version 2.2.0 (2026-05-13)
  *
  * v2.1.0 變更 — Batch C #14：
  *   - 新增 page-year-review.php 範本的條件式 CSS/JS 載入
  *   - 新增 smacgYearReview localize（ajax / nonce / user_id / year）
+ *
+ * v2.2.0 變更 — 頭像上傳優化：
+ *   - 新增 Cropper.js CDN（CSS + JS）條件式載入
+ *   - 僅在 page-member.php 範本（或 UM user page）載入
+ *   - LiteSpeed Cache 排除規則
  */
 defined( 'ABSPATH' ) || exit;
 
@@ -232,3 +237,49 @@ add_action( 'wp_enqueue_scripts', function () {
         ] );
     }
 }, 15 );
+
+/* ============================================================
+   Cropper.js（v2.2.0 - 2026-05-13 新增）
+   ------------------------------------------------------------
+   - 僅在會員中心頁面載入（page-member.php 或 UM user page）
+   - 用於頭像上傳的預覽 + 裁切
+   - CDN 來源：jsdelivr（v1.6.1，穩定版）
+   - priority 25：在 member-ajax.php 的 smacg-member 腳本（20）之後
+   - LiteSpeed Cache 排除：避免被 JS 合併打壞
+   ============================================================ */
+add_action( 'wp_enqueue_scripts', function () {
+    if ( ! function_exists( 'smacg_is_member_page' ) || ! smacg_is_member_page() ) {
+        return;
+    }
+
+    // Cropper.js CSS
+    wp_enqueue_style(
+        'cropperjs',
+        'https://cdn.jsdelivr.net/npm/cropperjs@1.6.1/dist/cropper.min.css',
+        [],
+        '1.6.1'
+    );
+
+    // Cropper.js JS（in footer，無依賴）
+    wp_enqueue_script(
+        'cropperjs',
+        'https://cdn.jsdelivr.net/npm/cropperjs@1.6.1/dist/cropper.min.js',
+        [],
+        '1.6.1',
+        true
+    );
+}, 25 );
+
+/* ============================================================
+   LiteSpeed Cache：排除 Cropper.js CDN（避免被合併壓縮搞壞）
+   ============================================================ */
+add_filter( 'litespeed_optimize_js_excludes', function ( $excludes ) {
+    $excludes[] = 'cdn.jsdelivr.net/npm/cropperjs';
+    $excludes[] = 'cropper.min.js';
+    return $excludes;
+} );
+add_filter( 'litespeed_optimize_css_excludes', function ( $excludes ) {
+    $excludes[] = 'cdn.jsdelivr.net/npm/cropperjs';
+    $excludes[] = 'cropper.min.css';
+    return $excludes;
+} );
