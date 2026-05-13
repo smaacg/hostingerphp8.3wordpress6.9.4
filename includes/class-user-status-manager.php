@@ -521,7 +521,12 @@ private function set_status( int $user_id, int $anime_id, string $status ): bool
     }
 
     private function flush_cache( int $user_id, int $anime_id ): void {
-        wp_cache_delete( "us_{$user_id}_{$anime_id}", self::CACHE_GROUP );
-        wp_cache_delete( "us_list_{$user_id}",        self::CACHE_GROUP );
-    }
+    wp_cache_delete( "us_{$user_id}_{$anime_id}", self::CACHE_GROUP );
+    wp_cache_delete( "us_list_{$user_id}",        self::CACHE_GROUP );
+
+    // v1.1.0 (2026-05-13)：同步清除 child theme 統計 transient
+    // 由 smacg_calc_member_stats() 寫入，TTL 5 分鐘
+    delete_transient( 'smacg_stats_' . $user_id );
+}
+
 }
