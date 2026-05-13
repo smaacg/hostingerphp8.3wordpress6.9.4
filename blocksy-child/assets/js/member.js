@@ -235,7 +235,6 @@
       action: 'smacg_update_profile',
       nonce: $form.find('[name=smacg_profile_nonce]').val(),
       display_name: $form.find('[name=display_name]').val(),
-      nickname:     $form.find('[name=nickname]').val(),
       description:  $form.find('[name=description]').val(),
     }, null, 'json')
     .done(res => {
