@@ -2,8 +2,8 @@
 /**
  * Plugin Name:       SMACG Gamification
  * Plugin URI:        https://github.com/smaacg/anime-sync-pro-2-
- * Description:       weixiaoacg 站點的等級、經驗值、徽章、排行榜與季賽事件系統。Batch 2.1 提供 EXP + Level 模組。
- * Version:           2.1.0
+ * Description:       weixiaoacg 站點的等級、經驗值、徽章、排行榜與季賽事件系統。
+ * Version:           2.5.0
  * Requires at least: 6.0
  * Requires PHP:      7.4
  * Author:            smaacg
@@ -13,40 +13,47 @@
  * @package SMACG_Gamification
  */
 
-/* === 版本號 === */
+defined( 'ABSPATH' ) || exit;
+
+/* ============================================================
+ * 版本與路徑常數
+ * ============================================================ */
 define( 'SMACG_GAMIFY_VERSION', '2.5.0' );
-if ( ! defined( 'SMACG_EXP_SLUG' ) )   define( 'SMACG_EXP_SLUG', 'exp' );
+define( 'SMACG_GAMIFY_FILE',    __FILE__ );
+define( 'SMACG_GAMIFY_DIR',     plugin_dir_path( __FILE__ ) );
+define( 'SMACG_GAMIFY_URL',     plugin_dir_url( __FILE__ ) );
+define( 'SMACG_GAMIFY_BASENAME', plugin_basename( __FILE__ ) );
+
+/* ============================================================
+ * 業務常數（與主題共用，必須 define 才能在主題模板讀到）
+ * ============================================================ */
+if ( ! defined( 'SMACG_EXP_SLUG' ) )   define( 'SMACG_EXP_SLUG',   'exp' );
 if ( ! defined( 'SMACG_BADGE_SLUG' ) ) define( 'SMACG_BADGE_SLUG', 'badge' );
 
-/* === Batch 2.3：Season Event 常數（必須 define 才能全域可見，主題模板會用） === */
-if ( ! defined( 'SMACG_EVENT_CPT' ) ) {
-    define( 'SMACG_EVENT_CPT', 'smacg_season_event' );
-}
-if ( ! defined( 'SMACG_EVENT_DB_VERSION' ) ) {
-    define( 'SMACG_EVENT_DB_VERSION', '1.0.0' );
-}
+/* Season Event */
+if ( ! defined( 'SMACG_EVENT_CPT' ) )        define( 'SMACG_EVENT_CPT',        'smacg_season_event' );
+if ( ! defined( 'SMACG_EVENT_DB_VERSION' ) ) define( 'SMACG_EVENT_DB_VERSION', '1.0.0' );
 
-if ( ! defined( 'SMACG_RANKING_DB_VERSION' ) ) {
-    define( 'SMACG_RANKING_DB_VERSION', '1.0.0' );
-}
-if ( ! defined( 'SMACG_RANKING_TOP_N' ) ) {
-    define( 'SMACG_RANKING_TOP_N', 100 );
-}
-if ( ! defined( 'SMACG_RANKING_PAGE_SIZE' ) ) {
-    define( 'SMACG_RANKING_PAGE_SIZE', 20 );
-}
-if ( ! defined( 'SMACG_RANKING_TYPES' ) ) {
-    define( 'SMACG_RANKING_TYPES', [ 'exp_total', 'exp_monthly', 'followers', 'badges' ] );
-}
-if ( ! defined( 'SMACG_RANKING_META_KEY' ) ) {
-    define( 'SMACG_RANKING_META_KEY', 'smacg_appear_in_ranking' );
-}
+/* Ranking */
+if ( ! defined( 'SMACG_RANKING_DB_VERSION' ) ) define( 'SMACG_RANKING_DB_VERSION', '1.0.0' );
+if ( ! defined( 'SMACG_RANKING_TOP_N' ) )      define( 'SMACG_RANKING_TOP_N',      100 );
+if ( ! defined( 'SMACG_RANKING_PAGE_SIZE' ) )  define( 'SMACG_RANKING_PAGE_SIZE',  20 );
+if ( ! defined( 'SMACG_RANKING_TYPES' ) )      define( 'SMACG_RANKING_TYPES',      [ 'exp_total', 'exp_monthly', 'followers', 'badges' ] );
+if ( ! defined( 'SMACG_RANKING_META_KEY' ) )   define( 'SMACG_RANKING_META_KEY',   'smacg_appear_in_ranking' );
 
-// SMACG_BADGE_SLUG 在主題 functions.php 已定義（GamiPress 成就 CPT slug）。
-// 若主題尚未載入，給一個保險預設，避免外掛單獨啟用時 fatal。
-if ( ! defined( 'SMACG_BADGE_SLUG' ) ) {
-    define( 'SMACG_BADGE_SLUG', 'smacg-badge' );
-}
+/* ============================================================
+ * 自訂 cron 排程（10 分鐘）
+ *    必須在 plugins_loaded 之前註冊，否則 wp_schedule_event 拿不到 interval。
+ * ============================================================ */
+add_filter( 'cron_schedules', function ( $schedules ) {
+    if ( ! isset( $schedules['smacg_10min'] ) ) {
+        $schedules['smacg_10min'] = [
+            'interval' => 600,
+            'display'  => __( 'Every 10 Minutes', 'smacg-gamification' ),
+        ];
+    }
+    return $schedules;
+} );
 
 /* ============================================================
  * Activation / Deactivation
@@ -68,14 +75,27 @@ require_once SMACG_GAMIFY_DIR . 'includes/class-plugin.php';
 add_action( 'plugins_loaded', [ '\SMACG\Gamification\Plugin', 'instance' ], 5 );
 
 /* ============================================================
- * 主題相依檢查（admin notice）
+ * 啟用前置條件警告（GamiPress 未啟用 / 主題版本過舊）
  * ============================================================ */
 add_action( 'admin_notices', function () {
-    // 主題若尚未提供 smacg_award_exp / smacg_get_user_exp，警告但不 fatal
-    if ( ! function_exists( 'smacg_award_exp' ) || ! function_exists( 'smacg_get_user_exp' ) ) {
-        if ( ! current_user_can( 'activate_plugins' ) ) return;
-        echo '<div class="notice notice-warning"><p><strong>SMACG Gamification：</strong>'
-           . '偵測不到主題的 <code>smacg_award_exp()</code> / <code>smacg_get_user_exp()</code>，'
-           . '請確認 weixiaoacg 主題（blocksy-child v2.8.0+）已啟用。EXP 發放將暫時停用。</p></div>';
+    if ( ! current_user_can( 'activate_plugins' ) ) return;
+
+    $msgs = [];
+
+    if ( ! function_exists( 'gamipress_get_user_points' ) ) {
+        $msgs[] = '偵測不到 <strong>GamiPress</strong> 外掛，EXP / 徽章功能將降級為 user_meta fallback。';
     }
+
+    if ( defined( 'weixiaoacg_VERSION' ) && version_compare( weixiaoacg_VERSION, '2.12.0', '<' ) ) {
+        $msgs[] = sprintf(
+            '主題 <strong>weixiaoacg</strong> 版本為 %s，需升級到 ≥ 2.12.0 才能與本外掛協同運作（避免雙重發放 EXP）。',
+            esc_html( weixiaoacg_VERSION )
+        );
+    }
+
+    if ( empty( $msgs ) ) return;
+
+    echo '<div class="notice notice-warning"><p><strong>SMACG Gamification：</strong></p><ul style="margin-left:20px;list-style:disc;">';
+    foreach ( $msgs as $m ) echo '<li>' . wp_kses_post( $m ) . '</li>';
+    echo '</ul></div>';
 } );
