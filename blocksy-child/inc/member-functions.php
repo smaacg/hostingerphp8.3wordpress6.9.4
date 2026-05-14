@@ -1,17 +1,18 @@
 <?php
 /**
- * 會員相關 helper：輔助函式 / 點數系統 / 等級系統 / cooldown / 每日登入
+ * 會員相關 helper：輔助函式 / 舊點數系統（已 deprecated）/ cooldown
  *
  * @package weixiaoacg
  * @subpackage Member
  *
- * 註：此檔案內函式未來會逐步搬到 plugin（anime-sync-pro/includes/）。
- * 目前留 theme 是因為 functions.php 重構期間先集中管理。
- *
  * Changelog:
+ * - v1.2.0 (2026-05-14) — Batch 2A-3：
+ *   - [移除] comment_post 加分 hook（改由 inc/exp-events.php 處理）
+ *   - [移除] um_user_login 加分 hook（改由 wp_login 處理）
+ *   - [保留] smacg_get_levels / smacg_get_user_level / smacg_add_points 函式定義
+ *     以維持向下相容（其他檔案可能仍引用），但內部標註為 @deprecated
+ *   - [說明] page-member.php Hero 已改用 smacg_get_user_level_info()（GamiPress EXP）
  * - v1.1.0 (2026-05-13)：新增 smacg_get_member_center_url()
- *   動態解析「會員中心」頁面 URL（掛 page-member.php 模板的頁面），
- *   完全繞開 Ultimate Member 的 /user/ 路徑，避免找不到 user 的錯誤。
  */
 defined( 'ABSPATH' ) || exit;
 
@@ -66,14 +67,7 @@ if (!function_exists('smacg_is_member_page')) {
 }
 
 /* ============================================================
-   會員中心 URL 解析（v1.1.0 新增）
-   ------------------------------------------------------------
-   動態查找掛 page-member.php 模板的頁面，完全繞開 UM 的 /user/。
-   解析順序：
-     1) static / object cache（單 request 不重複查 DB）
-     2) 透過 _wp_page_template meta 找到掛模板的頁面
-     3) fallback 到首頁
-   過濾器：可用 smacg_member_center_url filter 強制覆寫。
+   會員中心 URL 解析（v1.1.0）
    ============================================================ */
 if (!function_exists('smacg_get_member_center_url')) {
     function smacg_get_member_center_url(): string {
@@ -103,7 +97,6 @@ if (!function_exists('smacg_get_member_center_url')) {
             $url = get_permalink($pages[0]);
         }
 
-        // fallback：首頁（不再走 UM 的 /user/）
         if (!$url) {
             $url = home_url('/');
         }
@@ -115,9 +108,6 @@ if (!function_exists('smacg_get_member_center_url')) {
     }
 }
 
-/**
- * 當「會員中心」頁面被新增 / 修改 / 刪除時清掉快取。
- */
 if (!function_exists('smacg_flush_member_center_url_cache')) {
     function smacg_flush_member_center_url_cache($post_id = 0) {
         if ($post_id) {
@@ -132,7 +122,11 @@ if (!function_exists('smacg_flush_member_center_url_cache')) {
 }
 
 /* ============================================================
-   積分 / 等級系統
+   @deprecated v1.2.0 — 舊 anime_total_points 點數系統
+   ============================================================
+   保留函式定義以避免他處仍呼叫導致 fatal error，
+   但相關 hook（comment_post / um_user_login）已移除。
+   未來會在 Batch 2A-5 完全清除。
    ============================================================ */
 function smacg_get_levels(): array {
     return [
@@ -144,7 +138,19 @@ function smacg_get_levels(): array {
     ];
 }
 
+/**
+ * @deprecated v1.2.0 改用 smacg_get_user_level_info() (GamiPress EXP)
+ */
 function smacg_get_user_level(int $uid): array {
+    // 注意：此函式被 level-system.php 同名的「純函式版」覆寫風險。
+    // 但因為簽章不同（int 對 int，回傳 array 對 int），這裡保留會引發警告。
+    // 解法：讓 level-system.php 的 smacg_get_user_level($exp) 純函式
+    //       與此處 smacg_get_user_level(int $uid):array 同名 → PHP 會 fatal
+    //       所以本函式重新命名為 smacg_legacy_get_user_level_array
+    return smacg_legacy_get_user_level_array($uid);
+}
+
+function smacg_legacy_get_user_level_array(int $uid): array {
     $pts = (int)get_user_meta($uid,'anime_total_points',true);
     $levels = smacg_get_levels(); $cur = $levels[0]; $next = null;
     foreach ($levels as $i => $l) { if ($pts >= $l['min']) { $cur = $l; $next = $levels[$i+1] ?? null; } }
@@ -153,6 +159,9 @@ function smacg_get_user_level(int $uid): array {
     return ['points'=>$pts,'current'=>$cur,'next'=>$next,'progress_pct'=>$pct];
 }
 
+/**
+ * @deprecated v1.2.0 改用 smacg_award_exp()
+ */
 function smacg_add_points(int $uid, int $pts, string $reason=''): void {
     if ($pts <= 0 || !$uid) return;
     update_user_meta($uid,'anime_total_points',(int)get_user_meta($uid,'anime_total_points',true)+$pts);
@@ -170,26 +179,11 @@ function smacg_check_cooldown(int $uid, string $action, int $post_id): bool {
 }
 
 /* ============================================================
-   留言加分
+   v1.2.0：以下 hook 已移除（改由 inc/exp-events.php 處理）
+   ============================================================
+   - comment_post 加分
+   - um_user_login 每日登入加分
    ============================================================ */
-add_action('comment_post', function($cid,$approved) {
-    if ($approved !== 1) return;
-    $c = get_comment($cid); $uid = (int)$c->user_id;
-    if ($uid && smacg_check_cooldown($uid,'comment',(int)$c->comment_post_ID))
-        smacg_add_points($uid, SMACG_POINT_COMMENT, "comment:{$c->comment_post_ID}");
-}, 10, 2);
-
-/* ============================================================
-   每日登入積分（UM hook）
-   ============================================================ */
-add_action('um_user_login', function($uid) {
-    $uid = (int)$uid; if (!$uid) return;
-    $today = date('Y-m-d');
-    if ((string)get_user_meta($uid,'smacg_last_login_date',true) !== $today) {
-        update_user_meta($uid,'smacg_last_login_date',$today);
-        smacg_add_points($uid, SMACG_POINT_LOGIN, 'daily_login');
-    }
-});
 
 /* ============================================================
    watchlist 排序 helper
