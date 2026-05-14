@@ -13,7 +13,17 @@
  * v2.2.0 (2026-05-13) — Batch 1C-4:
  *   - 新增 smacg_render_notification_prefs_card()（通知偏好卡片）
  *   - smacg_render_settings() 卡片 2 之後插入通知偏好卡
+ * Member Center Render Layer
+ *
+ * @version 2.3.0
+ * 
+ * v2.3.0 (2026-05-13) Batch 2A-0
+ *   - smacg_render_points() 改用 GamiPress API
+ *   - 改顯示 Lv.X / 200、EXP 累積值、進度條到下一級
+ *   - 等級稱號改 5 階：新進會員/新客/常客/熟客/VIP/黑卡
+ *   - 移除舊參數 $points/$lvl/$log（向下相容保留參數位置）
  */
+
 if (!defined('ABSPATH')) exit;
 
 if (!defined('SMACG_PAGE_SIZE')) {
@@ -517,39 +527,88 @@ function smacg_render_comments( $uid ) {
 }
 
 /* =====================================================
- *  Tab 6:點數
+ *  Tab 6:點數 (v2.3.0 - 改用 GamiPress API)
+ *  Batch 2A-0: 全面遷移到 GamiPress，丟棄舊參數
  * ===================================================== */
-function smacg_render_points($points, $lvl, $log) { ?>
-    <div class="mc-points-summary">
-        <div class="mc-points-big">
-            <b><?php echo number_format($points); ?></b>
-            <span>目前點數 · Lv.<?php echo $lvl['level']; ?> <?php echo esc_html($lvl['title']); ?></span>
+function smacg_render_points( $points = null, $lvl = null, $log = null ) {
+    // 取得當前用戶（從 query 或當前登入用戶）
+    $uid = get_query_var( 'smacg_view_user' );
+    if ( ! $uid ) $uid = get_current_user_id();
+    $uid = (int) $uid;
+
+    if ( $uid <= 0 ) {
+        echo '<p class="mc-empty">請先登入</p>';
+        return;
+    }
+
+    // 從 GamiPress 取得即時資料
+    $info = smacg_get_user_level_info( $uid );
+    $log  = smacg_get_exp_log( $uid, 50 );
+
+    $is_max = ! empty( $info['is_max'] );
+    ?>
+    <div class="smacg-level-summary <?php echo $is_max ? 'is-max' : ''; ?>">
+        <div class="smacg-level-header">
+            <div class="smacg-level-icon"><?php echo $info['icon']; ?></div>
+            <div class="smacg-level-meta">
+                <div class="lvl-number">
+                    Lv.<?php echo (int) $info['level']; ?>
+                    <small>/ <?php echo SMACG_MAX_LEVEL; ?></small>
+                </div>
+                <div class="lvl-title"><?php echo esc_html( $info['title'] ); ?></div>
+            </div>
+            <div class="smacg-level-exp">
+                <div class="exp-num"><?php echo number_format( (int) $info['exp'] ); ?></div>
+                <div class="exp-label">EXP</div>
+            </div>
         </div>
-        <div class="mc-points-progress">
-            <div class="mc-level-bar"><div class="mc-level-fill" style="width:<?php echo $lvl['percent']; ?>%"></div></div>
-            <small>距離下一級還差 <?php echo max(0, $lvl['next'] - $points); ?> 點</small>
+
+        <div class="smacg-level-bar">
+            <div class="smacg-level-bar-fill" style="width:<?php echo (int) $info['percent']; ?>%"></div>
+        </div>
+
+        <div class="smacg-level-progress-text">
+            <?php if ( $is_max ): ?>
+                <span>🎉 已達最高等級！</span>
+                <span><?php echo number_format( (int) $info['exp'] ); ?> EXP</span>
+            <?php else: ?>
+                <span>距離 Lv.<?php echo (int) $info['level'] + 1; ?> 還差 <?php echo number_format( (int) $info['to_next'] ); ?> EXP</span>
+                <span><?php echo (int) $info['in_level_exp']; ?> / <?php echo (int) $info['level_total_exp']; ?></span>
+            <?php endif; ?>
         </div>
     </div>
-    <h3 class="mc-section-title">📜 最近 50 筆紀錄</h3>
-    <?php if ($log): ?>
+
+    <h3 class="mc-section-title">📜 最近 50 筆 EXP 紀錄</h3>
+    <?php if ( $log ): ?>
         <table class="mc-points-table">
-            <thead><tr><th>時間</th><th>變動</th><th>原因</th></tr></thead>
+            <thead>
+                <tr>
+                    <th>時間</th>
+                    <th>變動</th>
+                    <th>原因</th>
+                </tr>
+            </thead>
             <tbody>
-                <?php foreach ($log as $row):
-                    $v = (int)$row['change_value'];
-                    $cls = $v >= 0 ? 'pos' : 'neg'; ?>
+                <?php foreach ( $log as $row ):
+                    $v   = (int) $row['change_value'];
+                    $cls = $v >= 0 ? 'pos' : 'neg';
+                ?>
                     <tr>
-                        <td><?php echo esc_html($row['created_at']); ?></td>
-                        <td class="mc-pt-<?php echo $cls; ?>"><?php echo ($v >= 0 ? '+' : '') . $v; ?></td>
-                        <td><?php echo esc_html($row['reason']); ?></td>
+                        <td data-label="時間"><?php echo esc_html( $row['created_at'] ); ?></td>
+                        <td data-label="變動" class="mc-pt-<?php echo $cls; ?>">
+                            <?php echo ( $v >= 0 ? '+' : '' ) . number_format( $v ); ?>
+                        </td>
+                        <td data-label="原因"><?php echo esc_html( $row['reason'] ); ?></td>
                     </tr>
                 <?php endforeach; ?>
             </tbody>
         </table>
     <?php else: ?>
-        <p class="mc-empty">尚無點數紀錄</p>
+        <p class="mc-empty">尚無 EXP 紀錄。多多參與活動就能累積經驗值！</p>
     <?php endif; ?>
-<?php }
+    <?php
+}
+
 
 /* =====================================================
  *  Tab 7:設定（v2.2.0:卡片 2 後插入「通知偏好」卡）
