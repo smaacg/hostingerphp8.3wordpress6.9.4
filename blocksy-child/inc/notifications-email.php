@@ -1,323 +1,222 @@
 <?php
 /**
- * Notifications System — Email 摘要 + Cron
+ * Notifications Email Digest System
+ * 
+ * 功能：
+ * 1. WP-Cron 每日/每週 Email 摘要（台北時間 20:00 寄送）
+ * 2. AJAX 端點：smacg_notif_save_prefs（儲存通知偏好）
+ * 3. 管理員測試 URL：/wp-admin/?smacg_notif_test_digest=daily|weekly
+ * 
+ * 依賴：
+ * - inc/notifications-system.php（提供 smacg_get_notification_prefs / smacg_update_notification_prefs）
+ * - 資料表 wp_smacg_notifications
+ * 
+ * Version: 1.0.0
+ * Date: 2026-05-13
+ * Batch: 1C-4
  *
- * @package weixiaoacg
- * @version 1.0.0 (2026-05-13)
- *
- * Cron：
- *   smacg_notif_email_daily   每天晚上 20:00（台灣時間）
- *   smacg_notif_email_weekly  每週日晚上 20:00
- *
- * 邏輯：
- *   - 撈出過去 24h（或 7d）有未讀通知的使用者
- *   - 對每位檢查偏好（email_digest === 'daily' / 'weekly'）
- *   - 對每位再依事件類型過濾（xxx_email 是否開啟）
- *   - 彙整成單封 HTML Email 寄出
- *
- * Email 內容：
- *   - 標題：「微笑動漫 - 你今天有 X 則新通知」
- *   - 列表：按類型分組（追蹤 / 留言 / 評分 / 徽章 / 系統）
- *   - 底部：管理偏好連結
+ * @package Blocksy_Child
  */
-defined( 'ABSPATH' ) || exit;
 
-/* ============================================================
-   排程：每天 20:00 / 每週日 20:00
-   ============================================================ */
-add_action( 'init', function() {
+if ( ! defined( 'ABSPATH' ) ) {
+    exit;
+}
 
-	// 每日摘要
-	if ( ! wp_next_scheduled( 'smacg_notif_email_daily' ) ) {
-		// 計算下一個 20:00（台灣時區）
-		$tz = wp_timezone();
-		$next = new DateTime( 'today 20:00:00', $tz );
-		if ( $next->getTimestamp() <= time() ) {
-			$next->modify( '+1 day' );
-		}
-		wp_schedule_event( $next->getTimestamp(), 'daily', 'smacg_notif_email_daily' );
-	}
-
-	// 每週摘要（星期日 20:00）
-	if ( ! wp_next_scheduled( 'smacg_notif_email_weekly' ) ) {
-		$tz = wp_timezone();
-		$next = new DateTime( 'sunday 20:00:00', $tz );
-		if ( $next->getTimestamp() <= time() ) {
-			$next->modify( '+7 days' );
-		}
-		wp_schedule_event( $next->getTimestamp(), 'weekly', 'smacg_notif_email_weekly' );
-	}
+/* =========================================================
+ * 1. 自訂 Cron 排程（weekly）
+ * ========================================================= */
+add_filter( 'cron_schedules', function( $schedules ) {
+    if ( ! isset( $schedules['weekly'] ) ) {
+        $schedules['weekly'] = array(
+            'interval' => WEEK_IN_SECONDS,
+            'display'  => __( 'Once Weekly', 'blocksy-child' ),
+        );
+    }
+    return $schedules;
 } );
 
-// WordPress 預設沒有 weekly schedule，加上去
-add_filter( 'cron_schedules', function( $s ) {
-	if ( ! isset( $s['weekly'] ) ) {
-		$s['weekly'] = [
-			'interval' => 7 * DAY_IN_SECONDS,
-			'display'  => '每週一次',
-		];
-	}
-	return $s;
-} );
+/* =========================================================
+ * 2. 註冊 Cron（台北 20:00 寄送）
+ * ========================================================= */
+add_action( 'init', 'smacg_notif_schedule_email_cron' );
+function smacg_notif_schedule_email_cron() {
+    // 計算下一個台北時間 20:00 的 UTC timestamp
+    $tz_tw   = new DateTimeZone( 'Asia/Taipei' );
+    $now_tw  = new DateTime( 'now', $tz_tw );
+    $next_tw = new DateTime( 'today 20:00', $tz_tw );
+    if ( $next_tw <= $now_tw ) {
+        $next_tw->modify( '+1 day' );
+    }
+    $next_utc = $next_tw->getTimestamp();
 
-/* ============================================================
-   Cron Handler：每日摘要
-   ============================================================ */
-add_action( 'smacg_notif_email_daily',  function() { smacg_notif_send_digest( 'daily'  ); } );
+    if ( ! wp_next_scheduled( 'smacg_notif_email_daily' ) ) {
+        wp_schedule_event( $next_utc, 'daily', 'smacg_notif_email_daily' );
+    }
+    if ( ! wp_next_scheduled( 'smacg_notif_email_weekly' ) ) {
+        // 週寄送固定週一 20:00
+        $monday_tw = new DateTime( 'next monday 20:00', $tz_tw );
+        wp_schedule_event( $monday_tw->getTimestamp(), 'weekly', 'smacg_notif_email_weekly' );
+    }
+}
+
+// 主題停用時清除 cron
+register_deactivation_hook( __FILE__, 'smacg_notif_clear_email_cron' );
+function smacg_notif_clear_email_cron() {
+    wp_clear_scheduled_hook( 'smacg_notif_email_daily' );
+    wp_clear_scheduled_hook( 'smacg_notif_email_weekly' );
+}
+
+/* =========================================================
+ * 3. Cron Handlers
+ * ========================================================= */
+add_action( 'smacg_notif_email_daily',  function() { smacg_notif_send_digest( 'daily' );  } );
 add_action( 'smacg_notif_email_weekly', function() { smacg_notif_send_digest( 'weekly' ); } );
 
-/**
- * 寄送摘要的主流程
- *
- * @param string $period  'daily' | 'weekly'
- */
-function smacg_notif_send_digest( $period = 'daily' ) {
-	global $wpdb;
+/* =========================================================
+ * 4. 寄送摘要主邏輯
+ * ========================================================= */
+function smacg_notif_send_digest( $frequency = 'daily' ) {
+    global $wpdb;
+    $table = $wpdb->prefix . 'smacg_notifications';
 
-	$hours = ( $period === 'weekly' ) ? 168 : 24;
-	$since = gmdate( 'Y-m-d H:i:s', strtotime( "-{$hours} hours" ) );
+    // 取得所有設定該頻率的使用者
+    $user_ids = $wpdb->get_col( $wpdb->prepare( "
+        SELECT user_id 
+        FROM {$wpdb->usermeta} 
+        WHERE meta_key = 'smacg_notification_prefs' 
+        AND meta_value LIKE %s
+    ", '%' . $wpdb->esc_like( '"email_digest";s:' . strlen( $frequency ) . ':"' . $frequency . '"' ) . '%' ) );
 
-	$table = smacg_notifications_table();
+    if ( empty( $user_ids ) ) {
+        return 0;
+    }
 
-	// 撈出此期間內有「至少一筆通知」的所有使用者
-	$user_ids = $wpdb->get_col( $wpdb->prepare(
-		"SELECT DISTINCT user_id FROM {$table}
-		 WHERE created_at >= %s
-		 LIMIT 5000",
-		$since
-	) );
+    // 時間範圍
+    $hours_ago = ( $frequency === 'weekly' ) ? 168 : 24;
+    $since     = gmdate( 'Y-m-d H:i:s', time() - $hours_ago * HOUR_IN_SECONDS );
 
-	if ( empty( $user_ids ) ) {
-		return 0;
-	}
+    $sent = 0;
+    foreach ( $user_ids as $uid ) {
+        $uid = (int) $uid;
+        if ( ! $uid ) continue;
 
-	$sent = 0;
-	$skipped = 0;
+        $user = get_userdata( $uid );
+        if ( ! $user || empty( $user->user_email ) ) continue;
 
-	foreach ( $user_ids as $uid ) {
-		$uid = (int) $uid;
-		$prefs = smacg_get_notification_prefs( $uid );
+        // 取該用戶區間內通知
+        $rows = $wpdb->get_results( $wpdb->prepare(
+            "SELECT type, COUNT(*) AS cnt 
+             FROM $table 
+             WHERE user_id = %d AND created_at >= %s 
+             GROUP BY type",
+            $uid, $since
+        ) );
 
-		// 只寄給選擇此週期的使用者
-		if ( ( $prefs['email_digest'] ?? 'daily' ) !== $period ) {
-			$skipped++;
-			continue;
-		}
+        if ( empty( $rows ) ) continue;
 
-		// 撈該使用者期間內的通知
-		$notifs = $wpdb->get_results( $wpdb->prepare(
-			"SELECT * FROM {$table}
-			 WHERE user_id = %d AND created_at >= %s
-			 ORDER BY created_at DESC
-			 LIMIT 100",
-			$uid, $since
-		), ARRAY_A );
+        // 比對使用者 email 偏好（過濾關閉的類型）
+        $prefs = smacg_get_notification_prefs( $uid );
+        $type_label = array(
+            'follow'        => '新追蹤者',
+            'comment_reply' => '留言回覆',
+            'rating'        => '評分互動',
+            'level_up'      => '等級提升',
+            'badge'         => '徽章解鎖',
+            'system'        => '系統公告',
+        );
 
-		if ( empty( $notifs ) ) {
-			$skipped++;
-			continue;
-		}
+        $lines = array();
+        $total = 0;
+        foreach ( $rows as $r ) {
+            if ( empty( $prefs[ $r->type ]['email'] ) ) continue; // 該類 email 關閉就跳過
+            $label = isset( $type_label[ $r->type ] ) ? $type_label[ $r->type ] : $r->type;
+            $lines[] = "・{$label}：{$r->cnt} 則";
+            $total  += (int) $r->cnt;
+        }
 
-		// 依使用者偏好過濾（type_email 開關）
-		$filtered = [];
-		foreach ( $notifs as $n ) {
-			$type = $n['type'];
-			$email_pref_key = $type . '_email';
-			if ( empty( $prefs[ $email_pref_key ] ) ) continue;
+        if ( $total === 0 ) continue;
 
-			$n['data'] = ! empty( $n['data'] ) ? json_decode( $n['data'], true ) : [];
-			$filtered[] = $n;
-		}
+        // 組信
+        $site    = get_bloginfo( 'name' );
+        $mc_url  = function_exists( 'smacg_get_member_center_url' ) ? smacg_get_member_center_url() : home_url( '/mc/' );
+        $period  = ( $frequency === 'weekly' ) ? '本週' : '今日';
+        $subject = sprintf( '[%s] %s共有 %d 則新通知', $site, $period, $total );
 
-		if ( empty( $filtered ) ) {
-			$skipped++;
-			continue;
-		}
+        $body  = "Hi {$user->display_name}，\n\n";
+        $body .= "{$period}您在 {$site} 的通知摘要：\n\n";
+        $body .= implode( "\n", $lines ) . "\n\n";
+        $body .= "👉 前往會員中心查看：{$mc_url}?tab=notifications\n\n";
+        $body .= "──\n";
+        $body .= "若您不想再收到摘要信，請至會員中心 → 設定 → 通知偏好調整。\n";
+        $body .= "{$site}\n";
 
-		// 寄信
-		if ( smacg_notif_send_digest_email( $uid, $filtered, $period ) ) {
-			$sent++;
-		}
-	}
+        $headers = array( 'Content-Type: text/plain; charset=UTF-8' );
+        if ( wp_mail( $user->user_email, $subject, $body, $headers ) ) {
+            $sent++;
+        }
+    }
 
-	// 記錄到 option 供管理員查看
-	update_option( 'smacg_notif_last_digest_' . $period, [
-		'time'    => current_time( 'mysql' ),
-		'sent'    => $sent,
-		'skipped' => $skipped,
-		'total'   => count( $user_ids ),
-	] );
+    // 寫入日誌（除錯用）
+    if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+        error_log( "[SMACG Notif] {$frequency} digest sent: {$sent} users" );
+    }
 
-	return $sent;
+    return $sent;
 }
 
-/**
- * 寄出單封 Email
- *
- * @param int    $uid
- * @param array  $notifs  已過濾後的通知陣列（每筆 data 已 decode）
- * @param string $period
- * @return bool
- */
-function smacg_notif_send_digest_email( $uid, $notifs, $period ) {
-	$user = get_userdata( $uid );
-	if ( ! $user || ! is_email( $user->user_email ) ) return false;
+/* =========================================================
+ * 5. AJAX：儲存通知偏好
+ * ========================================================= */
+add_action( 'wp_ajax_smacg_notif_save_prefs', 'smacg_ajax_notif_save_prefs' );
+function smacg_ajax_notif_save_prefs() {
+    if ( ! is_user_logged_in() ) {
+        wp_send_json_error( array( 'message' => '請先登入' ), 401 );
+    }
+    check_ajax_referer( 'smacg_notif_save_prefs', 'nonce' );
 
-	$count    = count( $notifs );
-	$site     = get_bloginfo( 'name' );
-	$display  = $user->display_name ?: $user->user_login;
-	$mc_url   = home_url( '/mc/?tab=notifications' );
-	$pref_url = home_url( '/mc/?tab=settings' );
+    $uid   = get_current_user_id();
+    $input = isset( $_POST['prefs'] ) ? (array) $_POST['prefs'] : array();
 
-	$subject = ( $period === 'weekly' )
-		? sprintf( '[%s] 本週你有 %d 則新通知', $site, $count )
-		: sprintf( '[%s] 你今天有 %d 則新通知', $site, $count );
+    // 清洗：只接受預期欄位
+    $allowed_types = array( 'follow', 'comment_reply', 'rating', 'level_up', 'badge', 'system' );
+    $clean = array();
+    foreach ( $allowed_types as $t ) {
+        $clean[ $t ] = array(
+            'site'  => ! empty( $input[ $t ]['site'] )  ? 1 : 0,
+            'email' => ! empty( $input[ $t ]['email'] ) ? 1 : 0,
+        );
+    }
+    $digest = isset( $input['email_digest'] ) ? sanitize_text_field( $input['email_digest'] ) : 'daily';
+    if ( ! in_array( $digest, array( 'off', 'daily', 'weekly' ), true ) ) {
+        $digest = 'daily';
+    }
+    $clean['email_digest'] = $digest;
 
-	// 按類型分組
-	$by_type = [];
-	foreach ( $notifs as $n ) {
-		$by_type[ $n['type'] ][] = $n;
-	}
+    // 由 notifications-system.php 提供的 helper 寫入
+    if ( function_exists( 'smacg_update_notification_prefs' ) ) {
+        smacg_update_notification_prefs( $uid, $clean );
+    } else {
+        update_user_meta( $uid, 'smacg_notification_prefs', $clean );
+    }
 
-	$type_labels = [
-		'follow'        => '👥 新增粉絲',
-		'comment_reply' => '💬 留言回覆',
-		'rating'        => '⭐ 你收藏的動畫被評分',
-		'badge'         => '🏆 解鎖徽章',
-		'level_up'      => '🚀 等級提升',
-		'system'        => '📢 系統公告',
-	];
-
-	ob_start();
-	?>
-	<!DOCTYPE html>
-	<html>
-	<head>
-		<meta charset="UTF-8">
-		<style>
-			body { margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans TC", sans-serif; background: #f3f4f6; color: #1f2937; }
-			.wrap { max-width: 600px; margin: 24px auto; background: #fff; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 16px rgba(0,0,0,.06); }
-			.header { padding: 24px 28px; background: linear-gradient(135deg, #f472b6, #a78bfa); color: #fff; }
-			.header h1 { margin: 0 0 4px; font-size: 22px; }
-			.header p { margin: 0; font-size: 14px; opacity: .9; }
-			.body { padding: 24px 28px; }
-			.group { margin-bottom: 22px; }
-			.group:last-child { margin-bottom: 0; }
-			.group h2 { margin: 0 0 10px; font-size: 16px; color: #374151; padding-bottom: 6px; border-bottom: 1px solid #e5e7eb; }
-			.item { padding: 10px 0; border-bottom: 1px solid #f3f4f6; }
-			.item:last-child { border-bottom: 0; }
-			.item a { color: #6366f1; text-decoration: none; font-weight: 600; }
-			.item .title { font-size: 14px; line-height: 1.5; color: #1f2937; }
-			.item .excerpt { margin: 4px 0 0; font-size: 13px; color: #6b7280; line-height: 1.5; }
-			.cta { text-align: center; padding: 18px 0 6px; }
-			.cta a { display: inline-block; padding: 10px 28px; background: linear-gradient(135deg, #f472b6, #a78bfa); color: #fff; text-decoration: none; border-radius: 8px; font-weight: 600; font-size: 14px; }
-			.footer { padding: 18px 28px; background: #f9fafb; color: #9ca3af; font-size: 12px; text-align: center; line-height: 1.6; }
-			.footer a { color: #6b7280; text-decoration: underline; }
-		</style>
-	</head>
-	<body>
-	<div class="wrap">
-		<div class="header">
-			<h1>Hi, <?php echo esc_html( $display ); ?> 👋</h1>
-			<p><?php echo ( $period === 'weekly' ) ? '本週' : '今天'; ?> 累積了 <?php echo $count; ?> 則通知，幫你彙整在這裡。</p>
-		</div>
-
-		<div class="body">
-			<?php foreach ( $type_labels as $type => $label ) :
-				if ( empty( $by_type[ $type ] ) ) continue;
-				$items = $by_type[ $type ];
-			?>
-				<div class="group">
-					<h2><?php echo $label; ?>（<?php echo count( $items ); ?>）</h2>
-					<?php foreach ( $items as $n ) :
-						$d = $n['data'];
-						$title   = $d['title']   ?? '';
-						$excerpt = $d['excerpt'] ?? '';
-						$url     = $d['url']     ?? home_url( '/mc/' );
-					?>
-						<div class="item">
-							<div class="title">
-								<a href="<?php echo esc_url( $url ); ?>"><?php echo esc_html( $title ); ?></a>
-							</div>
-							<?php if ( $excerpt ) : ?>
-								<div class="excerpt"><?php echo esc_html( $excerpt ); ?></div>
-							<?php endif; ?>
-						</div>
-					<?php endforeach; ?>
-				</div>
-			<?php endforeach; ?>
-
-			<div class="cta">
-				<a href="<?php echo esc_url( $mc_url ); ?>">查看所有通知 →</a>
-			</div>
-		</div>
-
-		<div class="footer">
-			你收到這封 Email 是因為訂閱了 <?php echo esc_html( $site ); ?> 的<?php echo ( $period === 'weekly' ) ? '每週' : '每日'; ?>通知摘要。<br>
-			<a href="<?php echo esc_url( $pref_url ); ?>">管理通知偏好</a> ・
-			<a href="<?php echo esc_url( home_url( '/' ) ); ?>"><?php echo esc_html( $site ); ?></a>
-		</div>
-	</div>
-	</body>
-	</html>
-	<?php
-	$html = ob_get_clean();
-
-	$headers = [
-		'Content-Type: text/html; charset=UTF-8',
-	];
-
-	return wp_mail( $user->user_email, $subject, $html, $headers );
+    wp_send_json_success( array(
+        'message' => '已儲存',
+        'prefs'   => $clean,
+    ) );
 }
 
-/* ============================================================
-   管理員：手動觸發測試
-   ------------------------------------------------------------
-   訪問 wp-admin/?smacg_notif_test_digest=daily（或 weekly）
-   ============================================================ */
+/* =========================================================
+ * 6. 管理員測試入口
+ *    /wp-admin/?smacg_notif_test_digest=daily
+ *    /wp-admin/?smacg_notif_test_digest=weekly
+ * ========================================================= */
 add_action( 'admin_init', function() {
-	if ( ! current_user_can( 'manage_options' ) ) return;
-	if ( empty( $_GET['smacg_notif_test_digest'] ) ) return;
+    if ( ! current_user_can( 'manage_options' ) ) return;
+    if ( empty( $_GET['smacg_notif_test_digest'] ) ) return;
 
-	$period = $_GET['smacg_notif_test_digest'] === 'weekly' ? 'weekly' : 'daily';
-	$sent = smacg_notif_send_digest( $period );
+    $freq = sanitize_text_field( $_GET['smacg_notif_test_digest'] );
+    if ( ! in_array( $freq, array( 'daily', 'weekly' ), true ) ) return;
 
-	add_action( 'admin_notices', function() use ( $sent, $period ) {
-		echo '<div class="notice notice-success"><p><strong>['.$period.']</strong> 摘要 Email 已寄出 '.$sent.' 封</p></div>';
-	} );
-} );
-
-/* ============================================================
-   AJAX：儲存通知偏好（settings 頁用）
-   ============================================================ */
-add_action( 'wp_ajax_smacg_notif_save_prefs', function() {
-	check_ajax_referer( 'smacg_notif_nonce', 'nonce' );
-
-	$uid = get_current_user_id();
-	if ( ! $uid ) {
-		wp_send_json_error( [ 'message' => '請先登入' ], 401 );
-	}
-
-	$prefs = isset( $_POST['prefs'] ) ? (array) $_POST['prefs'] : [];
-
-	// sanitize
-	$clean = [];
-	foreach ( $prefs as $k => $v ) {
-		$k = sanitize_key( $k );
-		if ( $k === 'email_digest' ) {
-			$clean[ $k ] = in_array( $v, [ 'off', 'daily', 'weekly' ], true ) ? $v : 'daily';
-		} else {
-			$clean[ $k ] = $v ? 1 : 0;
-		}
-	}
-
-	$ok = smacg_update_notification_prefs( $uid, $clean );
-
-	if ( false === $ok ) {
-		wp_send_json_error( [ 'message' => '儲存失敗' ] );
-	}
-	wp_send_json_success( [
-		'message' => '已儲存',
-		'prefs'   => smacg_get_notification_prefs( $uid ),
-	] );
+    $sent = smacg_notif_send_digest( $freq );
+    wp_die( sprintf( '✅ Test digest (%s) executed. Emails sent: %d', esc_html( $freq ), (int) $sent ) );
 } );
