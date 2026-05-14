@@ -39,6 +39,8 @@
  *  * v2.7.0 變更 — Batch 2B-2 會員排行榜：
  *   - 條件式載入 leaderboard.css / leaderboard.js（page-ranking-users.php）
  *   - 注入 smacgRanku localize（ajax / defaultTab / currentUid / privacy）
+ *  * v2.7.1 變更 — Batch 2B-3 Top N widget：
+ *   - 全站載入 leaderboard-widget.css（widget / shortcode 共用）
  */
 
 defined( 'ABSPATH' ) || exit;
@@ -583,6 +585,28 @@ add_action( 'wp_enqueue_scripts', function () {
         'privacy'    => $privacy,
     ] );
 }, 27 );
+
+/* ============================================================
+   Leaderboard Widget / Shortcode 樣式（v2.7.1 - 2026-05-14）
+   ------------------------------------------------------------
+   - Batch 2B-3：Top N widget + [smacg_leaderboard] shortcode
+   - 全站載入（widget 可能出現在任何 sidebar / footer，shortcode 也可能放在任何頁面）
+   - 體積 < 4KB
+   ============================================================ */
+add_action( 'wp_enqueue_scripts', function () {
+    $base_dir = weixiaoacg_THEME_DIR;
+    $base_url = weixiaoacg_THEME_URL;
+
+    $css_path = $base_dir . '/assets/css/leaderboard-widget.css';
+    if ( file_exists( $css_path ) ) {
+        wp_enqueue_style(
+            'smacg-leaderboard-widget',
+            $base_url . '/assets/css/leaderboard-widget.css',
+            [ 'weixiaoacg-fa6' ],
+            filemtime( $css_path )
+        );
+    }
+}, 28 );
 
 
 /* ============================================================
