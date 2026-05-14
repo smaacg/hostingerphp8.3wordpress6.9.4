@@ -1,119 +1,53 @@
 <?php
-/**
- * EXP 規則設定（集中管理）
- *
- * 原檔：blocksy-child/inc/exp-config.php v1.0.0
- *
- * @package SMACG_Gamification
- */
-
-namespace SMACG\Gamification\Exp;
+namespace SMACG\Gamification;
 
 defined( 'ABSPATH' ) || exit;
 
-class Config {
+/**
+ * EXP 規則表（搬自 theme/inc/exp-config.php）
+ *
+ * 規則欄位：
+ *   exp      - 給予的 EXP 點數
+ *   cap_type - 'once' | 'daily' | null（無上限）
+ *   cap_key  - user_meta key 字首（once_/daily_ 自動加）
+ *
+ * 透過 filter 'smacg_exp_rules' 可被擴充。
+ */
+class Exp_Config {
 
-    /**
-     * 取得 EXP 發放規則表
-     *
-     * @return array
-     */
+    private static $rules = null;
+
     public static function rules() {
-        $rules = [
+        if ( self::$rules !== null ) return self::$rules;
 
-            // === 帳號類（一生一次） ===
-            'register' => [
-                'exp'       => 50,
-                'daily_cap' => -1,
-                'label'     => '註冊獎勵',
-            ],
+        self::$rules = [
+            /* 註冊 / 登入 / 互動 */
+            'register'        => [ 'exp' => 100, 'cap_type' => 'once',  'cap_key' => 'register' ],
+            'daily_login'     => [ 'exp' => 10,  'cap_type' => 'daily', 'cap_key' => 'login' ],
+            'streak_7'        => [ 'exp' => 100, 'cap_type' => 'once',  'cap_key' => 'streak_7' ],
+            'streak_30'       => [ 'exp' => 500, 'cap_type' => 'once',  'cap_key' => 'streak_30' ],
 
-            // === 每日活躍 ===
-            'daily_login' => [
-                'exp'       => 10,
-                'daily_cap' => 1,
-                'label'     => '每日首次登入',
-            ],
+            'comment_post'    => [ 'exp' => 5,   'cap_type' => 'daily', 'cap_key' => 'comment' ],
 
-            // === 觀看相關 ===
-            'watchlist_completed' => [
-                'exp'       => 30,
-                'daily_cap' => 10,
-                'label'     => '完成觀看作品',
-            ],
-            'watchlist_added' => [
-                'exp'       => 5,
-                'daily_cap' => 20,
-                'label'     => '加入追蹤清單',
-            ],
+            /* 追蹤系統 */
+            'follow_action'   => [ 'exp' => 2,   'cap_type' => 'daily', 'cap_key' => 'follow' ],
+            'followed_by'     => [ 'exp' => 5,   'cap_type' => 'daily', 'cap_key' => 'followed' ],
 
-            // === 評分 ===
-            'rating_added' => [
-                'exp'       => 15,
-                'daily_cap' => 20,
-                'label'     => '評分作品',
-            ],
+            /* anime-sync-pro 觀看記錄 */
+            'watchlist_add'      => [ 'exp' => 1,  'cap_type' => 'daily', 'cap_key' => 'wl_add' ],
+            'watchlist_complete' => [ 'exp' => 8,  'cap_type' => null,    'cap_key' => null ],
+            'rating_add'         => [ 'exp' => 3,  'cap_type' => 'daily', 'cap_key' => 'rating' ],
 
-            // === 留言 ===
-            'comment_posted' => [
-                'exp'       => 5,
-                'daily_cap' => 10,
-                'label'     => '發表留言',
-            ],
-            'comment_liked' => [
-                'exp'       => 3,
-                'daily_cap' => 10,
-                'label'     => '留言被按讚',
-            ],
-
-            // === 追蹤 ===
-            'follow_action' => [
-                'exp'       => 2,
-                'daily_cap' => 10,
-                'label'     => '追蹤其他用戶',
-            ],
-            'gained_follower' => [
-                'exp'       => 5,
-                'daily_cap' => 10,
-                'label'     => '獲得新追蹤者',
-            ],
-
-            // === 連續登入 ===
-            'streak_7' => [
-                'exp'       => 100,
-                'daily_cap' => 1,
-                'label'     => '連續登入 7 天',
-            ],
-            'streak_30' => [
-                'exp'       => 500,
-                'daily_cap' => 1,
-                'label'     => '連續登入 30 天',
-            ],
-
-            // === 徽章解鎖 ===
-            'badge_unlocked' => [
-                'exp'       => 20,
-                'daily_cap' => 0,
-                'label'     => '解鎖徽章',
-            ],
+            /* GamiPress 徽章解鎖（預設值；個別徽章可用 _smacg_badge_exp 覆蓋） */
+            'badge_unlock'    => [ 'exp' => 20,  'cap_type' => null,    'cap_key' => null ],
         ];
 
-        /** filter 名稱不變，保持外部相容 */
-        return apply_filters( 'smacg_exp_rules', $rules );
+        self::$rules = apply_filters( 'smacg_exp_rules', self::$rules );
+        return self::$rules;
     }
 
-    public static function get_exp( $action_key ) {
+    public static function get( $action_key ) {
         $rules = self::rules();
-        return isset( $rules[ $action_key ]['exp'] ) ? (int) $rules[ $action_key ]['exp'] : 0;
-    }
-
-    public static function get_cap( $action_key ) {
-        $rules = self::rules();
-        return isset( $rules[ $action_key ]['daily_cap'] ) ? (int) $rules[ $action_key ]['daily_cap'] : 0;
-    }
-
-    public static function get_label( $action_key ) {
-        $rules = self::rules();
-        return isset( $rules[ $action_key ]['label'] ) ? (string) $rules[ $action_key ]['label'] : $action_key;
+        return $rules[ $action_key ] ?? null;
     }
 }
