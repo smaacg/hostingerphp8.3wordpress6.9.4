@@ -36,6 +36,9 @@
  *   - 全站載入 level-badge.css（留言區小徽章 + 公開頁大徽章）
  *   - 僅在 /mc/?tab=career 載入 career.js + 注入 smacgCareer localize
  *   - 依賴 smacg-gamification（共用變數 / 顏色）
+ *  * v2.7.0 變更 — Batch 2B-2 會員排行榜：
+ *   - 條件式載入 leaderboard.css / leaderboard.js（page-ranking-users.php）
+ *   - 注入 smacgRanku localize（ajax / defaultTab / currentUid / privacy）
  */
 
 defined( 'ABSPATH' ) || exit;
@@ -526,6 +529,60 @@ add_action( 'wp_enqueue_scripts', function () {
             : wp_login_url(),
     ] );
 }, 26 );
+
+/* ============================================================
+   Leaderboard 會員排行榜（v2.7.0 - 2026-05-14）
+   ------------------------------------------------------------
+   - Batch 2B-2：/ranking-users/ 頁面
+   - 條件：is_page_template('page-ranking-users.php')
+   - 注入 smacgRanku（ajax / defaultTab / currentUid / privacy）
+   ============================================================ */
+add_action( 'wp_enqueue_scripts', function () {
+    if ( ! is_page_template( 'page-ranking-users.php' ) ) return;
+
+    $base_dir = weixiaoacg_THEME_DIR;
+    $base_url = weixiaoacg_THEME_URL;
+
+    // CSS
+    $css_path = $base_dir . '/assets/css/leaderboard.css';
+    if ( file_exists( $css_path ) ) {
+        wp_enqueue_style(
+            'smacg-leaderboard',
+            $base_url . '/assets/css/leaderboard.css',
+            [ 'weixiaoacg-fa6', 'smacg-level-badge' ],
+            filemtime( $css_path )
+        );
+    }
+
+    // JS
+    $js_path = $base_dir . '/assets/js/leaderboard.js';
+    if ( ! file_exists( $js_path ) ) return;
+
+    wp_enqueue_script(
+        'smacg-leaderboard',
+        $base_url . '/assets/js/leaderboard.js',
+        [],
+        filemtime( $js_path ),
+        true
+    );
+
+    $default_tab = isset( $_GET['tab'] ) ? sanitize_key( $_GET['tab'] ) : 'exp_total';
+    if ( ! in_array( $default_tab, [ 'exp_total', 'exp_monthly', 'followers', 'badges' ], true ) ) {
+        $default_tab = 'exp_total';
+    }
+
+    $privacy = function_exists( 'smacg_ranking_privacy_localize_data' )
+        ? smacg_ranking_privacy_localize_data()
+        : null;
+
+    wp_localize_script( 'smacg-leaderboard', 'smacgRanku', [
+        'ajax'       => admin_url( 'admin-ajax.php' ),
+        'defaultTab' => $default_tab,
+        'currentUid' => get_current_user_id(),
+        'loggedIn'   => is_user_logged_in(),
+        'privacy'    => $privacy,
+    ] );
+}, 27 );
 
 
 /* ============================================================
