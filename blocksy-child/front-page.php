@@ -7,19 +7,19 @@
 /* ── Hero 海報：手動指定圖片連結 ── */
 $hero_posters = [
     [
-        'img'   => 'https://dev.weixiaoacg.com/wp-content/uploads/2026/04/AxpkIcYx.jpg',
+        'img'   => 'https://darkcyan-alpaca-757238.hostingersite.com/wp-content/uploads/2026/05/5jrnQqTH.png',
         'title' => '動漫標題一',
         'url'   => home_url('/anime/'),
     ],
     [
-        'img'   => 'https://dev.weixiaoacg.com/wp-content/uploads/2026/04/x5XDrySi.jpg',
+        'img'   => 'https://darkcyan-alpaca-757238.hostingersite.com/wp-content/uploads/2026/05/NtUk2v3C.png',
         'title' => '動漫標題二',
-        'url'   => home_url('/anime/'),
+        'url'   => ('https://discord.com/invite/yw73RBZgss'),
     ],
     [
-        'img'   => 'https://dev.weixiaoacg.com/wp-content/uploads/2026/04/T2BLWWa5.jpg',
+        'img'   => 'https://darkcyan-alpaca-757238.hostingersite.com/wp-content/uploads/2026/05/zyYiYfQY.png',
         'title' => '動漫標題三',
-        'url'   => home_url('/anime/'),
+        'url'   => ('https://darkcyan-alpaca-757238.hostingersite.com/join/'),
     ],
 ];
 ?>
