@@ -1,42 +1,30 @@
 <?php
 /**
  * Template Name: 會員中心
- * Version: 2.4.0 (2026-05-13)
+ * Version: 2.5.0 (2026-05-14)
  *
- * 架構：本檔僅負責登入檢查 + 框架，資料統計交給 inc/member-stats.php，
- *      各 tab render 交給 inc/member-render.php / inc/notifications-render.php。
+ * v2.5.0：Batch 2A-3 GamiPress 整合 + 徽章 + 職業
+ *   - Hero 區改用 smacg_get_user_level_info()（GamiPress EXP）取代舊 smacg_points
+ *   - 新增 🏆 徽章 tab（呼叫 smacg_render_badges）
+ *   - 新增 🎯 職業 tab（呼叫 smacg_render_career）
+ *   - Points tab 改名「🎮 經驗 / EXP」
  *
- * v2.0.1：<main> 改回 <div>，避免 Blocksy 雙欄 grid 觸發空白
- * v2.0.2：頭像改為 <label> + 隱藏 <input type="file">，支援即時上傳
- * v2.0.3：移除 /account/ 依賴；fallback URL 改為自家會員頁
- * v2.0.4：P1-2 新增 Continue Watching 橫向列（Hero 下方、Tab 上方）
- * v2.1.0：頭像上傳優化 - A/B/E/G
- *   - A: 頭像上傳區新增格式/大小提示文字
- *   - B: <input accept> 移除 image/gif（後端原本就拒絕）
- *   - E+G: 新增 Cropper.js 裁切 Modal DOM（#mc-cropper-modal）
- *   - 新增進度條 DOM（#mc-avatar-progress）
- * v2.2.0：Batch 1A 公開個人頁
- *   - Hero plan badge 旁新增「公開頁」連結
- * v2.3.0：Batch 1B-3 追蹤系統 UI
- *   - Hero 區新增「粉絲 / 追蹤中」數字顯示
  * v2.4.0：Batch 1C-3 通知中心
- *   - 載入 inc/notifications-render.php
- *   - 新增「🔔 通知」tab + panel
+ * v2.3.0：Batch 1B-3 追蹤系統 UI
+ * v2.2.0：Batch 1A 公開個人頁
+ * v2.1.0：頭像上傳優化
  */
 
 if (!defined('ABSPATH')) exit;
 
-// 未登入導向
 if (!is_user_logged_in()) {
     wp_safe_redirect(wp_login_url(get_permalink()));
     exit;
 }
 
-// 載入模組
 require_once get_stylesheet_directory() . '/inc/member-stats.php';
 require_once get_stylesheet_directory() . '/inc/member-render.php';
 
-// v2.4.0: 通知中心 render（如存在）
 if ( file_exists( get_stylesheet_directory() . '/inc/notifications-render.php' ) ) {
     require_once get_stylesheet_directory() . '/inc/notifications-render.php';
 }
@@ -66,9 +54,26 @@ if (!$avatar_url) {
 }
 $account_url = get_permalink();
 
-// ---------- 點數 / 等級 ----------
-$points      = (int) get_user_meta($uid, 'smacg_points', true);
-$lvl_info    = smacg_calc_level($points);
+// ---------- v2.5.0: EXP / 等級（GamiPress） ----------
+$lvl_info = function_exists( 'smacg_get_user_level_info' )
+    ? smacg_get_user_level_info( $uid )
+    : array(
+        'exp'      => 0,
+        'level'    => 1,
+        'title'    => '新進會員',
+        'icon'     => '🌱',
+        'percent'  => 0,
+        'in_level_exp'    => 0,
+        'level_total_exp' => 1,
+        'to_next'  => 5,
+        'is_max'   => false,
+        'next_floor' => 5,
+    );
+
+// 職業稱號（可能為空 — 尚未一轉）
+$job_title = function_exists( 'smacg_get_user_job_title' )
+    ? smacg_get_user_job_title( $uid )
+    : array();
 
 // ---------- 會員方案 ----------
 $plan_label  = smacg_get_plan_label($user);
@@ -84,22 +89,28 @@ $display_email = $is_owner
 // ---------- 清單 / 評分 / 點數 / 留言 ----------
 $watchlist   = smacg_build_watchlist($uid);
 $ratings     = smacg_get_user_ratings($uid);
-$points_log  = smacg_get_points_log($uid, 50);
+$points_log  = function_exists( 'smacg_get_exp_log' )
+    ? smacg_get_exp_log( $uid, 50 )
+    : array();
 $recent_cmt  = smacg_get_recent_comments($uid, 5);
 
 // ---------- 統計 ----------
 $stats       = smacg_calc_member_stats($watchlist, $ratings);
 
-// ---------- v2.2.0: 公開頁 URL ----------
+// ---------- 公開頁 URL ----------
 $public_profile_url = function_exists('smacg_get_public_profile_url')
     ? smacg_get_public_profile_url($uid)
     : '';
 
-// ---------- v2.3.0: 追蹤數 ----------
+// ---------- 追蹤數 ----------
 $mc_followers = function_exists('smacg_get_followers_count')
     ? smacg_get_followers_count($uid) : 0;
 $mc_following = function_exists('smacg_get_following_count')
     ? smacg_get_following_count($uid) : 0;
+
+// ---------- 徽章數 ----------
+$mc_badge_count = function_exists('smacg_get_user_badge_count')
+    ? smacg_get_user_badge_count($uid) : 0;
 
 get_header(); ?>
 
@@ -143,14 +154,22 @@ get_header(); ?>
         </div>
 
         <div class="mc-hero-info">
-            <h1 class="mc-hero-name"><?php echo esc_html($display); ?>
+            <h1 class="mc-hero-name">
+                <?php echo esc_html($display); ?>
                 <span class="mc-plan-badge"><?php echo esc_html($plan_label); ?></span>
 
-                <?php /* v2.2.0：公開頁入口 */ ?>
+                <?php /* v2.5.0：職業稱號（如有） */ ?>
+                <?php if ( ! empty( $job_title ) ) : ?>
+                    <span class="mc-job-badge" title="<?php echo esc_attr( $job_title['title_ref'] ); ?>">
+                        <?php echo esc_html( $job_title['job_icon'] ); ?>
+                        <?php echo esc_html( $job_title['title_name'] ); ?>
+                    </span>
+                <?php endif; ?>
+
                 <?php if ( $public_profile_url ) : ?>
                     <a href="<?php echo esc_url( $public_profile_url ); ?>"
                        class="mc-public-link"
-                       title="查看公開個人頁（其他人看到的樣子）">
+                       title="查看公開個人頁">
                         <i class="fa-solid fa-eye"></i>
                         <span>公開頁</span>
                     </a>
@@ -162,7 +181,6 @@ get_header(); ?>
                 <span>📅 <?php echo esc_html($reg_date); ?></span>
             </p>
 
-            <?php /* v2.3.0：追蹤數 */ ?>
             <p class="mc-follow-meta">
                 <span class="mc-follow-stat">
                     <b><?php echo number_format( $mc_followers ); ?></b>
@@ -172,15 +190,27 @@ get_header(); ?>
                     <b><?php echo number_format( $mc_following ); ?></b>
                     <em>追蹤中</em>
                 </span>
+                <span class="mc-follow-stat">
+                    <b><?php echo number_format( $mc_badge_count ); ?></b>
+                    <em>徽章</em>
+                </span>
             </p>
 
             <?php if ($bio): ?><p class="mc-hero-bio"><?php echo esc_html($bio); ?></p><?php endif; ?>
 
-            <div class="mc-level-bar" title="Lv.<?php echo $lvl_info['level']; ?>　<?php echo $points; ?> 點">
-                <div class="mc-level-fill" style="width:<?php echo $lvl_info['percent']; ?>%"></div>
+            <?php /* v2.5.0：等級進度條（GamiPress EXP） */ ?>
+            <div class="mc-level-bar" title="Lv.<?php echo (int)$lvl_info['level']; ?>　<?php echo (int)$lvl_info['exp']; ?> EXP">
+                <div class="mc-level-fill" style="width:<?php echo (int)$lvl_info['percent']; ?>%"></div>
                 <span class="mc-level-text">
-                    Lv.<?php echo $lvl_info['level']; ?> · <?php echo esc_html($lvl_info['title']); ?>
-                    （<?php echo $points; ?> / <?php echo $lvl_info['next']; ?>）
+                    <?php echo esc_html( $lvl_info['icon'] ); ?>
+                    Lv.<?php echo (int)$lvl_info['level']; ?> · <?php echo esc_html($lvl_info['title']); ?>
+                    （<?php echo (int)$lvl_info['exp']; ?>
+                    <?php if ( empty( $lvl_info['is_max'] ) ) : ?>
+                        / <?php echo (int)$lvl_info['next_floor']; ?>
+                    <?php else : ?>
+                        <span class="mc-level-max">MAX</span>
+                    <?php endif; ?>
+                    EXP）
                 </span>
             </div>
 
@@ -194,7 +224,7 @@ get_header(); ?>
         </div>
     </section>
 
-    <?php /* === Continue Watching - P1-2 === */ ?>
+    <?php /* === Continue Watching === */ ?>
     <?php if ( ! empty( $privacy['show_continue_watching'] ) ) : ?>
         <?php smacg_render_continue_watching( $watchlist ); ?>
     <?php endif; ?>
@@ -207,9 +237,11 @@ get_header(); ?>
             'watchlist'     => '🎬 我的清單',
             'stats'         => '📈 統計',
             'ratings'       => '⭐ 我的評分',
+            'badges'        => '🏆 徽章',
+            'career'        => '🎯 職業',
             'notifications' => '🔔 通知',
             'comments'      => '💬 留言',
-            'points'        => '🪙 點數',
+            'points'        => '🎮 EXP',
             'settings'      => '⚙️ 設定',
         ];
         foreach ($tabs as $k => $label):
@@ -237,6 +269,26 @@ get_header(); ?>
             <?php smacg_render_ratings($ratings, $stats['rating']); ?>
         </section>
 
+        <section class="mc-panel" data-panel="badges">
+            <?php
+            if ( function_exists( 'smacg_render_badges' ) ) {
+                smacg_render_badges( $uid );
+            } else {
+                echo '<p class="mc-empty">徽章模組尚未載入</p>';
+            }
+            ?>
+        </section>
+
+        <section class="mc-panel" data-panel="career">
+            <?php
+            if ( function_exists( 'smacg_render_career' ) ) {
+                smacg_render_career( $uid, $lvl_info, $job_title );
+            } else {
+                echo '<p class="mc-empty">職業模組尚未載入</p>';
+            }
+            ?>
+        </section>
+
         <section class="mc-panel" data-panel="notifications">
             <?php
             if ( function_exists( 'smacg_render_notifications_tab' ) ) {
@@ -252,7 +304,7 @@ get_header(); ?>
         </section>
 
         <section class="mc-panel" data-panel="points">
-            <?php smacg_render_points($points, $lvl_info, $points_log); ?>
+            <?php smacg_render_points( $uid, $lvl_info, $points_log ); ?>
         </section>
 
         <section class="mc-panel" data-panel="settings">
