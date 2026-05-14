@@ -1,163 +1,156 @@
 <?php
-/**
- * EXP 事件監聽器
- *
- * 原檔：blocksy-child/inc/exp-events.php v1.2.0
- *
- * @package SMACG_Gamification
- */
-
-namespace SMACG\Gamification\Exp;
+namespace SMACG\Gamification;
 
 defined( 'ABSPATH' ) || exit;
 
-class Events {
+/**
+ * EXP 事件監聽（搬自 theme/inc/exp-events.php v1.2.0）
+ *
+ * 提供：
+ *   - 中央發放函式 award_with_cap()（含 daily / once cap 檢查）
+ *   - 升級偵測 handle_level_up()
+ *   - 各業務 hook 監聽（user_register / wp_login / comment / follow / badge）
+ *   - cron smacg_exp_daily_reset（清 daily_ 前綴的 user meta，預留位）
+ */
+class Exp_Events {
 
-    public static function init() {
-        // 註冊獎勵
-        add_action( 'user_register', [ __CLASS__, 'on_register' ], 20, 1 );
+    private static $instance = null;
 
-        // 每日登入 + 連續登入
-        add_action( 'wp_login', [ __CLASS__, 'on_login' ], 20, 2 );
-
-        // 留言
-        add_action( 'comment_post', [ __CLASS__, 'on_comment_post' ], 20, 2 );
-        add_action( 'transition_comment_status', [ __CLASS__, 'on_comment_approved' ], 20, 3 );
-
-        // 追蹤
-        add_action( 'smacg_user_followed', [ __CLASS__, 'on_followed' ], 20, 2 );
-
-        // 觀看清單／評分（給 anime-sync-pro 呼叫）
-        add_action( 'smacg_watchlist_completed', [ __CLASS__, 'on_watchlist_completed' ], 20, 2 );
-        add_action( 'smacg_watchlist_added',     [ __CLASS__, 'on_watchlist_added' ], 20, 2 );
-        add_action( 'smacg_rating_added',        [ __CLASS__, 'on_rating_added' ], 20, 3 );
-
-        // GamiPress 徽章
-        add_action( 'gamipress_award_achievement', [ __CLASS__, 'on_badge_unlocked' ], 20, 2 );
-
-        // Cron
-        add_action( 'init', [ __CLASS__, 'maybe_schedule_daily_reset' ] );
-        add_action( 'smacg_exp_daily_reset', [ __CLASS__, 'on_daily_reset' ] );
-        add_action( 'switch_theme', [ __CLASS__, 'clear_cron' ] );
+    public static function instance() {
+        if ( self::$instance === null ) self::$instance = new self();
+        return self::$instance;
     }
 
-    /* ---------------------------------------------------
-     * 核心：發 EXP + 升級偵測
-     * --------------------------------------------------- */
+    private function __construct() {
+        /* 註冊 */
+        add_action( 'user_register', function ( $uid ) {
+            self::award_with_cap( $uid, 'register' );
+        }, 20 );
 
-    /**
-     * 發放 EXP 並自動套用每日上限／一生一次限制 + 偵測升級
-     */
+        /* 登入（含連續登入） */
+        add_action( 'wp_login', [ __CLASS__, 'on_login' ], 20, 2 );
+
+        /* 留言 */
+        add_action( 'comment_post', [ __CLASS__, 'on_comment_post' ], 20, 3 );
+        add_action( 'transition_comment_status', [ __CLASS__, 'on_comment_approved' ], 20, 3 );
+
+        /* 追蹤系統 */
+        add_action( 'smacg_user_followed', [ __CLASS__, 'on_follow' ], 20, 2 );
+
+        /* anime-sync-pro（未來） */
+        add_action( 'smacg_watchlist_completed', function ( $uid ) {
+            self::award_with_cap( $uid, 'watchlist_complete' );
+        }, 20 );
+        add_action( 'smacg_watchlist_added', function ( $uid ) {
+            self::award_with_cap( $uid, 'watchlist_add' );
+        }, 20 );
+        add_action( 'smacg_rating_added', function ( $uid ) {
+            self::award_with_cap( $uid, 'rating_add' );
+        }, 20 );
+
+        /* GamiPress 徽章解鎖 */
+        add_action( 'gamipress_award_achievement', [ __CLASS__, 'on_badge_unlock' ], 20, 2 );
+
+        /* Daily 重置（cron） */
+        add_action( 'smacg_exp_daily_reset', [ __CLASS__, 'daily_reset' ] );
+    }
+
+    /* ==========================================================
+     * 中央發放：含 cap 檢查 + 升級偵測
+     * ========================================================== */
     public static function award_with_cap( $uid, $action_key, $extra_args = [] ) {
         $uid = (int) $uid;
         if ( $uid <= 0 ) return false;
 
-        // 主題函式還沒載入 → 不發
-        if ( ! function_exists( 'smacg_award_exp' ) || ! function_exists( 'smacg_get_user_exp' ) ) {
-            return false;
+        $rule = Exp_Config::get( $action_key );
+        if ( ! $rule ) return false;
+
+        $amount = (int) ( $extra_args['exp_override'] ?? $rule['exp'] );
+        if ( $amount <= 0 ) return false;
+
+        /* cap 檢查 */
+        if ( $rule['cap_type'] === 'once' && $rule['cap_key'] ) {
+            $meta = 'smacg_exp_once_' . $rule['cap_key'];
+            if ( get_user_meta( $uid, $meta, true ) ) return false;
+            update_user_meta( $uid, $meta, current_time( 'mysql' ) );
+        } elseif ( $rule['cap_type'] === 'daily' && $rule['cap_key'] ) {
+            $today = current_time( 'Ymd' );
+            $meta  = 'smacg_exp_daily_' . $rule['cap_key'] . '_' . $today;
+            $cnt   = (int) get_user_meta( $uid, $meta, true );
+            $max   = (int) ( $rule['daily_max'] ?? 1 );
+            if ( $cnt >= $max ) return false;
+            update_user_meta( $uid, $meta, $cnt + 1 );
         }
 
-        $exp   = Config::get_exp( $action_key );
-        $cap   = Config::get_cap( $action_key );
-        $label = Config::get_label( $action_key );
+        /* 取得升級前等級 */
+        $before = function_exists( 'smacg_calc_level_from_exp' )
+            ? smacg_calc_level_from_exp( Gamipress_Bridge::get_user_exp( $uid ) )
+            : 0;
 
-        if ( $exp <= 0 ) return false;
+        /* 發放 */
+        $reason = $extra_args['reason'] ?? ( 'EXP: ' . $action_key );
+        $ok = Gamipress_Bridge::award_exp( $uid, $amount, $reason, $extra_args );
+        if ( ! $ok ) return false;
 
-        // 上限檢查
-        if ( $cap === -1 ) {
-            $meta_key = 'smacg_exp_once_' . $action_key;
-            if ( get_user_meta( $uid, $meta_key, true ) ) return false;
-            update_user_meta( $uid, $meta_key, current_time( 'mysql' ) );
+        /* 升級偵測 */
+        $after = function_exists( 'smacg_calc_level_from_exp' )
+            ? smacg_calc_level_from_exp( Gamipress_Bridge::get_user_exp( $uid ) )
+            : 0;
 
-        } elseif ( $cap > 0 ) {
-            $today    = current_time( 'Y-m-d' );
-            $meta_key = 'smacg_exp_daily_' . $action_key;
-            $data     = get_user_meta( $uid, $meta_key, true );
-
-            if ( ! is_array( $data ) || ! isset( $data['date'] ) || $data['date'] !== $today ) {
-                $data = [ 'date' => $today, 'count' => 0 ];
-            }
-            if ( $data['count'] >= $cap ) return false;
-            $data['count']++;
-            update_user_meta( $uid, $meta_key, $data );
+        if ( $after > $before ) {
+            self::handle_level_up( $uid, $before, $after );
         }
 
-        // 升級偵測：發前
-        $level_before = \smacg_calc_user_level( \smacg_get_user_exp( $uid ) );
-
-        // 實際發放（呼叫主題函式）
-        $result = \smacg_award_exp( $uid, $exp, $label, $extra_args );
-
-        // 升級偵測：發後
-        if ( $result ) {
-            $level_after = \smacg_calc_user_level( \smacg_get_user_exp( $uid ) );
-            if ( $level_after > $level_before ) {
-                self::handle_level_up( $uid, $level_before, $level_after );
-            }
-        }
-
-        return $result;
+        return true;
     }
 
-    /**
-     * 處理升級（可能跨多級）
-     */
+    /* ==========================================================
+     * 升級處理：fire smacg_level_up + 里程碑
+     * ========================================================== */
     public static function handle_level_up( $uid, $from_level, $to_level ) {
-        if ( $to_level <= $from_level ) return;
+        $job = function_exists( 'smacg_get_job_by_level' )
+            ? smacg_get_job_by_level( $to_level )
+            : '';
 
-        $level_title = '';
-        if ( function_exists( 'smacg_get_level_title' ) ) {
-            $level_title = \smacg_get_level_title( $to_level );
-        } elseif ( function_exists( 'smacg_get_user_level_info' ) ) {
-            $info        = \smacg_get_user_level_info( $uid );
-            $level_title = isset( $info['title'] ) ? $info['title'] : '';
-        }
+        do_action( 'smacg_level_up', $uid, $to_level, $job );
 
-        do_action( 'smacg_level_up', $uid, $to_level, $level_title );
+        $milestones = [ 10, 30, 70, 120, 200 ];
+        foreach ( $milestones as $m ) {
+            if ( $from_level < $m && $to_level >= $m ) {
+                $meta = 'smacg_milestone_lv_' . $m;
+                if ( get_user_meta( $uid, $meta, true ) ) continue;
+                update_user_meta( $uid, $meta, current_time( 'mysql' ) );
+                do_action( 'smacg_level_milestone', $uid, $m, $from_level, $to_level );
 
-        foreach ( [ 10, 30, 70, 120, 200 ] as $milestone ) {
-            if ( $from_level < $milestone && $to_level >= $milestone ) {
-                $meta_key = 'smacg_milestone_lv_' . $milestone;
-                if ( ! get_user_meta( $uid, $meta_key, true ) ) {
-                    update_user_meta( $uid, $meta_key, current_time( 'mysql' ) );
-                    do_action( 'smacg_level_milestone', $uid, $milestone, $from_level, $to_level );
+                if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+                    error_log( sprintf( '[SMACG] user #%d hit milestone Lv.%d', $uid, $m ) );
                 }
             }
         }
-
-        if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
-            error_log( sprintf( '[SMACG] User #%d level up: %d → %d (%s)', $uid, $from_level, $to_level, $level_title ) );
-        }
     }
 
-    /* ---------------------------------------------------
-     * Hook handlers
-     * --------------------------------------------------- */
-
-    public static function on_register( $user_id ) {
-        self::award_with_cap( $user_id, 'register' );
-    }
-
+    /* ==========================================================
+     * 登入 + 連續登入
+     * ========================================================== */
     public static function on_login( $user_login, $user ) {
         if ( ! $user instanceof \WP_User ) return;
+        $uid = (int) $user->ID;
 
-        $uid   = (int) $user->ID;
-        $today = current_time( 'Y-m-d' );
-
-        $last = get_user_meta( $uid, 'smacg_last_login_date', true );
-        if ( $last === $today ) return;
-
+        /* 每日登入 EXP */
         self::award_with_cap( $uid, 'daily_login' );
 
+        /* 連續登入 streak */
+        $today = current_time( 'Ymd' );
+        $last  = get_user_meta( $uid, 'smacg_last_login_date', true );
         $streak = (int) get_user_meta( $uid, 'smacg_login_streak', true );
-        if ( $last ) {
-            $yesterday = date( 'Y-m-d', strtotime( '-1 day', strtotime( $today ) ) );
-            $streak = ( $last === $yesterday ) ? $streak + 1 : 1;
-        } else {
-            $streak = 1;
-        }
+
+        if ( $last === $today ) return; // 同一天重複登入
+
+        $yesterday = date( 'Ymd', strtotime( '-1 day', current_time( 'timestamp' ) ) );
+        $streak = ( $last === $yesterday ) ? ( $streak + 1 ) : 1;
+
         update_user_meta( $uid, 'smacg_last_login_date', $today );
-        update_user_meta( $uid, 'smacg_login_streak', $streak );
+        update_user_meta( $uid, 'smacg_login_streak',    $streak );
 
         if ( $streak === 7 ) {
             self::award_with_cap( $uid, 'streak_7' );
@@ -168,98 +161,93 @@ class Events {
         }
     }
 
-    public static function on_comment_post( $comment_id, $comment_approved ) {
-        if ( $comment_approved !== 1 && $comment_approved !== '1' ) return;
-        $comment = get_comment( $comment_id );
-        if ( ! $comment || empty( $comment->user_id ) ) return;
+    /* ==========================================================
+     * 留言：approved 才給 EXP，避免雙計
+     * ========================================================== */
+    public static function on_comment_post( $comment_id, $approved, $commentdata ) {
+        if ( $approved !== 1 ) return; // 待審不給
+        $uid = (int) ( $commentdata['user_id'] ?? 0 );
+        if ( $uid <= 0 ) return;
 
-        self::award_with_cap( (int) $comment->user_id, 'comment_posted', [
-            'comment_id' => (int) $comment_id,
-        ] );
+        $meta = 'smacg_exp_comment_' . $comment_id;
+        if ( get_user_meta( $uid, $meta, true ) ) return;
+        update_user_meta( $uid, $meta, 1 );
+
+        self::award_with_cap( $uid, 'comment_post' );
     }
 
     public static function on_comment_approved( $new_status, $old_status, $comment ) {
         if ( $new_status !== 'approved' || $old_status === 'approved' ) return;
-        if ( empty( $comment->user_id ) ) return;
+        $uid = (int) $comment->user_id;
+        if ( $uid <= 0 ) return;
 
-        $meta_key = 'smacg_exp_comment_' . $comment->comment_ID;
-        if ( get_user_meta( $comment->user_id, $meta_key, true ) ) return;
+        $meta = 'smacg_exp_comment_' . $comment->comment_ID;
+        if ( get_user_meta( $uid, $meta, true ) ) return;
+        update_user_meta( $uid, $meta, 1 );
 
-        if ( self::award_with_cap( (int) $comment->user_id, 'comment_posted', [
-            'comment_id' => (int) $comment->comment_ID,
-        ] ) ) {
-            update_user_meta( $comment->user_id, $meta_key, 1 );
-        }
+        self::award_with_cap( $uid, 'comment_post' );
     }
 
-    public static function on_followed( $follower_id, $target_id ) {
-        self::award_with_cap( (int) $follower_id, 'follow_action', [ 'target_id' => (int) $target_id ] );
-        self::award_with_cap( (int) $target_id,   'gained_follower', [ 'follower_id' => (int) $follower_id ] );
+    /* ==========================================================
+     * 追蹤
+     * ========================================================== */
+    public static function on_follow( $follower_id, $followee_id ) {
+        $follower_id = (int) $follower_id;
+        $followee_id = (int) $followee_id;
+        if ( $follower_id > 0 ) self::award_with_cap( $follower_id, 'follow_action' );
+        if ( $followee_id > 0 ) self::award_with_cap( $followee_id, 'followed_by' );
     }
 
-    public static function on_watchlist_completed( $uid, $anime_id ) {
-        self::award_with_cap( (int) $uid, 'watchlist_completed', [ 'anime_id' => (int) $anime_id ] );
+    /* ==========================================================
+     * GamiPress 徽章解鎖 → 自動發 EXP
+     *
+     * 個別徽章可在 post meta _smacg_badge_exp 設自訂值；
+     * 否則用 exp_config 的 badge_unlock 預設。
+     * ========================================================== */
+    public static function on_badge_unlock( $user_id, $achievement_id ) {
+        $user_id        = (int) $user_id;
+        $achievement_id = (int) $achievement_id;
+        if ( $user_id <= 0 || $achievement_id <= 0 ) return;
+
+        $post = get_post( $achievement_id );
+        if ( ! $post || $post->post_type !== SMACG_BADGE_SLUG ) return;
+
+        $meta = 'smacg_exp_badge_' . $achievement_id;
+        if ( get_user_meta( $user_id, $meta, true ) ) return;
+        update_user_meta( $user_id, $meta, 1 );
+
+        $custom = (int) get_post_meta( $achievement_id, '_smacg_badge_exp', true );
+        $args   = $custom > 0
+            ? [ 'exp_override' => $custom, 'achievement_id' => $achievement_id, 'reason' => 'Badge: ' . $post->post_title ]
+            : [ 'achievement_id' => $achievement_id, 'reason' => 'Badge: ' . $post->post_title ];
+
+        self::award_with_cap( $user_id, 'badge_unlock', $args );
     }
 
-    public static function on_watchlist_added( $uid, $anime_id ) {
-        self::award_with_cap( (int) $uid, 'watchlist_added', [ 'anime_id' => (int) $anime_id ] );
-    }
+    /* ==========================================================
+     * Daily reset：清理舊的 smacg_exp_daily_*_YYYYMMDD（保留昨天的，刪 2 天前）
+     * ========================================================== */
+    public static function daily_reset() {
+        global $wpdb;
+        $two_days_ago = date( 'Ymd', strtotime( '-2 days', current_time( 'timestamp' ) ) );
 
-    public static function on_rating_added( $uid, $anime_id, $rating ) {
-        self::award_with_cap( (int) $uid, 'rating_added', [
-            'anime_id' => (int) $anime_id,
-            'rating'   => $rating,
-        ] );
-    }
+        /* 刪除所有 daily key 中日期 < 兩天前的 */
+        $rows = $wpdb->get_results( "
+            SELECT umeta_id, meta_key
+            FROM {$wpdb->usermeta}
+            WHERE meta_key LIKE 'smacg_exp_daily_%'
+        " );
 
-    public static function on_badge_unlocked( $user_id, $achievement_id ) {
-        $achievement = get_post( $achievement_id );
-        if ( ! $achievement ) return;
-        if ( $achievement->post_type !== SMACG_BADGE_SLUG ) return;
-
-        $meta_key = 'smacg_exp_badge_' . $achievement_id;
-        if ( get_user_meta( $user_id, $meta_key, true ) ) return;
-        update_user_meta( $user_id, $meta_key, 1 );
-
-        $custom_exp = (int) get_post_meta( $achievement_id, '_smacg_badge_exp', true );
-
-        if ( ! function_exists( 'smacg_award_exp' ) || ! function_exists( 'smacg_get_user_exp' ) ) return;
-
-        $level_before = \smacg_calc_user_level( \smacg_get_user_exp( $user_id ) );
-
-        if ( $custom_exp > 0 ) {
-            \smacg_award_exp( $user_id, $custom_exp, '解鎖徽章：' . $achievement->post_title, [
-                'achievement_id' => $achievement_id,
-            ] );
-        } else {
-            self::award_with_cap( $user_id, 'badge_unlocked', [ 'achievement_id' => $achievement_id ] );
-        }
-
-        if ( $custom_exp > 0 ) {
-            $level_after = \smacg_calc_user_level( \smacg_get_user_exp( $user_id ) );
-            if ( $level_after > $level_before ) {
-                self::handle_level_up( $user_id, $level_before, $level_after );
+        foreach ( $rows as $row ) {
+            if ( preg_match( '/_(\d{8})$/', $row->meta_key, $m ) ) {
+                if ( $m[1] < $two_days_ago ) {
+                    $wpdb->delete( $wpdb->usermeta, [ 'umeta_id' => $row->umeta_id ], [ '%d' ] );
+                }
             }
         }
-    }
 
-    /* ---------------------------------------------------
-     * Cron
-     * --------------------------------------------------- */
-    public static function maybe_schedule_daily_reset() {
-        if ( ! wp_next_scheduled( 'smacg_exp_daily_reset' ) ) {
-            $timestamp = strtotime( 'tomorrow 00:05:00', current_time( 'timestamp' ) );
-            wp_schedule_event( $timestamp, 'daily', 'smacg_exp_daily_reset' );
+        if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+            error_log( '[SMACG] Daily EXP reset complete' );
         }
     }
-
-    public static function on_daily_reset() {
-        do_action( 'smacg_exp_daily_reset_done' );
-    }
-
-    public static function clear_cron() {
-        wp_clear_scheduled_hook( 'smacg_exp_daily_reset' );
-    }
 }
-
-Events::init();
