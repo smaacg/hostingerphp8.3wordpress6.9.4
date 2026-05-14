@@ -1,0 +1,500 @@
+/* ==========================================================
+ * SmileACG × wpForo Override
+ * 將 wpForo 論壇外觀對齊 child theme 玻璃擬態主題
+ *
+ * 變數來源：blocksy-child/assets/css/glass.css
+ *   --bg-base / --bg-section
+ *   --glass-bg / --glass-bg-mid / --glass-border / --glass-blur
+ *   --text-primary / --text-secondary / --text-muted
+ *   --accent-blue / --accent-violet / --accent-pink
+ *   --radius-lg / --radius-md / --radius-pill
+ *   --trans-fast / --trans-smooth
+ *
+ * 版本：1.0.0
+ * ========================================================== */
+
+/* ---------- 0. 隱藏 wpForo 自己塞的重複導覽列 ---------- */
+#wpforo .wpforo-nav,
+#wpforo-wrap .wpforo-nav,
+#wpforo #wpforo-nav,
+.wpforo-toolbar,
+.wpforo-breadcrumb-wrap > .wpforo-nav,
+#wpforo .wpf-top-bar,
+#wpforo .wpf-toolbar {
+    display: none !important;
+}
+
+/* ---------- 1. 整個論壇外框：透明，讓 child theme 背景透出來 ---------- */
+#wpforo,
+#wpforo-wrap,
+.wpforo-wrap,
+.wpf-wrap,
+.wpforo-content,
+.wpforo-container,
+#wpforo .wpforo-main,
+#wpforo .wpf-container,
+#wpforo .wpf-content {
+    background: transparent !important;
+    color: var(--text-primary, #F5F7F6) !important;
+    box-shadow: none !important;
+}
+
+#wpforo * {
+    box-sizing: border-box;
+}
+
+/* ---------- 2. 卡片：論壇分區 / 話題列 / 文章卡 ---------- */
+#wpforo .wpforo-forum,
+#wpforo .wpforo-topic,
+#wpforo .wpforo-post,
+#wpforo .wpf-forum-row,
+#wpforo .wpf-topic-row,
+#wpforo .wpforo-section,
+#wpforo .wpforo-header,
+#wpforo .wpforo-stats,
+#wpforo .wpforo-info,
+#wpforo .wpforo-forum-card,
+#wpforo .wpf-forum-cell,
+#wpforo .wpf-list,
+#wpforo .wpf-list > li,
+#wpforo .wpf-card {
+    background: var(--glass-bg, rgba(245,247,246,.07)) !important;
+    border: 1px solid var(--glass-border, rgba(245,247,246,.14)) !important;
+    border-radius: var(--radius-lg, 20px) !important;
+    backdrop-filter: blur(var(--glass-blur, 24px));
+    -webkit-backdrop-filter: blur(var(--glass-blur, 24px));
+    color: var(--text-primary, #F5F7F6) !important;
+    box-shadow: var(--glass-shadow, 0 8px 40px rgba(0,0,0,.32)) !important;
+    margin-bottom: 16px !important;
+}
+
+#wpforo .wpforo-forum:hover,
+#wpforo .wpforo-topic:hover,
+#wpforo .wpf-forum-row:hover,
+#wpforo .wpf-topic-row:hover {
+    border-color: var(--glass-border-h, rgba(245,247,246,.26)) !important;
+    transform: translateY(-1px);
+    transition: var(--trans-smooth, all .32s cubic-bezier(.4,0,.2,1));
+}
+
+/* ---------- 3. 標題、文字色 ---------- */
+#wpforo h1,
+#wpforo h2,
+#wpforo h3,
+#wpforo h4,
+#wpforo h5,
+#wpforo .wpforo-title,
+#wpforo .wpf-title,
+#wpforo .wpforo-forum-title a,
+#wpforo .wpforo-topic-title a,
+#wpforo .wpf-forum-title a,
+#wpforo .wpf-topic-title a {
+    color: var(--text-primary, #F5F7F6) !important;
+    font-weight: 700 !important;
+}
+
+#wpforo p,
+#wpforo li,
+#wpforo span,
+#wpforo div,
+#wpforo .wpforo-meta,
+#wpforo .wpforo-stats-text,
+#wpforo .wpforo-info-text,
+#wpforo .wpf-forum-desc,
+#wpforo .wpf-meta {
+    color: var(--text-secondary, #C3C6CE) !important;
+}
+
+#wpforo small,
+#wpforo .wpforo-date,
+#wpforo .wpforo-time,
+#wpforo .wpf-date,
+#wpforo .wpf-byline {
+    color: var(--text-muted, #7B8594) !important;
+}
+
+#wpforo a {
+    color: var(--accent-blue, #63A8FF) !important;
+    transition: var(--trans-fast, all .18s cubic-bezier(.4,0,.2,1));
+}
+
+#wpforo a:hover {
+    color: var(--accent-violet, #8F6BFF) !important;
+}
+
+/* ---------- 4. 按鈕（添加話題 / 標記全部閱讀 / 標籤 / 提交） ---------- */
+#wpforo .wpforo-button,
+#wpforo .button,
+#wpforo button,
+#wpforo .wpf-button,
+#wpforo .wpf-btn,
+#wpforo input[type="submit"],
+#wpforo input[type="button"] {
+    background: linear-gradient(135deg, rgba(99,168,255,.18), rgba(143,107,255,.18)) !important;
+    border: 1px solid rgba(99,168,255,.42) !important;
+    color: var(--text-primary, #F5F7F6) !important;
+    border-radius: var(--radius-pill, 999px) !important;
+    padding: 8px 18px !important;
+    font-weight: 600 !important;
+    font-size: 13px !important;
+    line-height: 1.4 !important;
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    box-shadow: none !important;
+    cursor: pointer;
+    transition: var(--trans-smooth, all .32s cubic-bezier(.4,0,.2,1)) !important;
+}
+
+#wpforo .wpforo-button:hover,
+#wpforo .button:hover,
+#wpforo button:hover,
+#wpforo .wpf-button:hover,
+#wpforo .wpf-btn:hover,
+#wpforo input[type="submit"]:hover,
+#wpforo input[type="button"]:hover {
+    background: linear-gradient(135deg, rgba(99,168,255,.32), rgba(143,107,255,.32)) !important;
+    border-color: rgba(99,168,255,.72) !important;
+    transform: translateY(-1px);
+}
+
+/* ---------- 5. 圖示色 ---------- */
+#wpforo .fa,
+#wpforo .fas,
+#wpforo .far,
+#wpforo .fab,
+#wpforo i[class^="fa-"],
+#wpforo i[class*=" fa-"],
+#wpforo .wpforo-icon {
+    color: var(--accent-blue, #63A8FF) !important;
+}
+
+/* ---------- 6. 輸入框 / 搜尋框 / 編輯器 ---------- */
+#wpforo input[type="text"],
+#wpforo input[type="search"],
+#wpforo input[type="email"],
+#wpforo input[type="password"],
+#wpforo input[type="url"],
+#wpforo input[type="number"],
+#wpforo textarea,
+#wpforo select,
+#wpforo .wpf-input,
+#wpforo .wpf-textarea,
+#wpforo .wpforo-search-input {
+    background: rgba(245,247,246,.05) !important;
+    border: 1px solid var(--glass-border, rgba(245,247,246,.14)) !important;
+    color: var(--text-primary, #F5F7F6) !important;
+    border-radius: var(--radius-md, 14px) !important;
+    padding: 10px 14px !important;
+    font-size: 14px !important;
+    transition: var(--trans-fast, all .18s cubic-bezier(.4,0,.2,1)) !important;
+}
+
+#wpforo input[type="text"]:focus,
+#wpforo input[type="search"]:focus,
+#wpforo textarea:focus,
+#wpforo select:focus,
+#wpforo .wpf-input:focus,
+#wpforo .wpf-textarea:focus {
+    border-color: rgba(99,168,255,.55) !important;
+    background: rgba(245,247,246,.08) !important;
+    outline: none !important;
+}
+
+#wpforo input::placeholder,
+#wpforo textarea::placeholder {
+    color: var(--text-muted, #7B8594) !important;
+}
+
+/* ---------- 7. 分隔線、表格列 ---------- */
+#wpforo hr,
+#wpforo .wpforo-divider,
+#wpforo .wpforo-row + .wpforo-row,
+#wpforo .wpf-forum-row + .wpf-forum-row,
+#wpforo table,
+#wpforo th,
+#wpforo td,
+#wpforo tr {
+    border-color: var(--glass-border, rgba(245,247,246,.14)) !important;
+    background: transparent !important;
+    color: var(--text-secondary, #C3C6CE) !important;
+}
+
+#wpforo thead,
+#wpforo .wpf-th {
+    background: rgba(245,247,246,.04) !important;
+    color: var(--text-primary, #F5F7F6) !important;
+}
+
+/* ---------- 8. 論壇卡片上的封面圖（你截圖的粉色/灰色那塊） ---------- */
+#wpforo .wpforo-forum-card .wpforo-cover,
+#wpforo .wpforo-forum .wpforo-cover,
+#wpforo .wpforo-forum-image,
+#wpforo .wpf-forum-cover,
+#wpforo .wpforo-forum-icon,
+#wpforo .wpf-forum-image {
+    background: linear-gradient(135deg,
+        rgba(99,168,255,.22),
+        rgba(143,107,255,.26),
+        rgba(255,107,174,.18)
+    ) !important;
+    border-radius: var(--radius-lg, 20px) var(--radius-lg, 20px) 0 0 !important;
+}
+
+/* ---------- 9. 麵包屑 ---------- */
+#wpforo .wpforo-breadcrumb,
+#wpforo .wpforo-breadcrumb-wrap,
+#wpforo .wpf-breadcrumb {
+    background: transparent !important;
+    color: var(--text-muted, #7B8594) !important;
+    padding: 8px 0 !important;
+}
+
+#wpforo .wpforo-breadcrumb a,
+#wpforo .wpf-breadcrumb a {
+    color: var(--text-secondary, #C3C6CE) !important;
+}
+
+#wpforo .wpforo-breadcrumb a:hover,
+#wpforo .wpf-breadcrumb a:hover {
+    color: var(--accent-blue, #63A8FF) !important;
+}
+
+/* ---------- 10. wpForo 頁尾 / Powered by ---------- */
+#wpforo .wpforo-copyright,
+#wpforo-copyright,
+#wpforo .wpforo-poweredby,
+#wpforo .wpf-footer {
+    opacity: .35 !important;
+    font-size: 11px !important;
+    color: var(--text-muted, #7B8594) !important;
+    text-align: right !important;
+}
+
+/* ==========================================================
+ * 11. 狀態小標籤：未讀 / 已讀 / 私人 / 已關閉 / 已解決 /
+ *     置頂 / 熱門 / 公告 / 未過審 / 已回覆 / 活躍 / 沒有回覆
+ * ========================================================== */
+
+/* 共通樣式（玻璃藥丸 pill） */
+#wpforo .wpf-label,
+#wpforo .wpforo-label,
+#wpforo .wpf-tag,
+#wpforo .wpforo-tag,
+#wpforo .wpf-status,
+#wpforo .wpforo-status,
+#wpforo .wpf-badge,
+#wpforo .wpforo-badge,
+#wpforo .wpforo-icon-label,
+#wpforo span[class*="wpforo-icon-"],
+#wpforo span[class*="wpf-icon-"] {
+    display: inline-flex !important;
+    align-items: center !important;
+    gap: 4px !important;
+    padding: 3px 10px !important;
+    border-radius: var(--radius-pill, 999px) !important;
+    font-size: 11px !important;
+    font-weight: 700 !important;
+    line-height: 1.4 !important;
+    letter-spacing: .02em !important;
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    border: 1px solid transparent !important;
+    background: rgba(245,247,246,.08) !important;
+    color: var(--text-secondary, #C3C6CE) !important;
+}
+
+/* 未讀（unread） */
+#wpforo .wpf-unread,
+#wpforo .wpforo-unread,
+#wpforo .wpf-new,
+#wpforo .wpforo-icon-unread,
+#wpforo .wpf-icon-unread {
+    background: rgba(99,168,255,.18) !important;
+    border-color: rgba(99,168,255,.55) !important;
+    color: var(--accent-blue, #63A8FF) !important;
+    box-shadow: 0 0 12px rgba(99,168,255,.25);
+}
+
+/* 已讀（read） */
+#wpforo .wpf-read,
+#wpforo .wpforo-read,
+#wpforo .wpforo-icon-read,
+#wpforo .wpf-icon-read {
+    background: rgba(245,247,246,.05) !important;
+    border-color: rgba(245,247,246,.18) !important;
+    color: var(--text-muted, #7B8594) !important;
+    opacity: .85;
+}
+
+/* 私人（private） */
+#wpforo .wpf-private,
+#wpforo .wpforo-private,
+#wpforo .wpforo-icon-private,
+#wpforo .wpf-icon-private {
+    background: rgba(143,107,255,.18) !important;
+    border-color: rgba(143,107,255,.55) !important;
+    color: var(--accent-violet, #8F6BFF) !important;
+    box-shadow: 0 0 12px rgba(143,107,255,.22);
+}
+
+/* 已關閉（closed / locked） */
+#wpforo .wpf-closed,
+#wpforo .wpforo-closed,
+#wpforo .wpf-locked,
+#wpforo .wpforo-locked,
+#wpforo .wpforo-icon-closed,
+#wpforo .wpf-icon-closed,
+#wpforo .wpforo-icon-locked {
+    background: rgba(120,128,140,.18) !important;
+    border-color: rgba(120,128,140,.55) !important;
+    color: #9AA3AE !important;
+    opacity: .9;
+}
+
+/* 已解決（solved） */
+#wpforo .wpf-solved,
+#wpforo .wpforo-solved,
+#wpforo .wpforo-icon-solved,
+#wpforo .wpf-icon-solved {
+    background: rgba(34,197,94,.18) !important;
+    border-color: rgba(34,197,94,.55) !important;
+    color: #22C55E !important;
+    box-shadow: 0 0 10px rgba(34,197,94,.22);
+}
+
+/* 置頂（sticky / pinned） */
+#wpforo .wpf-sticky,
+#wpforo .wpforo-sticky,
+#wpforo .wpf-pinned,
+#wpforo .wpforo-pinned,
+#wpforo .wpforo-icon-sticky,
+#wpforo .wpf-icon-sticky {
+    background: rgba(255,107,174,.18) !important;
+    border-color: rgba(255,107,174,.55) !important;
+    color: var(--accent-pink, #FF6BAE) !important;
+}
+
+/* 熱門（hot） */
+#wpforo .wpf-hot,
+#wpforo .wpforo-hot,
+#wpforo .wpforo-icon-hot,
+#wpforo .wpf-icon-hot {
+    background: rgba(255,140,66,.18) !important;
+    border-color: rgba(255,140,66,.55) !important;
+    color: #FF8C42 !important;
+    box-shadow: 0 0 12px rgba(255,140,66,.25);
+}
+
+/* 活躍（active） */
+#wpforo .wpf-active,
+#wpforo .wpforo-active,
+#wpforo .wpforo-icon-active,
+#wpforo .wpf-icon-active {
+    background: rgba(111,236,255,.16) !important;
+    border-color: rgba(111,236,255,.50) !important;
+    color: var(--accent-cyan, #6FECFF) !important;
+}
+
+/* 沒有回覆 / 未回覆（no reply / new topic） */
+#wpforo .wpf-noreply,
+#wpforo .wpforo-noreply,
+#wpforo .wpf-newtopic,
+#wpforo .wpforo-newtopic,
+#wpforo .wpforo-icon-noreply,
+#wpforo .wpf-icon-noreply {
+    background: rgba(245,247,246,.05) !important;
+    border-color: rgba(245,247,246,.18) !important;
+    color: var(--text-muted, #7B8594) !important;
+}
+
+/* 已回覆（replied） */
+#wpforo .wpf-replied,
+#wpforo .wpforo-replied,
+#wpforo .wpforo-icon-replied,
+#wpforo .wpf-icon-replied {
+    background: rgba(99,168,255,.10) !important;
+    border-color: rgba(99,168,255,.35) !important;
+    color: var(--accent-blue, #63A8FF) !important;
+}
+
+/* 未過審（pending / unapproved） */
+#wpforo .wpf-pending,
+#wpforo .wpforo-pending,
+#wpforo .wpforo-unapproved,
+#wpforo .wpforo-icon-pending,
+#wpforo .wpf-icon-pending {
+    background: rgba(250,204,21,.16) !important;
+    border-color: rgba(250,204,21,.50) !important;
+    color: #FACC15 !important;
+}
+
+/* ==========================================================
+ * 12. 分頁器
+ * ========================================================== */
+#wpforo .wpforo-pagination,
+#wpforo .wpf-pagination,
+#wpforo .pagination {
+    display: flex !important;
+    gap: 6px !important;
+    justify-content: center !important;
+    margin: 24px 0 !important;
+}
+
+#wpforo .wpforo-pagination a,
+#wpforo .wpforo-pagination span,
+#wpforo .wpf-pagination a,
+#wpforo .wpf-pagination span {
+    background: var(--glass-bg, rgba(245,247,246,.07)) !important;
+    border: 1px solid var(--glass-border, rgba(245,247,246,.14)) !important;
+    color: var(--text-secondary, #C3C6CE) !important;
+    border-radius: var(--radius-md, 14px) !important;
+    padding: 6px 12px !important;
+    font-size: 13px !important;
+    font-weight: 600 !important;
+}
+
+#wpforo .wpforo-pagination .current,
+#wpforo .wpf-pagination .current,
+#wpforo .wpforo-pagination a:hover {
+    background: rgba(99,168,255,.20) !important;
+    border-color: rgba(99,168,255,.55) !important;
+    color: var(--text-primary, #F5F7F6) !important;
+}
+
+/* ==========================================================
+ * 13. 頭像與圓角
+ * ========================================================== */
+#wpforo .avatar,
+#wpforo .wpforo-avatar,
+#wpforo .wpf-avatar img,
+#wpforo .wpforo-user-avatar img {
+    border-radius: 50% !important;
+    border: 2px solid var(--glass-border, rgba(245,247,246,.14)) !important;
+    background: rgba(245,247,246,.05);
+}
+
+/* ==========================================================
+ * 14. RWD 微調
+ * ========================================================== */
+@media (max-width: 768px) {
+    #wpforo .wpforo-forum,
+    #wpforo .wpforo-topic,
+    #wpforo .wpf-forum-row {
+        border-radius: var(--radius-md, 14px) !important;
+        padding: 12px !important;
+    }
+
+    #wpforo .wpforo-button,
+    #wpforo .button,
+    #wpforo button,
+    #wpforo .wpf-button {
+        font-size: 12px !important;
+        padding: 6px 12px !important;
+    }
+
+    #wpforo .wpf-label,
+    #wpforo .wpforo-label {
+        font-size: 10px !important;
+        padding: 2px 8px !important;
+    }
+}
