@@ -1,125 +1,108 @@
 <?php
-/**
- * Career Selection AJAX - 4 職業選擇端點
- *
- * 原檔：blocksy-child/inc/career-ajax.php v1.0.0
- * 注意：本職業表（4 種）與 System::get_jobs()（8 種）並存，
- *       對應不同的 user_meta：
- *         - 4 職業：user_meta 'smacg_career_job'
- *         - 8 職業：user_meta 'smacg_job_key'
- *       兩套都保留，未來規劃整併時再處理。
- *
- * @package SMACG_Gamification
- */
-
-namespace SMACG\Gamification\Level;
+namespace SMACG\Gamification;
 
 defined( 'ABSPATH' ) || exit;
 
-class Career {
+/**
+ * 職業選擇 AJAX（搬自 theme/inc/career-ajax.php）
+ *
+ * 規則：
+ *   - Lv ≥ 10 才能選
+ *   - 4 個職業（aniholic / collector / critic / commentator）
+ *   - 只能選一次（鎖定）
+ *
+ * Endpoint: wp_ajax_smacg_select_career
+ * Nonce:    smacg_career_nonce（由 class-plugin.php 的 localize_career_nonce 注入）
+ */
+class Career_Ajax {
 
-    public static function init() {
-        add_action( 'wp_ajax_smacg_select_career',        [ __CLASS__, 'ajax_select' ] );
-        add_action( 'wp_ajax_nopriv_smacg_select_career', [ __CLASS__, 'ajax_nopriv' ] );
+    private static $instance = null;
+
+    public static function instance() {
+        if ( self::$instance === null ) self::$instance = new self();
+        return self::$instance;
     }
 
-    /* ---------- 職業定義（4 種） ---------- */
+    private function __construct() {
+        add_action( 'wp_ajax_smacg_select_career', [ __CLASS__, 'handle' ] );
+    }
 
-    public static function get_all_jobs() {
+    /* ==========================================================
+     * 4 職業表（與 Level_System 的 8 職業表獨立）
+     * ========================================================== */
+    public static function careers() {
         return [
-            'streamer' => [
-                'key' => 'streamer', 'label' => '追番達人', 'icon' => '📺',
-                'desc' => '完整追完最多季番，月度更新王者', 'color' => '#60a5fa',
+            'aniholic'    => [
+                'title' => '動畫狂熱者',
+                'desc'  => '看番狂魔，擅長刷觀看記錄',
+                'icon'  => 'fa-tv',
             ],
-            'critic' => [
-                'key' => 'critic',   'label' => '評論家',   'icon' => '🎬',
-                'desc' => '評分與評論獨到，影響社群口味', 'color' => '#f59e0b',
+            'collector'   => [
+                'title' => '收藏家',
+                'desc'  => '追蹤、收藏一把抓',
+                'icon'  => 'fa-bookmark',
             ],
-            'archivist' => [
-                'key' => 'archivist','label' => '收藏家',   'icon' => '📚',
-                'desc' => '清單管理完整，跨年度作品收藏家', 'color' => '#a78bfa',
+            'critic'      => [
+                'title' => '評論家',
+                'desc'  => '銳利筆鋒，言之有物',
+                'icon'  => 'fa-pen-fancy',
             ],
-            'social' => [
-                'key' => 'social',   'label' => '社交家',   'icon' => '💬',
-                'desc' => '人氣追蹤者、留言互動王',         'color' => '#34d399',
+            'commentator' => [
+                'title' => '留言王',
+                'desc'  => '社群互動的核心',
+                'icon'  => 'fa-comments',
             ],
         ];
     }
 
-    public static function get_job_label( $job_key ) {
-        $all = self::get_all_jobs();
-        return $all[ $job_key ] ?? null;
-    }
-
-    public static function get_user_job( $user_id ) {
-        $user_id = (int) $user_id;
-        if ( ! $user_id ) return '';
-        $job = get_user_meta( $user_id, 'smacg_career_job', true );
-        return is_string( $job ) ? $job : '';
-    }
-
-    /* ---------- AJAX ---------- */
-
-    public static function ajax_nopriv() {
-        wp_send_json_error( [ 'message' => '請先登入', 'code' => 'not_logged_in' ], 401 );
-    }
-
-    public static function ajax_select() {
+    /* ==========================================================
+     * AJAX handler
+     * ========================================================== */
+    public static function handle() {
+        if ( ! is_user_logged_in() ) {
+            wp_send_json_error( [ 'message' => '未登入' ], 401 );
+        }
         if ( ! check_ajax_referer( 'smacg_career_nonce', 'nonce', false ) ) {
-            wp_send_json_error( [ 'message' => '安全驗證失敗，請重新整理頁面', 'code' => 'bad_nonce' ], 403 );
+            wp_send_json_error( [ 'message' => 'Nonce 驗證失敗' ], 403 );
         }
 
         $uid = get_current_user_id();
-        if ( ! $uid ) {
-            wp_send_json_error( [ 'message' => '請先登入', 'code' => 'not_logged_in' ], 401 );
-        }
 
-        $job_key = isset( $_POST['job'] ) ? sanitize_key( wp_unslash( $_POST['job'] ) ) : '';
-        $jobs    = self::get_all_jobs();
-        if ( ! isset( $jobs[ $job_key ] ) ) {
-            wp_send_json_error( [ 'message' => '無效的職業選擇', 'code' => 'invalid_job' ], 400 );
-        }
-
-        // 永久鎖定
-        $existing = self::get_user_job( $uid );
-        if ( ! empty( $existing ) ) {
-            $existing_label = self::get_job_label( $existing );
+        /* 等級檢查 */
+        $info = Level_System::get_user_level( $uid );
+        if ( $info['level'] < 10 ) {
             wp_send_json_error( [
-                'message'  => sprintf( '你已選擇「%s」，職業一經選定無法變更', $existing_label['label'] ?? $existing ),
-                'code'     => 'already_locked',
-                'existing' => $existing,
-            ], 409 );
+                'message' => '需達到 Lv.10 才能選擇職業',
+                'level'   => $info['level'],
+            ], 400 );
         }
 
-        // 等級檢查
-        if ( ! function_exists( 'smacg_get_user_level_info' ) ) {
-            wp_send_json_error( [ 'message' => '等級系統未載入', 'code' => 'level_system_missing' ], 500 );
-        }
-        $lvl_info = \smacg_get_user_level_info( $uid );
-        $level    = (int) ( $lvl_info['level'] ?? 0 );
-        if ( $level < 10 ) {
+        /* 是否已選 */
+        $existing = get_user_meta( $uid, 'smacg_career_job', true );
+        if ( $existing ) {
             wp_send_json_error( [
-                'message'  => sprintf( '需要 Lv.10 才能選擇職業（目前 Lv.%d）', $level ),
-                'code'     => 'level_too_low',
-                'level'    => $level,
-                'required' => 10,
-            ], 403 );
+                'message' => '已選過職業，無法重選',
+                'current' => $existing,
+            ], 400 );
         }
 
-        update_user_meta( $uid, 'smacg_career_job', $job_key );
-        update_user_meta( $uid, 'smacg_career_job_locked_at', current_time( 'mysql' ) );
+        /* 職業驗證 */
+        $career_key = sanitize_text_field( $_POST['career'] ?? '' );
+        $careers    = self::careers();
+        if ( ! isset( $careers[ $career_key ] ) ) {
+            wp_send_json_error( [ 'message' => '無效的職業代碼' ], 400 );
+        }
 
-        do_action( 'smacg_career_job_selected', $uid, $job_key );
+        /* 寫入 */
+        update_user_meta( $uid, 'smacg_career_job',       $career_key );
+        update_user_meta( $uid, 'smacg_career_chosen_at', current_time( 'mysql' ) );
 
-        $job_data = self::get_job_label( $job_key );
+        do_action( 'smacg_career_chosen', $uid, $career_key );
+
         wp_send_json_success( [
-            'message' => sprintf( '已成為「%s %s」！', $job_data['icon'], $job_data['label'] ),
-            'job'     => $job_key,
-            'label'   => $job_data['label'],
-            'icon'    => $job_data['icon'],
-            'color'   => $job_data['color'],
+            'message' => sprintf( '已選擇職業：%s', $careers[ $career_key ]['title'] ),
+            'career'  => $career_key,
+            'title'   => $careers[ $career_key ]['title'],
         ] );
     }
 }
-
-Career::init();
