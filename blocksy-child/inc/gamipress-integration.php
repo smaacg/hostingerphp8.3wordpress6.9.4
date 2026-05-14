@@ -14,8 +14,12 @@
  * Points Type Slug: exp
  * Achievement Type Slug: badge
  *
- * Version: 1.0.0 (2026-05-13)
- * Batch: 2A-0
+ * Version: 1.1.0 (2026-05-14) Hotfix:
+ *   - [修正] admin_notices 中的 get_page_by_path() 觸發過早翻譯載入
+ *     → 改為 admin_init 階段執行 + transient 緩存結果
+ *     → 解決 WP 6.7+ _load_textdomain_just_in_time notice
+ *
+ * Version: 1.0.0 (2026-05-13) Batch 2A-0
  *
  * @package Blocksy_Child
  */
@@ -38,11 +42,6 @@ if ( ! defined( 'SMACG_BADGE_SLUG' ) ) {
  * 1. GamiPress 可用性檢查
  * ========================================================= */
 
-/**
- * 檢查 GamiPress 是否已啟用且可用
- *
- * @return bool
- */
 function smacg_gamipress_active() {
     return function_exists( 'gamipress_get_user_points' );
 }
@@ -51,33 +50,17 @@ function smacg_gamipress_active() {
  * 2. EXP（經驗值）相關 Helper
  * ========================================================= */
 
-/**
- * 取得用戶當前 EXP 總值
- *
- * @param int $uid 用戶 ID
- * @return int EXP 數值
- */
 function smacg_get_user_exp( $uid ) {
     $uid = (int) $uid;
     if ( $uid <= 0 ) return 0;
 
     if ( ! smacg_gamipress_active() ) {
-        // Fallback：GamiPress 未啟用時使用 user_meta
         return (int) get_user_meta( $uid, 'smacg_exp_fallback', true );
     }
 
     return (int) gamipress_get_user_points( $uid, SMACG_EXP_SLUG );
 }
 
-/**
- * 給予用戶 EXP（推薦做法）
- *
- * @param int    $uid       用戶 ID
- * @param int    $amount    EXP 數量（正數）
- * @param string $reason    原因（紀錄用）
- * @param array  $args      額外參數
- * @return bool 是否成功
- */
 function smacg_award_exp( $uid, $amount, $reason = '', $args = array() ) {
     $uid    = (int) $uid;
     $amount = (int) $amount;
@@ -85,13 +68,11 @@ function smacg_award_exp( $uid, $amount, $reason = '', $args = array() ) {
     if ( $uid <= 0 || $amount <= 0 ) return false;
 
     if ( ! smacg_gamipress_active() ) {
-        // Fallback：用 user_meta 累加
         $current = (int) get_user_meta( $uid, 'smacg_exp_fallback', true );
         update_user_meta( $uid, 'smacg_exp_fallback', $current + $amount );
         return true;
     }
 
-    // 使用 GamiPress 官方 API
     $admin_id = isset( $args['admin_id'] ) ? (int) $args['admin_id'] : 1;
     $reason   = $reason ?: 'smacg_award_exp';
 
@@ -107,20 +88,11 @@ function smacg_award_exp( $uid, $amount, $reason = '', $args = array() ) {
         )
     );
 
-    // 觸發自訂事件（給其他模組監聽，如：通知系統、月度積分系統）
     do_action( 'smacg_exp_awarded', $uid, $amount, $reason, $args );
 
     return $result !== false;
 }
 
-/**
- * 扣除用戶 EXP（少用，目前僅 admin 手動）
- *
- * @param int    $uid    用戶 ID
- * @param int    $amount 扣除數量（正數）
- * @param string $reason 原因
- * @return bool
- */
 function smacg_deduct_exp( $uid, $amount, $reason = '' ) {
     $uid    = (int) $uid;
     $amount = (int) $amount;
@@ -150,26 +122,16 @@ function smacg_deduct_exp( $uid, $amount, $reason = '' ) {
 }
 
 /* =========================================================
- * 3. 點數紀錄（取代舊 smacg_render_points 用）
+ * 3. 點數紀錄
  * ========================================================= */
 
-/**
- * 取得用戶 EXP 變動紀錄
- *
- * @param int $uid   用戶 ID
- * @param int $limit 筆數上限
- * @return array
- */
 function smacg_get_exp_log( $uid, $limit = 50 ) {
     global $wpdb;
     $uid   = (int) $uid;
     $limit = max( 1, min( 100, (int) $limit ) );
 
     if ( $uid <= 0 ) return array();
-
-    if ( ! smacg_gamipress_active() ) {
-        return array();
-    }
+    if ( ! smacg_gamipress_active() ) return array();
 
     $logs_table = $wpdb->prefix . 'gamipress_logs';
     $meta_table = $wpdb->prefix . 'gamipress_logs_meta';
@@ -178,7 +140,6 @@ function smacg_get_exp_log( $uid, $limit = 50 ) {
         return array();
     }
 
-    // 取得該用戶所有 points 相關 log
     $rows = $wpdb->get_results( $wpdb->prepare( "
         SELECT l.log_id, l.title, l.date, m1.meta_value AS points, m2.meta_value AS points_type, l.type
         FROM $logs_table l
@@ -193,7 +154,6 @@ function smacg_get_exp_log( $uid, $limit = 50 ) {
 
     if ( empty( $rows ) ) return array();
 
-    // 格式化成統一格式
     $out = array();
     foreach ( $rows as $row ) {
         $is_deduct = in_array( $row['type'], array( 'points_deduct', 'points_expend' ), true );
@@ -214,12 +174,6 @@ function smacg_get_exp_log( $uid, $limit = 50 ) {
  * 4. 徽章（Achievement）相關 Helper
  * ========================================================= */
 
-/**
- * 取得用戶已解鎖的徽章 ID 列表
- *
- * @param int $uid 用戶 ID
- * @return array post_id 陣列
- */
 function smacg_get_user_badge_ids( $uid ) {
     $uid = (int) $uid;
     if ( $uid <= 0 || ! smacg_gamipress_active() ) return array();
@@ -234,23 +188,10 @@ function smacg_get_user_badge_ids( $uid ) {
     return wp_list_pluck( $earnings, 'ID' );
 }
 
-/**
- * 取得用戶已解鎖徽章數量
- *
- * @param int $uid
- * @return int
- */
 function smacg_get_user_badge_count( $uid ) {
     return count( smacg_get_user_badge_ids( $uid ) );
 }
 
-/**
- * 手動發放徽章給用戶
- *
- * @param int $uid          用戶 ID
- * @param int $badge_post_id 徽章 post ID
- * @return bool
- */
 function smacg_award_badge( $uid, $badge_post_id ) {
     $uid           = (int) $uid;
     $badge_post_id = (int) $badge_post_id;
@@ -268,14 +209,12 @@ function smacg_award_badge( $uid, $badge_post_id ) {
 }
 
 /* =========================================================
- * 5. 安裝/升級檢查（用於通知管理員缺少設定）
+ * 5. 安裝/升級檢查
+ *
+ * 注意：本函式內部使用 get_page_by_path() 查詢 GamiPress CPT，
+ * 必須在 init 之後執行，否則會觸發 WP 6.7+ _load_textdomain_just_in_time notice。
  * ========================================================= */
 
-/**
- * 檢查 GamiPress 必要設定是否完整
- *
- * @return array 錯誤訊息陣列（空陣列表示一切正常）
- */
 function smacg_gamipress_check_setup() {
     $errors = array();
 
@@ -284,13 +223,11 @@ function smacg_gamipress_check_setup() {
         return $errors;
     }
 
-    // 檢查 Points Type 「exp」是否存在
     $exp_type = get_page_by_path( SMACG_EXP_SLUG, OBJECT, 'points-type' );
     if ( ! $exp_type ) {
         $errors[] = sprintf( '請至 GamiPress 後台建立 Points Type，slug = "%s"', SMACG_EXP_SLUG );
     }
 
-    // 檢查 Achievement Type 「badge」是否存在
     $badge_type = get_page_by_path( SMACG_BADGE_SLUG, OBJECT, 'achievement-type' );
     if ( ! $badge_type ) {
         $errors[] = sprintf( '請至 GamiPress 後台建立 Achievement Type，slug = "%s"', SMACG_BADGE_SLUG );
@@ -299,22 +236,42 @@ function smacg_gamipress_check_setup() {
     return $errors;
 }
 
-/**
- * 後台顯示設定警告
- */
-add_action( 'admin_notices', function() {
-    if ( ! current_user_can( 'manage_options' ) ) return;
+/* =========================================================
+ * 6. 後台警告：延後到 admin_init 並用 transient 緩存
+ *    解決 WP 6.7+ _load_textdomain_just_in_time notice
+ * ========================================================= */
 
-    $errors = smacg_gamipress_check_setup();
+add_action( 'admin_init', 'smacg_gamipress_setup_admin_notice' );
+function smacg_gamipress_setup_admin_notice() {
+    if ( ! current_user_can( 'manage_options' ) ) return;
+    if ( ! is_admin() ) return;
+
+    // 用 transient 緩存檢查結果，避免每個 admin 頁面都重跑一次 DB
+    $errors = get_transient( 'smacg_gamipress_setup_errors' );
+    if ( $errors === false ) {
+        $errors = smacg_gamipress_check_setup();
+        set_transient( 'smacg_gamipress_setup_errors', $errors, HOUR_IN_SECONDS );
+    }
+
     if ( empty( $errors ) ) return;
 
-    // 只在外掛頁、儀表板顯示
-    $screen = get_current_screen();
-    if ( ! $screen || ! in_array( $screen->id, array( 'dashboard', 'plugins', 'themes' ), true ) ) return;
+    add_action( 'admin_notices', function () use ( $errors ) {
+        $screen = function_exists( 'get_current_screen' ) ? get_current_screen() : null;
+        if ( ! $screen || ! in_array( $screen->id, array( 'dashboard', 'plugins', 'themes' ), true ) ) return;
 
-    echo '<div class="notice notice-warning"><p><strong>微笑動漫 Gamification 系統提示：</strong></p><ul style="margin-left:20px;list-style:disc;">';
-    foreach ( $errors as $err ) {
-        echo '<li>' . esc_html( $err ) . '</li>';
-    }
-    echo '</ul></div>';
-} );
+        echo '<div class="notice notice-warning"><p><strong>微笑動漫 Gamification 系統提示：</strong></p><ul style="margin-left:20px;list-style:disc;">';
+        foreach ( $errors as $err ) {
+            echo '<li>' . esc_html( $err ) . '</li>';
+        }
+        echo '</ul></div>';
+    } );
+}
+
+/**
+ * GamiPress 設定變動時清掉 transient（下次 admin_init 重新檢測）
+ */
+add_action( 'save_post_points-type',      function () { delete_transient( 'smacg_gamipress_setup_errors' ); } );
+add_action( 'save_post_achievement-type', function () { delete_transient( 'smacg_gamipress_setup_errors' ); } );
+add_action( 'activated_plugin',           function () { delete_transient( 'smacg_gamipress_setup_errors' ); } );
+add_action( 'deactivated_plugin',         function () { delete_transient( 'smacg_gamipress_setup_errors' ); } );
+add_action( 'switch_theme',               function () { delete_transient( 'smacg_gamipress_setup_errors' ); } );
