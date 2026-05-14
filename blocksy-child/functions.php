@@ -4,7 +4,17 @@
  *
  * @package weixiaoacg
  * @version 2.5.1
- *
+ * * v2.5.2（2026-05-14）— Batch 2A-2 升級偵測 + 通知橋接:
+ *   - [修改] inc/exp-events.php v1.1.0:
+ *       - 修正 hook 名稱 'smacg_followed' → 'smacg_user_followed'（對齊 follow-system.php）
+ *       - 新增 smacg_handle_level_up() 升級偵測函式
+ *       - 大里程碑 Lv.10/30/70/120/200 觸發 smacg_level_milestone hook
+ *   - [新增] inc/gamipress-notif-bridge.php:
+ *       - 監聽 smacg_level_milestone → 轉職特別通知（force=true）
+ *       - 監聽 smacg_streak_milestone → 連續登入特別通知
+ *       - 自訂 _smacg_badge_exp 徽章的強化通知
+ *       - 提供 ?smacg_test_levelup=1 測試端點
+
  * v2.5.1（2026-05-14）— Batch 2A-1 EXP 事件系統:
  *   - [新增] inc/exp-config.php（EXP 規則集中設定）
  *   - [新增] inc/exp-events.php（自動事件監聽 + 防刷分上限）
@@ -177,3 +187,11 @@ if ( file_exists( $inc_dir . 'exp-config.php' ) ) {
 if ( file_exists( $inc_dir . 'exp-events.php' ) ) {
     require_once $inc_dir . 'exp-events.php';
 }
+
+// 19. GamiPress ↔ Notifications Bridge（Batch 2A-2 - 2026-05-14）
+//     監聽 smacg_level_milestone / smacg_streak_milestone，發強化版通知
+//     必須在 exp-events.php 之後載入（依賴 smacg_create_notification + 里程碑 hook）
+if ( file_exists( $inc_dir . 'gamipress-notif-bridge.php' ) ) {
+    require_once $inc_dir . 'gamipress-notif-bridge.php';
+}
+
