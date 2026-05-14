@@ -3,13 +3,14 @@
  * 微笑動漫 Child Theme — functions.php
  *
  * @package weixiaoacg
- * @version 2.6.0 (2026-05-14)
+ * @version 2.7.0 (2026-05-14)
  *
  * Changelog（只列近期；完整歷史見 git log）：
+ *   2.7.0 (2026-05-14) Batch 2B-2 — leaderboard-ajax (會員排行榜頁面前端)
  *   2.6.0 (2026-05-14) Batch 2B-1 — ranking-system + ranking-cron + ranking-privacy
  *   2.5.4 (2026-05-14) Batch 2A-4 — career-ajax + level-badge-display
- *   2.5.3 (2026-05-14) Batch 2A-3 — 解決 smacg_calc_level 命名衝突、徽章/職業 tab
- *   2.5.2 (2026-05-14) Batch 2A-2 — 升級偵測 + gamipress-notif-bridge
+ *   2.5.3 (2026-05-14) Batch 2A-3 — 解決 smacg_calc_level 命名衝突
+ *   2.5.2 (2026-05-14) Batch 2A-2 — gamipress-notif-bridge
  *   2.5.1 (2026-05-14) Batch 2A-1 — exp-config + exp-events
  *   2.5.0 (2026-05-14) Batch 2A-0 — gamipress-integration + level-system
  *   2.4.x              Batch 1C   — 通知中心
@@ -23,11 +24,10 @@ defined( 'ABSPATH' ) || exit;
 /* ============================================================
    常數
    ============================================================ */
-define( 'weixiaoacg_VERSION',   '2.6.0' );
+define( 'weixiaoacg_VERSION',   '2.7.0' );
 define( 'weixiaoacg_THEME_URL', get_stylesheet_directory_uri() );
 define( 'weixiaoacg_THEME_DIR', get_stylesheet_directory() );
 
-// 舊版自定點數常數（保留相容，將由 EXP 系統取代）
 define( 'SMACG_POINT_FAVORITE',  5  );
 define( 'SMACG_POINT_WANT',      1  );
 define( 'SMACG_POINT_WATCHING',  3  );
@@ -38,7 +38,6 @@ define( 'SMACG_POINT_READ',      2  );
 define( 'SMACG_POINT_COMMENT',   3  );
 define( 'SMACG_POINT_LOGIN',     1  );
 
-// 追蹤系統（Batch 1B-1）
 define( 'SMACG_FOLLOW_DAILY_LIMIT', 200 );
 define( 'SMACG_FOLLOW_COOLDOWN',    1   );
 
@@ -69,7 +68,6 @@ foreach ( [
 
 // ---- optional ----
 $optional = [
-    // Batch C / 1A / 1B / 1C
     'image-optimizer',
     'public-profile',
     'public-profile-render',
@@ -90,10 +88,13 @@ $optional = [
     'career-ajax',
     'level-badge-display',
 
-    // Phase 2B-1：Ranking
-    'ranking-system',     // 資料層 + 兩張表 + smacg_exp_awarded listener
-    'ranking-cron',       // 每小時 Cron + admin bar 手動觸發
-    'ranking-privacy',    // 隱私開關（appear_in_ranking）
+    // Phase 2B-1：Ranking 資料層
+    'ranking-system',
+    'ranking-cron',
+    'ranking-privacy',
+
+    // Phase 2B-2：Ranking 前端
+    'leaderboard-ajax',
 ];
 
 foreach ( $optional as $f ) {
