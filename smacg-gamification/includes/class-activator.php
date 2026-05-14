@@ -10,17 +10,16 @@ class Activator {
         self::install_event_tables();
         self::schedule_crons();
 
-        update_option( 'smacg_gamify_version', SMACG_GAMIFY_VERSION );
+        update_option( 'smacg_gamify_version',      SMACG_GAMIFY_VERSION );
         update_option( 'smacg_gamify_activated_at', current_time( 'mysql' ) );
 
-        // CPT 註冊在 plugins_loaded 之後的 init，這裡用一次性 flush 標記
+        // 觸發 init 99 階段的 flush（CPT 此時尚未註冊，不能在此直接 flush）
         update_option( 'smacg_event_cpt_flushed', '0' );
-        flush_rewrite_rules();
     }
 
     public static function install_ranking_tables() {
         global $wpdb;
-        $charset = $wpdb->get_charset_collate();
+        $charset      = $wpdb->get_charset_collate();
         $tbl_monthly  = $wpdb->prefix . 'smacg_monthly_exp';
         $tbl_rankings = $wpdb->prefix . 'smacg_rankings';
 
@@ -52,9 +51,6 @@ class Activator {
         update_option( 'smacg_ranking_db_version', SMACG_RANKING_DB_VERSION );
     }
 
-    /**
-     * Batch 2.3：建立 event_progress 表
-     */
     public static function install_event_tables() {
         global $wpdb;
         $charset = $wpdb->get_charset_collate();
@@ -78,23 +74,17 @@ class Activator {
         update_option( 'smacg_event_db_version', SMACG_EVENT_DB_VERSION );
     }
 
-    /**
-     * 註冊所有 cron
-     */
     public static function schedule_crons() {
-        // Batch 2.1
         if ( ! wp_next_scheduled( 'smacg_exp_daily_reset' ) ) {
-            $timestamp = strtotime( 'tomorrow 00:05:00', current_time( 'timestamp' ) );
-            wp_schedule_event( $timestamp, 'daily', 'smacg_exp_daily_reset' );
+            $ts = strtotime( 'tomorrow 00:05:00', current_time( 'timestamp' ) );
+            wp_schedule_event( $ts, 'daily', 'smacg_exp_daily_reset' );
         }
-        // Batch 2.2
         if ( ! wp_next_scheduled( 'smacg_ranking_recalc' ) ) {
             wp_schedule_event( time() + 60, 'hourly', 'smacg_ranking_recalc' );
         }
         if ( ! wp_next_scheduled( 'smacg_ranking_monthly_purge' ) ) {
             wp_schedule_event( strtotime( 'tomorrow 04:00' ), 'daily', 'smacg_ranking_monthly_purge' );
         }
-        // Batch 2.3
         if ( ! wp_next_scheduled( 'smacg_event_settle_sweep' ) ) {
             wp_schedule_event( time() + 120, 'smacg_10min', 'smacg_event_settle_sweep' );
         }
