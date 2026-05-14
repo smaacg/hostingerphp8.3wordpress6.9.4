@@ -1,44 +1,13 @@
 /* ==========================================================
- * SmileACG × wpForo v3.x Override — Real Class Edition
- * 基於 wpForo 原始 CSS Matrix (Classic theme) 對齊
- *
- * 真實 wrapper：#wpforo #wpforo-wrap
- * 主選單：#wpforo-menu
- * 列表布局：.wpfl-1 / .wpfl-2 / .wpfl-3 / .wpfl-4 / .wpfl-5
- *
- * v2.0.0
+ * SmileACG × wpForo v3.x Override — v3.0.0
+ * 完整版：對齊玻璃擬態主題 + 添加話題介面強化
  * ========================================================== */
 
 /* ==========================================================
- * 0. 自動啟用 wpForo 內建 dark mode
+ * 0. 主容器
  * ========================================================== */
-body.forum,
-body[class*="wpforo"],
-body[class*="community"] {
-    /* 觸發 wpForo 自帶暗色 */
-}
-
 #wpforo #wpforo-wrap {
     color: #F5F7F6 !important;
-    background: transparent !important;
-    font-family: 'Inter', 'Noto Sans TC', sans-serif !important;
-    padding: 0 !important;
-}
-
-/* ==========================================================
- * 1. 隱藏 wpForo 自己的選單列（你截圖的第二條淺色 nav）
- * ========================================================== */
-#wpforo #wpforo-wrap #wpforo-menu {
-    display: none !important;
-}
-
-/* 同時隱藏 wpforo 自帶的麵包屑（如果跟 child theme 重複） */
-/* 不隱藏麵包屑，因為 wpForo 麵包屑功能比 child theme 完整 */
-
-/* ==========================================================
- * 2. 整個論壇外殼：玻璃容器
- * ========================================================== */
-#wpforo #wpforo-wrap {
     background: rgba(30, 36, 43, 0.65) !important;
     border: 1px solid rgba(245, 247, 246, 0.10) !important;
     border-radius: 20px !important;
@@ -47,10 +16,16 @@ body[class*="community"] {
     box-shadow: 0 16px 50px rgba(0, 0, 0, .35) !important;
     padding: 20px !important;
     margin: 20px auto !important;
+    font-family: 'Inter', 'Noto Sans TC', sans-serif !important;
+    font-size: 14px !important;
+}
+
+#wpforo #wpforo-wrap #wpforo-menu {
+    display: none !important;
 }
 
 /* ==========================================================
- * 3. 麵包屑（wpForo 真實 class：.wpf-breadcrumb）
+ * 1. 麵包屑
  * ========================================================== */
 #wpforo #wpforo-wrap .wpf-breadcrumb {
     background: transparent !important;
@@ -65,15 +40,9 @@ body[class*="community"] {
 }
 
 #wpforo #wpforo-wrap .wpf-breadcrumb div:hover,
-#wpforo #wpforo-wrap .wpf-breadcrumb div:hover:after,
-#wpforo #wpforo-wrap .wpf-breadcrumb div.active,
-#wpforo #wpforo-wrap .wpf-breadcrumb div.active:after {
+#wpforo #wpforo-wrap .wpf-breadcrumb div.active {
     background: rgba(99, 168, 255, 0.10) !important;
     color: #63A8FF !important;
-}
-
-#wpforo #wpforo-wrap .wpf-breadcrumb div:after {
-    background: transparent !important;
 }
 
 #wpforo #wpforo-wrap .wpf-breadcrumb .wpf-root {
@@ -81,8 +50,7 @@ body[class*="community"] {
 }
 
 /* ==========================================================
- * 4. 大標題列（你截圖：darkcyan-...Forum + 未讀帖子 | 論壇 | 話題）
- *    wpForo 真實 class：.wpf-head-bar
+ * 2. 標題列 / 工具列
  * ========================================================== */
 #wpforo #wpforo-wrap .wpf-head-bar {
     background: rgba(245, 247, 246, 0.04) !important;
@@ -102,9 +70,22 @@ body[class*="community"] {
     color: #63A8FF !important;
 }
 
+#wpforo #wpforo-wrap .wpf-bar-right,
+#wpforo #wpforo-wrap .wpf-bar-right span,
+#wpforo #wpforo-wrap .wpf-bar-right a {
+    color: #C3C6CE !important;
+}
+
+#wpforo #wpforo-wrap .wpf-bar-right a:hover {
+    color: #63A8FF !important;
+}
+
+#wpforo #wpforo-wrap .wpf-bar-right .wpf-alerts {
+    border-right: 1px solid rgba(245, 247, 246, 0.14) !important;
+}
+
 /* ==========================================================
- * 5. 分類標題（你截圖：微笑動漫討論區）
- *    wpForo 真實 class：.wpforo-category / .wpfl-X .wpforo-category
+ * 3. 分類標題（微笑動漫討論區）
  * ========================================================== */
 #wpforo #wpforo-wrap .wpforo-category,
 #wpforo #wpforo-wrap .wpfl-1 .wpforo-category,
@@ -134,8 +115,335 @@ body[class*="community"] {
 }
 
 /* ==========================================================
- * 6. 論壇分區卡片（你截圖：動漫討論區 / 站務區）
- *    wpForo 真實 class：.forum-wrap / .wpforo-forum-* (拆成多列)
+ * 4. ★★★ 添加話題 Toggle 按鈕（你截圖那顆綠色 toggle）
+ *    強化視覺：改為主視覺漸層 + 發光 + 加大
+ * ========================================================== */
+#wpforo #wpforo-wrap .wpf-acp-header,
+#wpforo #wpforo-wrap .wpf-add-topic-header,
+#wpforo #wpforo-wrap [class*="wpf-acp"] {
+    background: linear-gradient(135deg,
+        rgba(99,168,255,.14),
+        rgba(143,107,255,.14)
+    ) !important;
+    border: 1px solid rgba(99, 168, 255, 0.30) !important;
+    border-radius: 14px !important;
+    padding: 14px 20px !important;
+    margin-bottom: 16px !important;
+    cursor: pointer !important;
+    transition: all .25s ease !important;
+}
+
+#wpforo #wpforo-wrap .wpf-acp-header:hover {
+    background: linear-gradient(135deg,
+        rgba(99,168,255,.22),
+        rgba(143,107,255,.22)
+    ) !important;
+    border-color: rgba(99, 168, 255, 0.55) !important;
+    box-shadow: 0 8px 24px rgba(99, 168, 255, .25) !important;
+    transform: translateY(-1px);
+}
+
+#wpforo #wpforo-wrap .wpf-acp-header .wpf-acp-title,
+#wpforo #wpforo-wrap .wpf-acp-title {
+    color: #F5F7F6 !important;
+    font-size: 15px !important;
+    font-weight: 700 !important;
+}
+
+#wpforo #wpforo-wrap .wpf-acp-header .wpf-acp-toggle i,
+#wpforo #wpforo-wrap .wpf-acp-toggle i {
+    color: #63A8FF !important;
+    font-size: 20px !important;
+    filter: drop-shadow(0 0 8px rgba(99, 168, 255, .55));
+}
+
+#wpforo #wpforo-wrap .wpf-add-topic-title {
+    background: linear-gradient(135deg, #63A8FF, #8F6BFF) !important;
+    color: #fff !important;
+    border: 0 !important;
+    border-radius: 999px !important;
+    padding: 8px 18px !important;
+    font-weight: 700 !important;
+    display: inline-block !important;
+    box-shadow: 0 4px 14px rgba(99, 168, 255, .45) !important;
+}
+
+/* ==========================================================
+ * 5. ★★★ 添加話題編輯區整體
+ * ========================================================== */
+#wpforo #wpforo-wrap .wpf-topic-create,
+#wpforo #wpforo-wrap .wpf-post-create,
+#wpforo #wpforo-wrap .wpforo-portable-form-wrap {
+    background: rgba(245, 247, 246, 0.04) !important;
+    border: 1px solid rgba(245, 247, 246, 0.10) !important;
+    border-radius: 16px !important;
+    padding: 20px !important;
+    margin-bottom: 16px !important;
+}
+
+#wpforo #wpforo-wrap .wpf-topic-create .wpf-subject,
+#wpforo #wpforo-wrap .wpf-post-create .wpf-subject {
+    background: rgba(245, 247, 246, 0.06) !important;
+    color: #F5F7F6 !important;
+    border: 1px solid rgba(245, 247, 246, 0.14) !important;
+    border-radius: 12px !important;
+    padding: 12px 16px !important;
+    font-size: 16px !important;
+    font-weight: 600 !important;
+    width: 100% !important;
+    box-sizing: border-box !important;
+}
+
+#wpforo #wpforo-wrap .wpf-topic-create .wpf-subject:focus,
+#wpforo #wpforo-wrap .wpf-post-create .wpf-subject:focus {
+    border-color: rgba(99, 168, 255, 0.55) !important;
+    background: rgba(245, 247, 246, 0.08) !important;
+}
+
+/* ==========================================================
+ * 6. ★★★ 選擇論壇下拉選單（你截圖那個白底看不清的）
+ * ========================================================== */
+#wpforo #wpforo-wrap select,
+#wpforo #wpforo-wrap .wpf-forum-select,
+#wpforo #wpforo-wrap select[name*="forum"],
+#wpforo #wpforo-wrap .wpf-field select {
+    background: rgba(30, 36, 43, 0.92) !important;
+    background-color: rgba(30, 36, 43, 0.92) !important;
+    color: #F5F7F6 !important;
+    border: 1px solid rgba(99, 168, 255, 0.35) !important;
+    border-radius: 12px !important;
+    padding: 12px 40px 12px 16px !important;
+    font-size: 14px !important;
+    font-weight: 600 !important;
+    box-shadow: none !important;
+    -webkit-appearance: none !important;
+    -moz-appearance: none !important;
+    appearance: none !important;
+
+    /* 自訂下拉箭頭（純 CSS，不需圖檔） */
+    background-image: linear-gradient(45deg, transparent 50%, #63A8FF 50%),
+                      linear-gradient(135deg, #63A8FF 50%, transparent 50%) !important;
+    background-position: calc(100% - 20px) center, calc(100% - 14px) center !important;
+    background-size: 6px 6px !important;
+    background-repeat: no-repeat !important;
+    background-color: rgba(30, 36, 43, 0.92) !important;
+}
+
+#wpforo #wpforo-wrap select:hover {
+    border-color: rgba(99, 168, 255, 0.60) !important;
+}
+
+#wpforo #wpforo-wrap select:focus {
+    border-color: #63A8FF !important;
+    background-color: rgba(30, 36, 43, 1) !important;
+    outline: none !important;
+    box-shadow: 0 0 0 3px rgba(99, 168, 255, .20) !important;
+}
+
+/* 下拉的 option（瀏覽器原生樣式，能改的有限） */
+#wpforo #wpforo-wrap select option {
+    background: #1E242B !important;
+    color: #F5F7F6 !important;
+    padding: 10px !important;
+}
+
+#wpforo #wpforo-wrap select option:checked,
+#wpforo #wpforo-wrap select option:hover {
+    background: #63A8FF !important;
+    color: #fff !important;
+}
+
+/* ==========================================================
+ * 7. ★★★ TinyMCE 編輯器（你截圖那個太小的編輯器）
+ *    強制加大高度 + 深色配色
+ * ========================================================== */
+#wpforo #wpforo-wrap .mce-tinymce.mce-container.mce-panel,
+#wpforo #wpforo-wrap .mce-tinymce {
+    background: rgba(30, 36, 43, 0.85) !important;
+    border: 1px solid rgba(99, 168, 255, 0.30) !important;
+    border-radius: 12px !important;
+    overflow: hidden !important;
+    min-height: 400px !important;
+    box-shadow: 0 4px 14px rgba(0, 0, 0, .25) !important;
+}
+
+/* 編輯器 iframe（實際輸入區） */
+#wpforo #wpforo-wrap .mce-tinymce iframe,
+#wpforo #wpforo-wrap .wp-editor-area,
+#wpforo #wpforo-wrap textarea.wp-editor-area {
+    background: rgba(30, 36, 43, 0.95) !important;
+    color: #F5F7F6 !important;
+    min-height: 320px !important;
+    border: 0 !important;
+}
+
+/* TinyMCE 工具列（B / I / U / link / 表情符號等按鈕列） */
+#wpforo #wpforo-wrap .mce-toolbar-grp,
+#wpforo #wpforo-wrap div.mce-toolbar-grp,
+#wpforo #wpforo-wrap .mce-menubar,
+#wpforo #wpforo-wrap .mce-statusbar {
+    background: rgba(245, 247, 246, 0.05) !important;
+    border-color: rgba(245, 247, 246, 0.10) !important;
+}
+
+#wpforo #wpforo-wrap .mce-btn {
+    background: transparent !important;
+    border: 0 !important;
+    color: #C3C6CE !important;
+}
+
+#wpforo #wpforo-wrap .mce-btn:hover {
+    background: rgba(99, 168, 255, 0.18) !important;
+    color: #63A8FF !important;
+}
+
+#wpforo #wpforo-wrap .mce-btn i,
+#wpforo #wpforo-wrap .mce-ico {
+    color: #C3C6CE !important;
+}
+
+#wpforo #wpforo-wrap .mce-btn:hover i {
+    color: #63A8FF !important;
+}
+
+/* QuickTags（HTML 模式工具列） */
+#wpforo #wpforo-wrap .quicktags-toolbar {
+    background: rgba(245, 247, 246, 0.05) !important;
+    border-bottom: 1px solid rgba(245, 247, 246, 0.10) !important;
+}
+
+#wpforo #wpforo-wrap .quicktags-toolbar input[type="button"] {
+    background: rgba(99, 168, 255, 0.18) !important;
+    color: #63A8FF !important;
+    border: 1px solid rgba(99, 168, 255, 0.35) !important;
+    border-radius: 6px !important;
+    padding: 4px 10px !important;
+    box-shadow: none !important;
+}
+
+#wpforo #wpforo-wrap .quicktags-toolbar input[type="button"]:hover {
+    background: rgba(99, 168, 255, 0.35) !important;
+    color: #fff !important;
+}
+
+/* 編輯器頂部 Visual / Text 切換頁籤 */
+#wpforo #wpforo-wrap .wp-editor-tabs {
+    background: transparent !important;
+}
+
+#wpforo #wpforo-wrap .wp-editor-tabs a.switch-tmce,
+#wpforo #wpforo-wrap .wp-editor-tabs a.switch-html {
+    background: rgba(245, 247, 246, 0.05) !important;
+    color: #C3C6CE !important;
+    border: 1px solid rgba(245, 247, 246, 0.14) !important;
+    border-bottom: 0 !important;
+    border-radius: 8px 8px 0 0 !important;
+    padding: 6px 14px !important;
+}
+
+#wpforo #wpforo-wrap .wp-editor-tabs a.switch-tmce.active,
+#wpforo #wpforo-wrap .wp-editor-tabs a.switch-html.active {
+    background: rgba(99, 168, 255, 0.18) !important;
+    color: #63A8FF !important;
+    border-color: rgba(99, 168, 255, 0.40) !important;
+}
+
+/* ==========================================================
+ * 8. 上傳檔案 / 公開 / 私密選項
+ * ========================================================== */
+#wpforo #wpforo-wrap input[type="file"] {
+    background: rgba(245, 247, 246, 0.05) !important;
+    border: 1px dashed rgba(99, 168, 255, 0.35) !important;
+    color: #C3C6CE !important;
+    border-radius: 10px !important;
+    padding: 10px !important;
+}
+
+#wpforo #wpforo-wrap input[type="checkbox"],
+#wpforo #wpforo-wrap input[type="radio"] {
+    accent-color: #63A8FF !important;
+    width: 16px !important;
+    height: 16px !important;
+    cursor: pointer !important;
+}
+
+#wpforo #wpforo-wrap label,
+#wpforo #wpforo-wrap .wpf-label {
+    color: #F5F7F6 !important;
+    font-weight: 600 !important;
+}
+
+#wpforo #wpforo-wrap .wpf-field .wpf-label i {
+    color: #63A8FF !important;
+}
+
+/* 主題標籤輸入框 */
+#wpforo #wpforo-wrap #wpf_tags,
+#wpforo #wpforo-wrap input[name*="tags"] {
+    background: rgba(245, 247, 246, 0.06) !important;
+    color: #F5F7F6 !important;
+    border: 1px solid rgba(245, 247, 246, 0.14) !important;
+    border-radius: 10px !important;
+    padding: 10px 14px !important;
+}
+
+/* ==========================================================
+ * 9. ★★★ 提交按鈕（添加話題的「添加話題」最終按鈕）
+ * ========================================================== */
+#wpforo #wpforo-wrap input[type="submit"],
+#wpforo #wpforo-wrap input[type="reset"],
+#wpforo #wpforo-wrap input[type="button"],
+#wpforo #wpforo-wrap .wpf-button,
+.wpf-button {
+    background: linear-gradient(135deg, #63A8FF, #8F6BFF) !important;
+    border: 0 !important;
+    color: #fff !important;
+    border-radius: 999px !important;
+    padding: 10px 24px !important;
+    font-weight: 700 !important;
+    font-size: 14px !important;
+    box-shadow: 0 6px 18px rgba(99, 168, 255, .40) !important;
+    transition: all .25s ease !important;
+    cursor: pointer !important;
+    text-decoration: none !important;
+}
+
+#wpforo #wpforo-wrap input[type="submit"]:hover,
+#wpforo #wpforo-wrap input[type="button"]:hover,
+#wpforo #wpforo-wrap .wpf-button:hover,
+.wpf-button:hover {
+    background: linear-gradient(135deg, #8F6BFF, #FF6BAE) !important;
+    transform: translateY(-2px);
+    box-shadow: 0 10px 28px rgba(99, 168, 255, .60) !important;
+}
+
+#wpforo #wpforo-wrap .wpf-button-secondary,
+.wpf-button-secondary {
+    background: rgba(245, 247, 246, 0.08) !important;
+    border: 1px solid rgba(245, 247, 246, 0.18) !important;
+    color: #C3C6CE !important;
+    box-shadow: none !important;
+}
+
+#wpforo #wpforo-wrap .wpf-button-secondary:hover {
+    background: rgba(245, 247, 246, 0.14) !important;
+    color: #F5F7F6 !important;
+}
+
+#wpforo #wpforo-wrap .wpf-button-outlined {
+    background: transparent !important;
+    border: 1px solid rgba(99, 168, 255, 0.45) !important;
+    color: #63A8FF !important;
+    box-shadow: none !important;
+}
+
+#wpforo #wpforo-wrap .wpf-button-outlined:hover {
+    background: rgba(99, 168, 255, 0.18) !important;
+    box-shadow: 0 4px 14px rgba(99, 168, 255, .35) !important;
+}
+
+/* ==========================================================
+ * 10. 論壇列表卡片（動漫討論區 / 站務區）
  * ========================================================== */
 #wpforo #wpforo-wrap .forum-wrap {
     background: linear-gradient(135deg,
@@ -143,7 +451,6 @@ body[class*="community"] {
         rgba(143,107,255,.06)
     ) !important;
     border: 1px solid rgba(245, 247, 246, 0.10) !important;
-    border-bottom: 1px solid rgba(245, 247, 246, 0.10) !important;
     border-radius: 14px !important;
     padding: 16px 18px !important;
     margin-bottom: 12px !important;
@@ -158,10 +465,6 @@ body[class*="community"] {
     border-color: rgba(99, 168, 255, 0.45) !important;
     transform: translateY(-2px);
     box-shadow: 0 10px 28px rgba(0, 0, 0, .30) !important;
-}
-
-#wpforo #wpforo-wrap .forum-wrap:last-child {
-    border-bottom: 1px solid rgba(245, 247, 246, 0.10) !important;
 }
 
 #wpforo #wpforo-wrap .wpforo-forum-title,
@@ -194,11 +497,9 @@ body[class*="community"] {
     color: #63A8FF !important;
 }
 
-/* ★ 拔掉那塊粉色 / 灰色封面圖（wpfl-X 的 forum cover） */
 #wpforo #wpforo-wrap .wpforo-subforum,
 #wpforo #wpforo-wrap .wpforo-forum-image,
-#wpforo #wpforo-wrap [class*="forum-cover"],
-#wpforo #wpforo-wrap [class*="cover-image"] {
+#wpforo #wpforo-wrap [class*="forum-cover"] {
     background: linear-gradient(135deg,
         #1E242B 0%,
         #2A3340 60%,
@@ -208,7 +509,7 @@ body[class*="community"] {
 }
 
 /* ==========================================================
- * 7. 主題列表（topic-wrap）
+ * 11. 主題列表
  * ========================================================== */
 #wpforo #wpforo-wrap .topic-wrap {
     background: rgba(245, 247, 246, 0.04) !important;
@@ -257,77 +558,7 @@ body[class*="community"] {
 }
 
 /* ==========================================================
- * 8. 按鈕（wpForo 真實 class：.wpf-button / input[submit]）
- * ========================================================== */
-#wpforo #wpforo-wrap input[type="submit"],
-#wpforo #wpforo-wrap input[type="reset"],
-#wpforo #wpforo-wrap input[type="button"],
-#wpforo #wpforo-wrap .wpf-button,
-.wpf-button {
-    background: linear-gradient(135deg, #63A8FF, #8F6BFF) !important;
-    border: 0 !important;
-    color: #fff !important;
-    border-radius: 999px !important;
-    padding: 8px 18px !important;
-    font-weight: 700 !important;
-    font-size: 13px !important;
-    box-shadow: 0 4px 14px rgba(99, 168, 255, .35) !important;
-    transition: all .25s ease !important;
-    cursor: pointer !important;
-    text-decoration: none !important;
-}
-
-#wpforo #wpforo-wrap input[type="submit"]:hover,
-#wpforo #wpforo-wrap input[type="reset"]:hover,
-#wpforo #wpforo-wrap input[type="button"]:hover,
-#wpforo #wpforo-wrap .wpf-button:hover,
-.wpf-button:hover {
-    background: linear-gradient(135deg, #8F6BFF, #FF6BAE) !important;
-    transform: translateY(-1px);
-    box-shadow: 0 8px 22px rgba(99, 168, 255, .55) !important;
-}
-
-/* 副要按鈕 */
-#wpforo #wpforo-wrap .wpf-button-secondary,
-.wpf-button-secondary {
-    background: rgba(245, 247, 246, 0.08) !important;
-    border: 1px solid rgba(245, 247, 246, 0.18) !important;
-    color: #C3C6CE !important;
-    box-shadow: none !important;
-}
-
-#wpforo #wpforo-wrap .wpf-button-secondary:hover {
-    background: rgba(245, 247, 246, 0.14) !important;
-    color: #F5F7F6 !important;
-}
-
-/* Outline 按鈕（變更顯示模式 / 流程管理 / Antispam / 論壇小工具 / 顯示違禁詞） */
-#wpforo #wpforo-wrap .wpf-button-outlined {
-    background: transparent !important;
-    border: 1px solid rgba(99, 168, 255, 0.45) !important;
-    color: #63A8FF !important;
-    box-shadow: none !important;
-}
-
-#wpforo #wpforo-wrap .wpf-button-outlined:hover {
-    background: rgba(99, 168, 255, 0.18) !important;
-    box-shadow: 0 4px 14px rgba(99, 168, 255, .35) !important;
-}
-
-/* ==========================================================
- * 9. 動作連結（wpf-action）
- * ========================================================== */
-#wpforo #wpforo-wrap .wpf-action,
-.wpf-notifications .wpf-action {
-    color: #C3C6CE !important;
-}
-
-#wpforo #wpforo-wrap .wpf-action:hover {
-    color: #63A8FF !important;
-}
-
-/* ==========================================================
- * 10. 一般連結
+ * 12. 連結 / 文字 / 標題
  * ========================================================== */
 #wpforo #wpforo-wrap a {
     color: #63A8FF !important;
@@ -350,10 +581,6 @@ body[class*="community"] {
     fill: #63A8FF !important;
 }
 
-/* ==========================================================
- * 11. 文字 / 標題
- * ========================================================== */
-#wpforo #wpforo-wrap,
 #wpforo #wpforo-wrap p,
 #wpforo #wpforo-wrap div,
 #wpforo #wpforo-wrap span,
@@ -377,8 +604,16 @@ body[class*="community"] {
     color: #7B8594 !important;
 }
 
+#wpforo #wpforo-wrap .wpf-action {
+    color: #C3C6CE !important;
+}
+
+#wpforo #wpforo-wrap .wpf-action:hover {
+    color: #63A8FF !important;
+}
+
 /* ==========================================================
- * 12. 輸入框 / 搜尋框
+ * 13. 通用輸入框
  * ========================================================== */
 #wpforo #wpforo-wrap input[type="text"],
 #wpforo #wpforo-wrap input[type="search"],
@@ -388,22 +623,22 @@ body[class*="community"] {
 #wpforo #wpforo-wrap input[type="tel"],
 #wpforo #wpforo-wrap input[type="number"],
 #wpforo #wpforo-wrap input[type="date"],
-#wpforo #wpforo-wrap textarea,
-#wpforo #wpforo-wrap select {
+#wpforo #wpforo-wrap textarea {
     background: rgba(245, 247, 246, 0.06) !important;
     border: 1px solid rgba(245, 247, 246, 0.14) !important;
     color: #F5F7F6 !important;
     border-radius: 12px !important;
     padding: 10px 14px !important;
     box-shadow: none !important;
+    font-family: inherit !important;
 }
 
 #wpforo #wpforo-wrap input:focus,
-#wpforo #wpforo-wrap textarea:focus,
-#wpforo #wpforo-wrap select:focus {
+#wpforo #wpforo-wrap textarea:focus {
     border-color: rgba(99, 168, 255, .55) !important;
     background: rgba(245, 247, 246, .10) !important;
     outline: none !important;
+    box-shadow: 0 0 0 3px rgba(99, 168, 255, .15) !important;
 }
 
 #wpforo #wpforo-wrap input::placeholder,
@@ -416,47 +651,12 @@ body[class*="community"] {
     color: #F5F7F6 !important;
 }
 
-#wpforo #wpforo-wrap .wpf-search input[type="text"]:focus {
-    background: rgba(245, 247, 246, 0.08) !important;
-}
-
 #wpforo #wpforo-wrap .wpf-search i {
     color: #63A8FF !important;
 }
 
 /* ==========================================================
- * 13. 添加話題編輯區（wpf-topic-create / wpf-post-create）
- * ========================================================== */
-#wpforo #wpforo-wrap .wpf-topic-create,
-#wpforo #wpforo-wrap .wpf-post-create {
-    background: rgba(245, 247, 246, 0.04) !important;
-    border: 1px solid rgba(245, 247, 246, 0.10) !important;
-    border-radius: 14px !important;
-    padding: 16px !important;
-}
-
-/* ==========================================================
- * 14. 標籤系統（tags）
- * ========================================================== */
-#wpforo #wpforo-wrap .wpforo-tags {
-    background: rgba(245, 247, 246, 0.04) !important;
-    border-radius: 12px !important;
-    padding: 10px 14px !important;
-}
-
-#wpforo #wpforo-wrap .wpf-tags a {
-    background: rgba(99, 168, 255, 0.18) !important;
-    color: #63A8FF !important;
-    border-radius: 6px !important;
-}
-
-#wpforo #wpforo-wrap .wpf-tags a:hover {
-    background: rgba(99, 168, 255, 0.35) !important;
-    color: #F5F7F6 !important;
-}
-
-/* ==========================================================
- * 15. 圖示色 / 狀態
+ * 14. 圖示色 / 狀態色
  * ========================================================== */
 #wpforo #wpforo-wrap i.fa,
 #wpforo #wpforo-wrap i.fas,
@@ -467,11 +667,10 @@ body[class*="community"] {
     color: #63A8FF !important;
 }
 
-/* 狀態色（用 wpForo CSS Matrix 內定義的 wpfcl-X / wpfbg-X 真實 class） */
-#wpforo #wpforo-wrap .wpfcl-4 { color: #22C55E !important; } /* 已解決 */
-#wpforo #wpforo-wrap .wpfcl-5 { color: #FF8C42 !important; } /* 熱門 / 警告 */
-#wpforo #wpforo-wrap .wpfcl-8 { color: #22C55E !important; } /* 已解決綠 */
-#wpforo #wpforo-wrap .wpfcl-10 { color: #FB7185 !important; } /* 錯誤紅 */
+#wpforo #wpforo-wrap .wpfcl-4 { color: #22C55E !important; }
+#wpforo #wpforo-wrap .wpfcl-5 { color: #FF8C42 !important; }
+#wpforo #wpforo-wrap .wpfcl-8 { color: #22C55E !important; }
+#wpforo #wpforo-wrap .wpfcl-10 { color: #FB7185 !important; }
 
 #wpforo #wpforo-wrap .wpforo-topic-badges {
     background: rgba(245, 247, 246, 0.06) !important;
@@ -484,31 +683,13 @@ body[class*="community"] {
 }
 
 /* ==========================================================
- * 16. 訂閱 RSS 區（你截圖右上：未讀帖子 | 論壇 | 話題）
- * ========================================================== */
-#wpforo #wpforo-wrap .wpf-bar-right,
-#wpforo #wpforo-wrap .wpf-bar-right span,
-#wpforo #wpforo-wrap .wpf-bar-right a {
-    color: #C3C6CE !important;
-}
-
-#wpforo #wpforo-wrap .wpf-bar-right a:hover {
-    color: #63A8FF !important;
-}
-
-#wpforo #wpforo-wrap .wpf-bar-right .wpf-alerts {
-    border-right: 1px solid rgba(245, 247, 246, 0.14) !important;
-}
-
-/* ==========================================================
- * 17. 文章內容
+ * 15. 文章 / 留言內容
  * ========================================================== */
 #wpforo #wpforo-wrap .wpforo-post,
 #wpforo #wpforo-wrap .post-wrap {
     background: rgba(245, 247, 246, 0.04) !important;
     border: 1px solid rgba(245, 247, 246, 0.10) !important;
     border-radius: 14px !important;
-    padding: 0 !important;
     margin-bottom: 14px !important;
     overflow: hidden !important;
 }
@@ -533,15 +714,13 @@ body[class*="community"] {
 #wpforo #wpforo-wrap .wpforo-post blockquote {
     background: rgba(99, 168, 255, 0.08) !important;
     border-left: 3px solid #63A8FF !important;
-    border: 1px solid rgba(99, 168, 255, 0.25) !important;
     border-radius: 8px !important;
     padding: 12px 16px !important;
     color: #C3C6CE !important;
 }
 
 #wpforo #wpforo-wrap .wpforo-post code,
-#wpforo #wpforo-wrap .wpforo-post pre,
-#wpforo #wpforo-wrap .wpforo-post .wpforo-post-code {
+#wpforo #wpforo-wrap .wpforo-post pre {
     background: rgba(0, 0, 0, 0.45) !important;
     border: 1px solid rgba(245, 247, 246, 0.12) !important;
     color: #6FECFF !important;
@@ -554,19 +733,18 @@ body[class*="community"] {
 }
 
 /* ==========================================================
- * 18. 頭像
+ * 16. 頭像
  * ========================================================== */
 #wpforo #wpforo-wrap .avatar,
 #wpforo #wpforo-wrap img.avatar,
 #wpforo #wpforo-wrap .wpf-avatar img {
     border-radius: 50% !important;
     border: 2px solid rgba(99, 168, 255, 0.45) !important;
-    background: rgba(245, 247, 246, 0.06) !important;
     box-shadow: 0 0 0 2px rgba(30, 36, 43, .55), 0 4px 12px rgba(0, 0, 0, .35) !important;
 }
 
 /* ==========================================================
- * 19. 統計頁尾（wpforo-stat-* / 你截圖底部「2 論壇 / 0 話題...」）
+ * 17. 統計頁尾
  * ========================================================== */
 #wpforo #wpforo-wrap #wpforo-stat-header {
     color: #F5F7F6 !important;
@@ -603,31 +781,7 @@ body[class*="community"] {
 }
 
 /* ==========================================================
- * 20. 通知 / 訊息框
- * ========================================================== */
-#wpforo #wpforo-wrap .wpf-notifications {
-    background: rgba(245, 247, 246, 0.04) !important;
-    border-top: 2px solid rgba(99, 168, 255, 0.55) !important;
-    border-bottom: 0 !important;
-    border-radius: 12px !important;
-}
-
-#wpforo #wpforo-wrap .wpf-notifications .wpf-notification-head {
-    color: #F5F7F6 !important;
-    border-bottom: 2px solid #FF6BAE !important;
-}
-
-#wpforo #wpforo-wrap .wpf-notifications .wpf-notification-content li {
-    border-bottom: 1px solid rgba(245, 247, 246, 0.10) !important;
-    color: #C3C6CE !important;
-}
-
-#wpforo #wpforo-wrap .wpf-notifications .wpf-notification-content li:hover {
-    background: rgba(99, 168, 255, 0.08) !important;
-}
-
-/* ==========================================================
- * 21. 分頁器
+ * 18. 分頁器
  * ========================================================== */
 #wpforo #wpforo-wrap .wpf-navi .wpf-navi-wrap .wpf-prev-button,
 #wpforo #wpforo-wrap .wpf-navi .wpf-navi-wrap .wpf-next-button {
@@ -643,45 +797,27 @@ body[class*="community"] {
 }
 
 /* ==========================================================
- * 22. 個人檔案
+ * 19. 標籤系統
  * ========================================================== */
-#wpforo #wpforo-wrap .wpforo-profile .wpforo-profile-head {
-    background: rgba(245, 247, 246, 0.06) !important;
-    border-radius: 14px !important;
-    box-shadow: none !important;
+#wpforo #wpforo-wrap .wpforo-tags {
+    background: rgba(245, 247, 246, 0.04) !important;
+    border-radius: 12px !important;
+    padding: 10px 14px !important;
 }
 
-#wpforo #wpforo-wrap .wpforo-profile .wpforo-profile-menu {
-    border-bottom: 2px solid rgba(245, 247, 246, 0.10) !important;
-}
-
-#wpforo #wpforo-wrap .wpforo-profile .wpforo-profile-menu .wpf-profile-menu {
-    border-right-color: rgba(245, 247, 246, 0.10) !important;
-}
-
-#wpforo #wpforo-wrap .wpforo-profile .wpforo-profile-menu .wpf-profile-menu:hover {
-    background: rgba(99, 168, 255, 0.08) !important;
+#wpforo #wpforo-wrap .wpf-tags a {
+    background: rgba(99, 168, 255, 0.18) !important;
     color: #63A8FF !important;
+    border-radius: 6px !important;
 }
 
-#wpforo #wpforo-wrap .wpforo-profile .wpforo-profile-menu .wpf-profile-menu.wpforo-active {
-    color: #63A8FF !important;
+#wpforo #wpforo-wrap .wpf-tags a:hover {
+    background: rgba(99, 168, 255, 0.35) !important;
+    color: #F5F7F6 !important;
 }
 
 /* ==========================================================
- * 23. 表格列分隔線 / 邊框
- * ========================================================== */
-#wpforo #wpforo-wrap pre {
-    border: 1px solid rgba(245, 247, 246, 0.10) !important;
-    background: rgba(0, 0, 0, 0.40) !important;
-}
-
-#wpforo #wpforo-wrap .wpf-field {
-    border-bottom: 1px dashed rgba(245, 247, 246, 0.10) !important;
-}
-
-/* ==========================================================
- * 24. RWD
+ * 20. RWD
  * ========================================================== */
 @media (max-width: 768px) {
     #wpforo #wpforo-wrap {
@@ -696,7 +832,17 @@ body[class*="community"] {
         border-radius: 12px !important;
     }
     
-    #wpforo #wpforo-wrap .wpf-head-bar {
+    #wpforo #wpforo-wrap .wpf-head-bar,
+    #wpforo #wpforo-wrap .wpf-acp-header {
         padding: 10px 12px !important;
+    }
+    
+    #wpforo #wpforo-wrap .mce-tinymce {
+        min-height: 280px !important;
+    }
+    
+    #wpforo #wpforo-wrap .mce-tinymce iframe,
+    #wpforo #wpforo-wrap .wp-editor-area {
+        min-height: 220px !important;
     }
 }
