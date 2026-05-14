@@ -1,245 +1,209 @@
 <?php
-/**
- * Level System - 等級計算與稱號對應
- *
- * 原檔：blocksy-child/inc/level-system.php v1.2.0
- *
- * @package SMACG_Gamification
- */
-
-namespace SMACG\Gamification\Level;
+namespace SMACG\Gamification;
 
 defined( 'ABSPATH' ) || exit;
 
-if ( ! defined( 'SMACG_MAX_LEVEL' ) ) {
-    define( 'SMACG_MAX_LEVEL', 200 );
-}
+/**
+ * Level / Job system（搬自 theme/inc/level-system.php）
+ *
+ * 等級規則：Lv.1 → Lv.200，5 階職業
+ * 職業階層：
+ *   Lv.1-9    新人
+ *   Lv.10-29  見習（轉職一次）
+ *   Lv.30-69  二轉
+ *   Lv.70-119 三轉
+ *   Lv.120-199 四轉
+ *   Lv.200    滿級
+ *
+ * EXP 公式（每級所需 EXP）：
+ *   Lv.1-10:   level * 100
+ *   Lv.11-30:  1000 + (level - 10) * 250
+ *   Lv.31-70:  6000 + (level - 30) * 600
+ *   Lv.71-120: 30000 + (level - 70) * 1500
+ *   Lv.121-200: 105000 + (level - 120) * 3000
+ */
+class Level_System {
 
-class System {
+    private static $instance = null;
+    private static $level_table = null;
 
-    /* ---------- 等級計算 ---------- */
-
-    public static function calc_level( $exp ) {
-        $exp = max( 0, (int) $exp );
-        if ( $exp < 5 ) return 1;
-        $level = (int) floor( sqrt( $exp / 5 ) );
-        return min( SMACG_MAX_LEVEL, max( 1, $level ) );
+    public static function instance() {
+        if ( self::$instance === null ) self::$instance = new self();
+        return self::$instance;
     }
 
-    public static function level_to_exp( $level ) {
-        $level = max( 1, (int) $level );
-        return $level * $level * 5;
-    }
+    private function __construct() {}
 
-    /* ---------- 稱號階段（6 階） ---------- */
-
-    public static function get_tier( $level ) {
-        $level = (int) $level;
-        if ( $level >= 200 ) return [ 'tier' => 6, 'title' => '黑卡會員', 'icon' => '💎' ];
-        if ( $level >= 120 ) return [ 'tier' => 5, 'title' => 'VIP',      'icon' => '👑' ];
-        if ( $level >= 70  ) return [ 'tier' => 4, 'title' => '熟客',     'icon' => '🎬' ];
-        if ( $level >= 30  ) return [ 'tier' => 3, 'title' => '常客',     'icon' => '📺' ];
-        if ( $level >= 10  ) return [ 'tier' => 2, 'title' => '新客',     'icon' => '🌿' ];
-        return [ 'tier' => 1, 'title' => '新進會員', 'icon' => '🌱' ];
-    }
-
-    public static function get_title( $level ) {
-        $tier = self::get_tier( $level );
-        return $tier['icon'] . ' ' . $tier['title'];
-    }
-
-    /* ---------- 等級進度條 ---------- */
-
-    public static function get_user_info( $uid ) {
-        $exp = function_exists( 'smacg_get_user_exp' ) ? \smacg_get_user_exp( $uid ) : 0;
-        $level         = self::calc_level( $exp );
-        $current_floor = self::level_to_exp( $level );
-        $next_floor    = self::level_to_exp( $level + 1 );
-        $tier          = self::get_tier( $level );
-
-        $in_level_exp    = $exp - $current_floor;
-        $level_total_exp = max( 1, $next_floor - $current_floor );
-        $percent         = max( 0, min( 100, round( $in_level_exp / $level_total_exp * 100 ) ) );
-
-        return [
-            'exp'             => $exp,
-            'level'           => $level,
-            'tier'            => $tier['tier'],
-            'title'           => $tier['title'],
-            'icon'            => $tier['icon'],
-            'current_floor'   => $current_floor,
-            'next_floor'      => $next_floor,
-            'in_level_exp'    => $in_level_exp,
-            'level_total_exp' => $level_total_exp,
-            'percent'         => $percent,
-            'to_next'         => max( 0, $next_floor - $exp ),
-            'is_max'          => $level >= SMACG_MAX_LEVEL,
-        ];
-    }
-
-    /* ---------- 轉職階段 ---------- */
-
-    public static function get_career_stage( $level ) {
-        $level = (int) $level;
-        if ( $level >= 120 ) return 4;
-        if ( $level >= 70  ) return 3;
-        if ( $level >= 30  ) return 2;
-        if ( $level >= 10  ) return 1;
-        return 0;
-    }
-
-    public static function get_career_milestones() {
-        return [
-            1 => [ 'level' => 10,  'label' => '一轉：解鎖職業', 'icon' => '🎓' ],
-            2 => [ 'level' => 30,  'label' => '二轉：職業升階', 'icon' => '⭐' ],
-            3 => [ 'level' => 70,  'label' => '三轉：高階稱號', 'icon' => '🌟' ],
-            4 => [ 'level' => 120, 'label' => '四轉：究極稱號', 'icon' => '👑' ],
-        ];
-    }
-
-    /* ---------- 8 職業 × 4 階稱號（舊系統，user_meta = smacg_job_key） ---------- */
-
+    /* ==========================================================
+     * 8 職業表（含轉職階層 + 稱號）
+     * ========================================================== */
     public static function get_jobs() {
         return [
-            'student'   => [ 'label' => '學生',         'icon' => '🎓', 'titles' => [
-                1 => [ 'name' => '懵懂新生', 'ref' => '我的英雄學院' ],
-                2 => [ 'name' => '優等生',   'ref' => '為美好的世界獻上祝福' ],
-                3 => [ 'name' => '學生會長', 'ref' => '輝夜姬想讓人告白' ],
-                4 => [ 'name' => '神級學者', 'ref' => '文豪Stray Dogs' ],
-            ] ],
-            'it'        => [ 'label' => '資訊／軟體業',  'icon' => '💻', 'titles' => [
-                1 => [ 'name' => '程式新手',   'ref' => '無職轉生' ],
-                2 => [ 'name' => '鏈鋸碼農',   'ref' => '鏈鋸人' ],
-                3 => [ 'name' => '咒術工程師', 'ref' => '咒術迴戰' ],
-                4 => [ 'name' => '開發超人',   'ref' => 'SPY×FAMILY' ],
-            ] ],
-            'design'    => [ 'label' => '設計／創作',    'icon' => '🎨', 'titles' => [
-                1 => [ 'name' => '美術新手',   'ref' => '排球少年' ],
-                2 => [ 'name' => '色彩魔法師', 'ref' => '魔法少女小圓' ],
-                3 => [ 'name' => '藝術鬼才',   'ref' => '進擊的巨人' ],
-                4 => [ 'name' => '神之筆者',   'ref' => '哆啦A夢' ],
-            ] ],
-            'office'    => [ 'label' => '行政／內勤',    'icon' => '💼', 'titles' => [
-                1 => [ 'name' => '社畜新血',   'ref' => 'NEW GAME!' ],
-                2 => [ 'name' => '會議達人',   'ref' => '我推的孩子' ],
-                3 => [ 'name' => '部門核心',   'ref' => '半澤直樹' ],
-                4 => [ 'name' => '辦公室之神', 'ref' => '魔法少女小圓' ],
-            ] ],
-            'sales'     => [ 'label' => '業務／行銷',    'icon' => '📊', 'titles' => [
-                1 => [ 'name' => '業務新兵',   'ref' => '機動戰士鋼彈' ],
-                2 => [ 'name' => '簽單獵人',   'ref' => '獵人' ],
-                3 => [ 'name' => '王牌業務',   'ref' => 'JOJO的奇妙冒險' ],
-                4 => [ 'name' => '銷售之神',   'ref' => '海賊王' ],
-            ] ],
-            'medical'   => [ 'label' => '醫療／護理',    'icon' => '🏥', 'titles' => [
-                1 => [ 'name' => '見習醫師', 'ref' => '怪醫黑傑克' ],
-                2 => [ 'name' => '白衣天使', 'ref' => '工作細胞' ],
-                3 => [ 'name' => '主治醫師', 'ref' => '怪醫黑傑克' ],
-                4 => [ 'name' => '醫術之神', 'ref' => 'Dr. STONE' ],
-            ] ],
-            'service'   => [ 'label' => '餐飲／服務業',  'icon' => '🍽️', 'titles' => [
-                1 => [ 'name' => '服務員',   'ref' => '異世界食堂' ],
-                2 => [ 'name' => '迎賓武士', 'ref' => '銀魂' ],
-                3 => [ 'name' => '微笑大使', 'ref' => 'SPY×FAMILY' ],
-                4 => [ 'name' => '傳奇店長', 'ref' => '中華一番' ],
-            ] ],
-            'freelance' => [ 'label' => '自由／其他',    'icon' => '🌱', 'titles' => [
-                1 => [ 'name' => '自由人',   'ref' => '葬送的芙莉蓮' ],
-                2 => [ 'name' => '斜槓達人', 'ref' => '為美好的世界獻上祝福' ],
-                3 => [ 'name' => '人生玩家', 'ref' => 'JOJO的奇妙冒險' ],
-                4 => [ 'name' => '逍遙之神', 'ref' => '聖哥傳' ],
-            ] ],
+            [ 'min' => 1,   'max' => 9,   'tier' => 0, 'key' => 'rookie',    'title' => '新人' ],
+            [ 'min' => 10,  'max' => 29,  'tier' => 1, 'key' => 'apprentice','title' => '見習生' ],
+            [ 'min' => 30,  'max' => 49,  'tier' => 2, 'key' => 'expert',    'title' => '專家' ],
+            [ 'min' => 50,  'max' => 69,  'tier' => 2, 'key' => 'master',    'title' => '達人' ],
+            [ 'min' => 70,  'max' => 99,  'tier' => 3, 'key' => 'guru',      'title' => '宗師' ],
+            [ 'min' => 100, 'max' => 119, 'tier' => 3, 'key' => 'sage',      'title' => '賢者' ],
+            [ 'min' => 120, 'max' => 199, 'tier' => 4, 'key' => 'legend',    'title' => '傳奇' ],
+            [ 'min' => 200, 'max' => 200, 'tier' => 5, 'key' => 'celestial', 'title' => '滿級・天界' ],
         ];
     }
 
-    public static function get_user_job( $uid ) {
-        return (string) get_user_meta( (int) $uid, 'smacg_job_key', true );
-    }
-
-    public static function set_user_job( $uid, $job_key ) {
-        $uid     = (int) $uid;
-        $job_key = sanitize_key( $job_key );
-        $jobs    = self::get_jobs();
-        if ( $uid <= 0 || ! isset( $jobs[ $job_key ] ) ) return false;
-
-        update_user_meta( $uid, 'smacg_job_key',       $job_key );
-        update_user_meta( $uid, 'smacg_job_chosen_at', current_time( 'mysql' ) );
-
-        do_action( 'smacg_user_job_chosen', $uid, $job_key );
-        return true;
-    }
-
-    public static function get_user_job_title( $uid ) {
-        $uid = (int) $uid;
-        if ( $uid <= 0 ) return [];
-
-        $job_key = self::get_user_job( $uid );
-        if ( ! $job_key ) return [];
-
-        $jobs = self::get_jobs();
-        if ( ! isset( $jobs[ $job_key ] ) ) return [];
-
-        $info  = self::get_user_info( $uid );
-        $stage = max( 1, self::get_career_stage( $info['level'] ) );
-        if ( $stage < 1 ) return [];
-
-        $title = $jobs[ $job_key ]['titles'][ $stage ];
-
-        return [
-            'job_key'    => $job_key,
-            'job_label'  => $jobs[ $job_key ]['label'],
-            'job_icon'   => $jobs[ $job_key ]['icon'],
-            'stage'      => $stage,
-            'title_name' => $title['name'],
-            'title_ref'  => $title['ref'],
-        ];
-    }
-
-    /* ---------- EXP 給予包裝（含完整結果） ---------- */
-
-    public static function grant_exp( $uid, $amount, $reason = '', $args = [] ) {
-        $uid    = (int) $uid;
-        $amount = (int) $amount;
-
-        $result = [
-            'success'    => false,
-            'leveled_up' => false,
-            'old_level'  => 0,
-            'new_level'  => 0,
-            'milestones' => [],
-        ];
-
-        if ( $uid <= 0 || $amount <= 0 ) return $result;
-        if ( ! function_exists( 'smacg_award_exp' ) || ! function_exists( 'smacg_get_user_exp' ) ) return $result;
-
-        $old_exp   = \smacg_get_user_exp( $uid );
-        $old_level = self::calc_level( $old_exp );
-
-        $success = \smacg_award_exp( $uid, $amount, $reason, $args );
-        if ( ! $success ) return $result;
-
-        $new_exp   = \smacg_get_user_exp( $uid );
-        $new_level = self::calc_level( $new_exp );
-
-        $result['success']    = true;
-        $result['old_level']  = $old_level;
-        $result['new_level']  = $new_level;
-        $result['leveled_up'] = ( $new_level > $old_level );
-
-        if ( $result['leveled_up'] ) {
-            foreach ( self::get_career_milestones() as $stage => $info ) {
-                if ( $old_level < $info['level'] && $new_level >= $info['level'] ) {
-                    $result['milestones'][] = [
-                        'stage' => $stage,
-                        'level' => $info['level'],
-                        'label' => $info['label'],
-                        'icon'  => $info['icon'],
-                    ];
-                }
+    public static function get_job_by_level( $lv ) {
+        $lv = (int) $lv;
+        foreach ( self::get_jobs() as $job ) {
+            if ( $lv >= $job['min'] && $lv <= $job['max'] ) {
+                return $job['title'];
             }
-            do_action( 'smacg_user_leveled_up', $uid, $old_level, $new_level, $result );
+        }
+        return '新人';
+    }
+
+    public static function get_job_data_by_level( $lv ) {
+        $lv = (int) $lv;
+        foreach ( self::get_jobs() as $job ) {
+            if ( $lv >= $job['min'] && $lv <= $job['max'] ) return $job;
+        }
+        return self::get_jobs()[0];
+    }
+
+    /* ==========================================================
+     * Tier（轉職階段）
+     * ========================================================== */
+    public static function get_tier( $lv ) {
+        $j = self::get_job_data_by_level( $lv );
+        return (int) $j['tier'];
+    }
+
+    /* ==========================================================
+     * EXP <-> Level
+     * ========================================================== */
+    public static function get_level_table() {
+        if ( self::$level_table !== null ) return self::$level_table;
+
+        $table = [ 0 ]; // index 0 = Lv.1（accumulated EXP needed）
+        $acc   = 0;
+        for ( $lv = 1; $lv <= 200; $lv++ ) {
+            $acc += self::exp_for_level( $lv );
+            $table[ $lv ] = $acc;
+        }
+        self::$level_table = $table;
+        return $table;
+    }
+
+    /** 升到指定等級「下一級」所需的 EXP */
+    public static function exp_for_level( $lv ) {
+        if ( $lv <= 10 )  return $lv * 100;
+        if ( $lv <= 30 )  return 1000 + ( $lv - 10 ) * 250;
+        if ( $lv <= 70 )  return 6000 + ( $lv - 30 ) * 600;
+        if ( $lv <= 120 ) return 30000 + ( $lv - 70 ) * 1500;
+        return 105000 + ( $lv - 120 ) * 3000;
+    }
+
+    public static function calc_level_from_exp( $exp ) {
+        $exp   = max( 0, (int) $exp );
+        $table = self::get_level_table();
+        $lv    = 1;
+        for ( $i = 1; $i <= 200; $i++ ) {
+            if ( $exp >= $table[ $i ] ) $lv = $i;
+            else break;
+        }
+        return $lv;
+    }
+
+    /* ==========================================================
+     * 對外 API：取得用戶完整等級資訊
+     * ========================================================== */
+    public static function get_user_level( $uid ) {
+        $uid = (int) $uid;
+        if ( $uid <= 0 ) {
+            return self::empty_struct();
         }
 
-        return $result;
+        $exp = Gamipress_Bridge::get_user_exp( $uid );
+        $lv  = self::calc_level_from_exp( $exp );
+        $job = self::get_job_data_by_level( $lv );
+
+        $table = self::get_level_table();
+        $cur_lv_exp  = $table[ $lv ] ?? 0;
+        $next_lv_exp = $table[ min( $lv + 1, 200 ) ] ?? $cur_lv_exp;
+        $delta       = max( 1, $next_lv_exp - $cur_lv_exp );
+        $progress    = $lv >= 200 ? 100 : floor( ( $exp - $cur_lv_exp ) / $delta * 100 );
+
+        /* 自訂職業（career-ajax 選擇後寫入 smacg_career_job） */
+        $custom_career = get_user_meta( $uid, 'smacg_career_job', true );
+
+        return [
+            'user_id'        => $uid,
+            'exp'            => $exp,
+            'level'          => $lv,
+            'tier'           => (int) $job['tier'],
+            'job_key'        => $job['key'],
+            'job_title'      => $job['title'],
+            'custom_career'  => $custom_career ?: '',
+            'exp_current'    => $exp,
+            'exp_this_level' => $cur_lv_exp,
+            'exp_next_level' => $next_lv_exp,
+            'exp_needed'     => $lv >= 200 ? 0 : ( $next_lv_exp - $exp ),
+            'progress_pct'   => (int) $progress,
+            'is_max'         => $lv >= 200,
+            'badge_count'    => Gamipress_Bridge::get_user_badge_count( $uid ),
+        ];
+    }
+
+    private static function empty_struct() {
+        return [
+            'user_id'        => 0,
+            'exp'            => 0,
+            'level'          => 1,
+            'tier'           => 0,
+            'job_key'        => 'rookie',
+            'job_title'      => '新人',
+            'custom_career'  => '',
+            'exp_current'    => 0,
+            'exp_this_level' => 0,
+            'exp_next_level' => 100,
+            'exp_needed'     => 100,
+            'progress_pct'   => 0,
+            'is_max'         => false,
+            'badge_count'    => 0,
+        ];
+    }
+
+    /* ==========================================================
+     * 主動發放 EXP（API 風格，回傳詳細結果）
+     * ========================================================== */
+    public static function grant_exp( $uid, $amount, $reason = '' ) {
+        $uid    = (int) $uid;
+        $amount = (int) $amount;
+        if ( $uid <= 0 || $amount <= 0 ) {
+            return [ 'ok' => false, 'reason' => 'invalid_args' ];
+        }
+
+        $before_exp = Gamipress_Bridge::get_user_exp( $uid );
+        $before_lv  = self::calc_level_from_exp( $before_exp );
+
+        $ok = Gamipress_Bridge::award_exp( $uid, $amount, $reason ?: 'smacg_grant_exp' );
+        if ( ! $ok ) {
+            return [ 'ok' => false, 'reason' => 'gamipress_failed' ];
+        }
+
+        $after_exp = Gamipress_Bridge::get_user_exp( $uid );
+        $after_lv  = self::calc_level_from_exp( $after_exp );
+
+        if ( $after_lv > $before_lv ) {
+            Exp_Events::handle_level_up( $uid, $before_lv, $after_lv );
+        }
+
+        return [
+            'ok'         => true,
+            'awarded'    => $amount,
+            'exp_before' => $before_exp,
+            'exp_after'  => $after_exp,
+            'lv_before'  => $before_lv,
+            'lv_after'   => $after_lv,
+            'leveled_up' => $after_lv > $before_lv,
+        ];
     }
 }
