@@ -3,71 +3,31 @@
  * 微笑動漫 Child Theme — functions.php
  *
  * @package weixiaoacg
- * @version 2.5.1
- * * v2.5.2（2026-05-14）— Batch 2A-2 升級偵測 + 通知橋接:
- *   - [修改] inc/exp-events.php v1.1.0:
- *       - 修正 hook 名稱 'smacg_followed' → 'smacg_user_followed'（對齊 follow-system.php）
- *       - 新增 smacg_handle_level_up() 升級偵測函式
- *       - 大里程碑 Lv.10/30/70/120/200 觸發 smacg_level_milestone hook
- *   - [新增] inc/gamipress-notif-bridge.php:
- *       - 監聽 smacg_level_milestone → 轉職特別通知（force=true）
- *       - 監聽 smacg_streak_milestone → 連續登入特別通知
- *       - 自訂 _smacg_badge_exp 徽章的強化通知
- *       - 提供 ?smacg_test_levelup=1 測試端點
-
- * v2.5.1（2026-05-14）— Batch 2A-1 EXP 事件系統:
- *   - [新增] inc/exp-config.php（EXP 規則集中設定）
- *   - [新增] inc/exp-events.php（自動事件監聽 + 防刷分上限）
- *   - 監聽 user_register / wp_login / comment_post / smacg_followed
- *     / smacg_watchlist_* / smacg_rating_added / gamipress_award_achievement
- *   - 連續登入 streak 判定（7 日 +100、30 日 +500）
+ * @version 2.5.4 (2026-05-14)
  *
- * v2.5.0（2026-05-14）— Batch 2A-0 GamiPress 整合層:
- *   - [新增] inc/gamipress-integration.php（smacg_* helper 包裝層）
- *   - [新增] inc/level-system.php（Lv.1-200 等級計算 + 4 轉職業稱號）
- *   - 移除舊 smacg_render_points() 自定點數實作，改用 GamiPress API
- *   - Points Type slug: exp / Achievement Type slug: badge
- *
- * v2.4.3（2026-05-13）— Batch 1C-4 完工:
- *   - [新增] inc/notifications-email.php（每日 / 每週 Email 摘要 cron + 偏好 AJAX）
- *
- * v2.4.2（2026-05-13）— Batch 1C-3：載入 notifications-render.php
- *
- * v2.4.1（2026-05-13）— Batch 1C-2：
- *   - [新增] inc/notifications-events.php（5 種事件監聽）
- *   - [新增] inc/notifications-ajax.php（5 個 endpoints）
- *
- * v2.4.0 變更（2026-05-13）— Batch 1C-1 通知中心資料層：
- *   - [新增] inc/notifications-system.php（wp_smacg_notifications 資料表 + helpers）
- *
- * v2.3.1 變更（2026-05-13）— Batch 1B-2：載入 inc/follow-ajax.php
- *
- * v2.3.0 變更（2026-05-13）— Batch 1B-1：追蹤系統
- *   - [新增] inc/follow-system.php（wp_smacg_follows 資料表 + 核心 helpers）
- *
- * v2.2.0 變更（2026-05-13）— Batch 1A：公開個人頁
- *   - [新增] inc/public-profile.php（/u/{username}/ rewrite + 資料準備）
- *
- * v2.1.0 變更（2026-05-13）— Batch C：
- *   - [新增] inc/image-optimizer.php（#6 WebP/srcset 處理）
- *
- * v2.0.0 變更（2026-05-12）:
- *   - [重構] functions.php 拆分為 inc/*.php，由 1100 行縮減至 ~50 行
- *   - [新增] inc/setup-theme.php、class-nav-walker.php、setup-enqueue.php
- *   - [新增] inc/member-functions.php、member-ajax.php、um-integration.php
- *   - [新增] inc/api-rest.php、content-slug.php、external-links.php
- *   - [保留] inc/member-stats.php、member-render.php
+ * Changelog（只列近期；完整歷史見 git log）：
+ *   2.5.4 (2026-05-14) Batch 2A-4 — career-ajax + level-badge-display
+ *   2.5.3 (2026-05-14) Batch 2A-3 — 解決 smacg_calc_level 命名衝突、徽章/職業 tab
+ *   2.5.2 (2026-05-14) Batch 2A-2 — 升級偵測 + gamipress-notif-bridge
+ *   2.5.1 (2026-05-14) Batch 2A-1 — exp-config + exp-events（自動發放 EXP）
+ *   2.5.0 (2026-05-14) Batch 2A-0 — gamipress-integration + level-system
+ *   2.4.3 (2026-05-13) Batch 1C-4 — notifications-email
+ *   2.4.0–2.4.2        Batch 1C-1~3 — 通知中心
+ *   2.3.0–2.3.1        Batch 1B-1~2 — 追蹤系統
+ *   2.2.0              Batch 1A     — 公開個人頁
+ *   2.1.0              Batch C      — image-optimizer
+ *   2.0.0 (2026-05-12) 重構：functions.php → inc/*.php
  */
 defined( 'ABSPATH' ) || exit;
 
 /* ============================================================
    常數
    ============================================================ */
-define( 'weixiaoacg_VERSION',   '2.5.1' );
+define( 'weixiaoacg_VERSION',   '2.5.4' );
 define( 'weixiaoacg_THEME_URL', get_stylesheet_directory_uri() );
 define( 'weixiaoacg_THEME_DIR', get_stylesheet_directory() );
 
-/* ---------- 舊版自定點數常數（保留以維持相容；未來會由 EXP 系統取代）---------- */
+// 舊版自定點數常數（保留相容，將由 EXP 系統取代）
 define( 'SMACG_POINT_FAVORITE',  5  );
 define( 'SMACG_POINT_WANT',      1  );
 define( 'SMACG_POINT_WATCHING',  3  );
@@ -78,120 +38,70 @@ define( 'SMACG_POINT_READ',      2  );
 define( 'SMACG_POINT_COMMENT',   3  );
 define( 'SMACG_POINT_LOGIN',     1  );
 
-// Batch 1B-1: 追蹤系統參數
-define( 'SMACG_FOLLOW_DAILY_LIMIT', 200 );  // 單日追蹤上限
-define( 'SMACG_FOLLOW_COOLDOWN',    1   );  // 同一目標冷卻秒數（防連點）
+// 追蹤系統（Batch 1B-1）
+define( 'SMACG_FOLLOW_DAILY_LIMIT', 200 );
+define( 'SMACG_FOLLOW_COOLDOWN',    1   );
 
 const WEIXIAOACG_ID_CATS  = [ 'announcement', 'news' ];
 const WEIXIAOACG_LLM_CATS = [ 'review', 'feature' ];
 
 /* ============================================================
-   載入 inc/*.php （順序很重要）
+   載入 inc/*.php
+   ------------------------------------------------------------
+   順序很重要：
+     1) 基礎 helpers → 主題設定 → 資源 → AJAX/REST → 整合
+     2) Phase 1：公開頁 / 追蹤 / 通知
+     3) Phase 2A：GamiPress 整合 → 等級 → EXP 規則 → EXP 事件
+                  → 通知橋接 → 職業 AJAX → 等級徽章顯示
+   ------------------------------------------------------------
+   分兩組：core（必載，缺檔即 fatal）、optional（缺檔靜默略過）
    ============================================================ */
-$inc_dir = weixiaoacg_THEME_DIR . '/inc/';
+$inc = weixiaoacg_THEME_DIR . '/inc/';
 
-// 1. 基礎函式（其他檔會用到）
-require_once $inc_dir . 'member-functions.php';   // 點數/等級/cooldown helpers
-require_once $inc_dir . 'member-stats.php';       // 統計/隱私/email 遮罩
-require_once $inc_dir . 'member-render.php';      // 會員頁渲染
-
-// 2. 主題設定
-require_once $inc_dir . 'setup-theme.php';        // theme support / menu / image size
-require_once $inc_dir . 'class-nav-walker.php';   // 自訂 Nav Walker
-
-// 3. 資源載入
-require_once $inc_dir . 'setup-enqueue.php';      // jQuery / CSS / JS
-
-// 4. AJAX 與 REST
-require_once $inc_dir . 'member-ajax.php';        // wp_ajax_smacg_*
-require_once $inc_dir . 'api-rest.php';           // REST API routes
-
-// 5. 第三方整合
-require_once $inc_dir . 'um-integration.php';     // Ultimate Member
-
-// 6. 內容處理
-require_once $inc_dir . 'content-slug.php';       // Gemini slug
-require_once $inc_dir . 'external-links.php';     // 外部連結 target=_blank
-
-// 7. 影像優化（Batch C #6 - 2026-05-13）
-if ( file_exists( $inc_dir . 'image-optimizer.php' ) ) {
-    require_once $inc_dir . 'image-optimizer.php';  // WebP / srcset / picture tag
+// ---- core：必須存在，沿用 require_once 強制報錯 ----
+foreach ( [
+    'member-functions',   // 點數/等級/cooldown helpers（舊版）
+    'member-stats',       // 統計 / 隱私 / email 遮罩
+    'member-render',      // 會員頁渲染
+    'setup-theme',        // theme support / menu / image size
+    'class-nav-walker',   // 自訂 Nav Walker
+    'setup-enqueue',      // jQuery / CSS / JS
+    'member-ajax',        // wp_ajax_smacg_*
+    'api-rest',           // REST API routes
+    'um-integration',     // Ultimate Member
+    'content-slug',       // Gemini slug
+    'external-links',     // 外部連結 target=_blank
+] as $f ) {
+    require_once $inc . $f . '.php';
 }
 
-// 8. 公開個人頁（Batch 1A - 2026-05-13）
-//    用 file_exists 防呆，這樣你可以分批 push 而不會在中間狀態壞站
-if ( file_exists( $inc_dir . 'public-profile.php' ) ) {
-    require_once $inc_dir . 'public-profile.php';   // /u/{username}/ rewrite + 資料準備
+// ---- optional：file_exists 防呆，允許分批 push 不壞站 ----
+//      順序仍須維持：依賴在前、使用方在後
+$optional = [
+    // Batch C / 1A / 1B / 1C
+    'image-optimizer',          // Batch C #6
+    'public-profile',           // Batch 1A
+    'follow-system',            // Batch 1B-1
+    'follow-ajax',              // Batch 1B-2
+    'notifications-system',     // Batch 1C-1
+    'notifications-events',     // Batch 1C-2
+    'notifications-ajax',       // Batch 1C-2
+    'notifications-render',     // Batch 1C-3
+    'notifications-email',      // Batch 1C-4
+
+    // Phase 2A：Gamification
+    'gamipress-integration',    // 2A-0 GamiPress wrapper
+    'level-system',             // 2A-0 Lv.1-200 + 4 職業
+    'exp-config',               // 2A-1 EXP 規則
+    'exp-events',               // 2A-1 自動發 EXP（依賴 exp-config + integration）
+    'gamipress-notif-bridge',   // 2A-2 升級／里程碑通知橋接（依賴 exp-events + notifications）
+    'career-ajax',              // 2A-4 職業選擇 AJAX（Lv≥10、永久鎖定）
+    'level-badge-display',      // 2A-4 留言/公開頁 等級徽章渲染（依賴 career-ajax）
+];
+
+foreach ( $optional as $f ) {
+    $path = $inc . $f . '.php';
+    if ( file_exists( $path ) ) require_once $path;
 }
 
-// 9. 追蹤系統（Batch 1B-1 - 2026-05-13）
-//    提供 smacg_follow_user / smacg_unfollow_user / smacg_is_following / 計數 helpers
-if ( file_exists( $inc_dir . 'follow-system.php' ) ) {
-    require_once $inc_dir . 'follow-system.php';
-}
-
-// 10. 追蹤系統 AJAX（Batch 1B-2 - 2026-05-13）
-if ( file_exists( $inc_dir . 'follow-ajax.php' ) ) {
-    require_once $inc_dir . 'follow-ajax.php';
-}
-
-// 11. 通知中心（Batch 1C-1 - 2026-05-13）
-if ( file_exists( $inc_dir . 'notifications-system.php' ) ) {
-    require_once $inc_dir . 'notifications-system.php';
-}
-
-// 12. 通知中心 事件監聽 + AJAX（Batch 1C-2 - 2026-05-13）
-if ( file_exists( $inc_dir . 'notifications-events.php' ) ) {
-    require_once $inc_dir . 'notifications-events.php';
-}
-if ( file_exists( $inc_dir . 'notifications-ajax.php' ) ) {
-    require_once $inc_dir . 'notifications-ajax.php';
-}
-
-// 13. 通知中心 Render（Batch 1C-3）
-if ( file_exists( $inc_dir . 'notifications-render.php' ) ) {
-    require_once $inc_dir . 'notifications-render.php';
-}
-
-// 14. 通知中心 Email + Cron（Batch 1C-4 - 2026-05-13）
-if ( file_exists( $inc_dir . 'notifications-email.php' ) ) {
-    require_once $inc_dir . 'notifications-email.php';
-}
-
-/* ============================================================
-   === Phase 2A: Gamification（GamiPress 整合 + 等級 + EXP 事件）===
-   ============================================================ */
-
-// 15. GamiPress 整合層（Batch 2A-0 - 2026-05-14）
-//     smacg_* helper 包裝層；GamiPress 未啟用時 graceful degradation
-if ( file_exists( $inc_dir . 'gamipress-integration.php' ) ) {
-    require_once $inc_dir . 'gamipress-integration.php';
-}
-
-// 16. 等級系統（Batch 2A-0 - 2026-05-14）
-//     Lv.1-200 計算公式 + 4 轉職業稱號表 + 進度條 helper
-if ( file_exists( $inc_dir . 'level-system.php' ) ) {
-    require_once $inc_dir . 'level-system.php';
-}
-
-// 17. EXP 規則設定（Batch 2A-1 - 2026-05-14）
-//     所有 EXP 數值集中於此檔，方便日後做成後台選項
-if ( file_exists( $inc_dir . 'exp-config.php' ) ) {
-    require_once $inc_dir . 'exp-config.php';
-}
-
-// 18. EXP 事件監聽（Batch 2A-1 - 2026-05-14）
-//     依賴 exp-config.php + gamipress-integration.php
-//     監聽：user_register / wp_login / comment_post / smacg_followed
-//          / smacg_watchlist_* / smacg_rating_added / gamipress_award_achievement
-if ( file_exists( $inc_dir . 'exp-events.php' ) ) {
-    require_once $inc_dir . 'exp-events.php';
-}
-
-// 19. GamiPress ↔ Notifications Bridge（Batch 2A-2 - 2026-05-14）
-//     監聽 smacg_level_milestone / smacg_streak_milestone，發強化版通知
-//     必須在 exp-events.php 之後載入（依賴 smacg_create_notification + 里程碑 hook）
-if ( file_exists( $inc_dir . 'gamipress-notif-bridge.php' ) ) {
-    require_once $inc_dir . 'gamipress-notif-bridge.php';
-}
-
+unset( $inc, $optional, $f, $path );
