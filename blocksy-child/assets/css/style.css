@@ -1617,7 +1617,7 @@ h1.page-title, h1.entry-title, h2.entry-title,
 /* 強制覆蓋 header.php 的 inline style="height:38px" */
 .site-header .site-logo .logo-icon-box img,
 .site-header .lm-logo .logo-icon-box img {
-    height: 38px !important;
+    height: 50px !important;
     width: auto !important;
     vertical-align: middle !important;
 }
