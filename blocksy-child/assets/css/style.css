@@ -1606,3 +1606,77 @@ h1.page-title, h1.entry-title, h2.entry-title,
     }
 }
 
+
+/* ==========================================================
+ * Header Logo / Avatar 尺寸微調 (v1.0)
+ * - Logo 圖片從 38px 縮小到 28px
+ * - 個人頭像從 32px 放大到 42px
+ * ========================================================== */
+
+/* ---------- 1. Logo 圖片縮小 ---------- */
+/* 強制覆蓋 header.php 的 inline style="height:38px" */
+.site-header .site-logo .logo-icon-box img,
+.site-header .lm-logo .logo-icon-box img {
+    height: 38px !important;
+    width: auto !important;
+    vertical-align: middle !important;
+}
+
+/* logo 文字也跟著微調，視覺更協調 */
+.site-header .site-logo .logo-text {
+    font-size: 32px !important;
+    line-height: 1.2 !important;
+}
+
+.site-header .site-logo .logo-tagline {
+    font-size: 11px !important;
+    opacity: .75;
+}
+
+/* ---------- 2. 個人頭像放大 ---------- */
+.site-header .header-avatar-btn .header-avatar,
+.site-header .header-avatar-btn img.avatar {
+    width: 50px !important;
+    height: 50px !important;
+    border-radius: 50% !important;
+    border: 2px solid rgba(99, 168, 255, 0.45) !important;
+    box-shadow: 0 0 0 2px rgba(30, 36, 43, .55), 0 4px 12px rgba(0, 0, 0, .35) !important;
+    transition: all .25s ease;
+}
+
+.site-header .header-avatar-btn:hover .header-avatar,
+.site-header .header-avatar-btn:hover img.avatar {
+    border-color: rgba(99, 168, 255, 0.80) !important;
+    box-shadow: 0 0 0 2px rgba(30, 36, 43, .55), 0 6px 18px rgba(99, 168, 255, .50) !important;
+    transform: scale(1.05);
+}
+
+/* 頭像按鈕間距微調，避免頭像變大後擠到使用者名稱 */
+.site-header .header-avatar-btn {
+    gap: 10px !important;
+    padding: 4px 14px 4px 6px !important;
+    border-radius: 999px !important;
+}
+
+.site-header .header-username {
+    font-size: 14px !important;
+    font-weight: 600 !important;
+}
+
+/* ---------- 3. RWD：手機版再縮一點 ---------- */
+@media (max-width: 768px) {
+    .site-header .site-logo .logo-icon-box img,
+    .site-header .lm-logo .logo-icon-box img {
+        height: 24px !important;
+    }
+
+    .site-header .header-avatar-btn .header-avatar,
+    .site-header .header-avatar-btn img.avatar {
+        width: 36px !important;
+        height: 36px !important;
+    }
+
+    .site-header .header-username {
+        display: none;  /* 手機版隱藏使用者名稱，只留頭像 */
+    }
+}
