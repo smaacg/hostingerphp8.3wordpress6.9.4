@@ -431,3 +431,30 @@ add_action( 'wp_enqueue_scripts', function () {
     }
 }, 23 );
 
+/* ============================================================
+   wpForo 論壇樣式覆蓋（玻璃擬態主題對齊）
+   ============================================================ */
+add_action( 'wp_enqueue_scripts', function () {
+
+    $uri = isset($_SERVER['REQUEST_URI']) ? $_SERVER['REQUEST_URI'] : '';
+    $is_forum = ( strpos($uri, '/community') !== false || strpos($uri, '/forum') !== false );
+    if ( ! $is_forum && function_exists('is_wpforo_page') ) {
+        $is_forum = is_wpforo_page();
+    }
+    if ( ! $is_forum ) return;
+
+    $css_path = weixiaoacg_THEME_DIR . '/assets/css/wpforo-override.css';
+    if ( ! file_exists( $css_path ) ) return;
+
+    $deps = [];
+    if ( wp_style_is( 'weixiaoacg-style', 'registered' ) ) $deps[] = 'weixiaoacg-style';
+
+    wp_enqueue_style(
+        'smacg-wpforo-override',
+        weixiaoacg_THEME_URL . '/assets/css/wpforo-override.css',
+        $deps,
+        filemtime( $css_path )
+    );
+
+}, 30 );
+
