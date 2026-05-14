@@ -6,12 +6,16 @@
  * @subpackage Member
  *
  * Changelog:
+ * - v1.3.0 (2026-05-14) — Hotfix：
+ *   - [移除] smacg_get_user_level()（與 level-system.php 思路衝突）
+ *     - 舊回傳 array、新需求是「依 EXP 算 level」走 smacg_calc_user_level()
+ *     - 改用 smacg_get_user_level_legacy() 名稱保留舊邏輯，避免撞名 fatal
+ *   - [說明] 外部請改呼叫：
+ *     - smacg_get_user_level_info( $uid )    — 取得完整等級資訊（GamiPress EXP）
+ *     - smacg_calc_user_level( $exp )         — 由 EXP 算 level
+ *     - smacg_get_user_level_legacy( $uid )   — 舊版 anime_total_points 計算（僅限相容用途）
  * - v1.2.0 (2026-05-14) — Batch 2A-3：
- *   - [移除] comment_post 加分 hook（改由 inc/exp-events.php 處理）
- *   - [移除] um_user_login 加分 hook（改由 wp_login 處理）
- *   - [保留] smacg_get_levels / smacg_get_user_level / smacg_add_points 函式定義
- *     以維持向下相容（其他檔案可能仍引用），但內部標註為 @deprecated
- *   - [說明] page-member.php Hero 已改用 smacg_get_user_level_info()（GamiPress EXP）
+ *   - [移除] comment_post / um_user_login hook（改由 inc/exp-events.php 處理）
  * - v1.1.0 (2026-05-13)：新增 smacg_get_member_center_url()
  */
 defined( 'ABSPATH' ) || exit;
@@ -122,60 +126,82 @@ if (!function_exists('smacg_flush_member_center_url_cache')) {
 }
 
 /* ============================================================
-   @deprecated v1.2.0 — 舊 anime_total_points 點數系統
+   @deprecated v1.3.0 — 舊 anime_total_points 點數系統
    ============================================================
    保留函式定義以避免他處仍呼叫導致 fatal error，
    但相關 hook（comment_post / um_user_login）已移除。
    未來會在 Batch 2A-5 完全清除。
+
+   注意：原本的 smacg_get_user_level() 已移除（與 level-system.php
+   命名空間衝突）。舊邏輯改名為 smacg_get_user_level_legacy()。
    ============================================================ */
-function smacg_get_levels(): array {
-    return [
-        ['min'=>0,    'label'=>'🌱 新手',   'key'=>'newbie'],
-        ['min'=>100,  'label'=>'⭐ 動漫迷', 'key'=>'lover'],
-        ['min'=>500,  'label'=>'💫 老手',   'key'=>'veteran'],
-        ['min'=>2000, 'label'=>'🔥 狂熱者', 'key'=>'fanatic'],
-        ['min'=>5000, 'label'=>'👑 大師',   'key'=>'master'],
-    ];
+if (!function_exists('smacg_get_levels')) {
+    function smacg_get_levels(): array {
+        return [
+            ['min'=>0,    'label'=>'🌱 新手',   'key'=>'newbie'],
+            ['min'=>100,  'label'=>'⭐ 動漫迷', 'key'=>'lover'],
+            ['min'=>500,  'label'=>'💫 老手',   'key'=>'veteran'],
+            ['min'=>2000, 'label'=>'🔥 狂熱者', 'key'=>'fanatic'],
+            ['min'=>5000, 'label'=>'👑 大師',   'key'=>'master'],
+        ];
+    }
 }
 
 /**
- * @deprecated v1.2.0 改用 smacg_get_user_level_info() (GamiPress EXP)
+ * @deprecated v1.3.0 改用 smacg_get_user_level_info()（GamiPress EXP）
+ *             僅保留給可能仍引用舊回傳結構的第三方程式碼。
+ *
+ * @param int $uid
+ * @return array
  */
-function smacg_get_user_level(int $uid): array {
-    // 注意：此函式被 level-system.php 同名的「純函式版」覆寫風險。
-    // 但因為簽章不同（int 對 int，回傳 array 對 int），這裡保留會引發警告。
-    // 解法：讓 level-system.php 的 smacg_get_user_level($exp) 純函式
-    //       與此處 smacg_get_user_level(int $uid):array 同名 → PHP 會 fatal
-    //       所以本函式重新命名為 smacg_legacy_get_user_level_array
-    return smacg_legacy_get_user_level_array($uid);
-}
-
-function smacg_legacy_get_user_level_array(int $uid): array {
-    $pts = (int)get_user_meta($uid,'anime_total_points',true);
-    $levels = smacg_get_levels(); $cur = $levels[0]; $next = null;
-    foreach ($levels as $i => $l) { if ($pts >= $l['min']) { $cur = $l; $next = $levels[$i+1] ?? null; } }
-    $pct = 100;
-    if ($next) { $r = $next['min']-$cur['min']; $e = $pts-$cur['min']; $pct = $r > 0 ? min(100,round($e/$r*100)) : 100; }
-    return ['points'=>$pts,'current'=>$cur,'next'=>$next,'progress_pct'=>$pct];
+if (!function_exists('smacg_get_user_level_legacy')) {
+    function smacg_get_user_level_legacy(int $uid): array {
+        $pts = (int) get_user_meta($uid, 'anime_total_points', true);
+        $levels = smacg_get_levels();
+        $cur  = $levels[0];
+        $next = null;
+        foreach ($levels as $i => $l) {
+            if ($pts >= $l['min']) {
+                $cur  = $l;
+                $next = $levels[$i + 1] ?? null;
+            }
+        }
+        $pct = 100;
+        if ($next) {
+            $r = $next['min'] - $cur['min'];
+            $e = $pts - $cur['min'];
+            $pct = $r > 0 ? min(100, round($e / $r * 100)) : 100;
+        }
+        return [
+            'points'       => $pts,
+            'current'      => $cur,
+            'next'         => $next,
+            'progress_pct' => $pct,
+        ];
+    }
 }
 
 /**
- * @deprecated v1.2.0 改用 smacg_award_exp()
+ * @deprecated v1.3.0 改用 smacg_award_exp()
  */
-function smacg_add_points(int $uid, int $pts, string $reason=''): void {
-    if ($pts <= 0 || !$uid) return;
-    update_user_meta($uid,'anime_total_points',(int)get_user_meta($uid,'anime_total_points',true)+$pts);
-    $log = json_decode(get_user_meta($uid,'anime_points_log',true)?:'[]',true);
-    $log[] = ['points'=>$pts,'reason'=>$reason,'time'=>time()];
-    if (count($log) > 100) $log = array_slice($log,-100);
-    update_user_meta($uid,'anime_points_log',wp_json_encode($log));
+if (!function_exists('smacg_add_points')) {
+    function smacg_add_points(int $uid, int $pts, string $reason=''): void {
+        if ($pts <= 0 || !$uid) return;
+        update_user_meta($uid,'anime_total_points',(int)get_user_meta($uid,'anime_total_points',true)+$pts);
+        $log = json_decode(get_user_meta($uid,'anime_points_log',true)?:'[]',true);
+        $log[] = ['points'=>$pts,'reason'=>$reason,'time'=>time()];
+        if (count($log) > 100) $log = array_slice($log,-100);
+        update_user_meta($uid,'anime_points_log',wp_json_encode($log));
+    }
 }
 
-function smacg_check_cooldown(int $uid, string $action, int $post_id): bool {
-    $key = "smacg_cd_{$action}_{$post_id}";
-    if (time()-(int)get_user_meta($uid,$key,true) < DAY_IN_SECONDS) return false;
-    update_user_meta($uid,$key,time());
-    return true;
+if (!function_exists('smacg_check_cooldown')) {
+    function smacg_check_cooldown(int $uid, string $action, int $post_id): bool {
+        $key = "smacg_cd_{$action}_{$post_id}";
+        if (time()-(int)get_user_meta($uid,$key,true) < DAY_IN_SECONDS) return false;
+        update_user_meta($uid,$key,time());
+        return true;
+    }
 }
 
 /* ============================================================
