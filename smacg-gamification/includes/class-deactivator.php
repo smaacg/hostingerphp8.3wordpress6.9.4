@@ -12,11 +12,11 @@ class Deactivator {
             'smacg_event_settle_sweep',
             'smacg_event_end_check',
         ];
-        foreach ( $hooks as $hook ) {
-            $ts = wp_next_scheduled( $hook );
-            if ( $ts ) wp_unschedule_event( $ts, $hook );
-            wp_clear_scheduled_hook( $hook );
+        foreach ( $hooks as $h ) {
+            $ts = wp_next_scheduled( $h );
+            if ( $ts ) wp_unschedule_event( $ts, $h );
+            wp_clear_scheduled_hook( $h );
         }
-        flush_rewrite_rules();
+        flush_rewrite_rules( false );
     }
 }
