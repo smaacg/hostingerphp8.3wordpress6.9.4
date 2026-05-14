@@ -1612,27 +1612,37 @@ h1.page-title, h1.entry-title, h2.entry-title,
  * - Logo 圖片從 38px 縮小到 28px
  * - 個人頭像從 32px 放大到 42px
  * ========================================================== */
+/* ---------- Logo 間距調整版 ---------- */
 
-/* ---------- 1. Logo 圖片縮小 ---------- */
-/* 強制覆蓋 header.php 的 inline style="height:38px" */
+/* Logo 整體排列 */
+.site-header .site-logo,
+.site-header .lm-logo{
+    display:flex;
+    align-items:center;
+    gap:11px; /* ← 圖片與文字距離 */
+}
+
+/* Logo 圖片 */
 .site-header .site-logo .logo-icon-box img,
-.site-header .lm-logo .logo-icon-box img {
-    height: 50px !important;
-    width: auto !important;
-    vertical-align: middle !important;
+.site-header .lm-logo .logo-icon-box img{
+    height:50px !important;
+    width:auto !important;
+    vertical-align:middle !important;
 }
 
-/* logo 文字也跟著微調，視覺更協調 */
-.site-header .site-logo .logo-text {
-    font-size: 32px !important;
-    line-height: 1.2 !important;
+/* Logo 主文字 */
+.site-header .site-logo .logo-text{
+    font-size:34px !important;
+    line-height:1.1 !important;
+    margin:0 !important;
 }
 
-.site-header .site-logo .logo-tagline {
-    font-size: 11px !important;
-    opacity: .75;
+/* Logo 副標題 */
+.site-header .site-logo .logo-tagline{
+    font-size:11px !important;
+    opacity:.75;
+    margin-top:2px !important; /* ← 主文字與副標題距離 */
 }
-
 /* ---------- 2. 個人頭像放大 ---------- */
 .site-header .header-avatar-btn .header-avatar,
 .site-header .header-avatar-btn img.avatar {
