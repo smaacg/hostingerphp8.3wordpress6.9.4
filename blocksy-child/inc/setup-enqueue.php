@@ -41,6 +41,8 @@
  *   - 注入 smacgRanku localize（ajax / defaultTab / currentUid / privacy）
  *  * v2.7.1 變更 — Batch 2B-3 Top N widget：
  *   - 全站載入 leaderboard-widget.css（widget / shortcode 共用）
+ *  * v2.7.2 變更 — Batch 2B-5 Season Event 模板：
+ *   - 條件式載入 season-event.css（/event/{slug}/）
  */
 
 defined( 'ABSPATH' ) || exit;
@@ -608,6 +610,28 @@ add_action( 'wp_enqueue_scripts', function () {
     }
 }, 28 );
 
+/* ============================================================
+   Season Event single 模板（v2.7.2 - 2026-05-14）
+   ------------------------------------------------------------
+   - Batch 2B-5：/event/{slug}/ 單頁
+   - 條件：is_singular( 'smacg_season_event' )
+   ============================================================ */
+add_action( 'wp_enqueue_scripts', function () {
+    if ( ! is_singular( defined( 'SMACG_EVENT_CPT' ) ? SMACG_EVENT_CPT : 'smacg_season_event' ) ) return;
+
+    $base_dir = weixiaoacg_THEME_DIR;
+    $base_url = weixiaoacg_THEME_URL;
+
+    $css_path = $base_dir . '/assets/css/season-event.css';
+    if ( file_exists( $css_path ) ) {
+        wp_enqueue_style(
+            'smacg-season-event',
+            $base_url . '/assets/css/season-event.css',
+            [ 'weixiaoacg-fa6' ],
+            filemtime( $css_path )
+        );
+    }
+}, 29 );
 
 /* ============================================================
    wpForo 論壇樣式覆蓋（玻璃擬態主題對齊）
