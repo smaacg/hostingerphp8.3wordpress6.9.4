@@ -1,10 +1,9 @@
 <?php
 /**
  * Level System - 等級計算與稱號對應
- * 
- * 公式：等級 = floor(sqrt(EXP / 5))
- * 範圍：Lv.1 ~ Lv.200
- * 
+ *
+ * 公式：等級 = floor(sqrt(EXP / 5))，範圍：Lv.1 ~ Lv.200
+ *
  * 等級里程碑：
  * - Lv.10  (500 EXP)    一轉解鎖
  * - Lv.30  (4,500 EXP)  二轉自動升階
@@ -12,8 +11,10 @@
  * - Lv.120 (72,000 EXP) 四轉究極稱號
  * - Lv.200 (200,000 EXP) 神級老粉
  *
- * Version: 1.0.0 (2026-05-13)
- * Batch: 2A-0
+ * Version: 1.1.0 (2026-05-14)
+ *   - [重新命名] smacg_calc_level → smacg_calc_user_level（避免與舊 member-functions.php 衝突）
+ *   - [新增] smacg_get_user_level()（給 exp-events.php 用的薄包裝）
+ *   - [新增] smacg_get_level_title($level)
  *
  * @package Blocksy_Child
  */
@@ -22,25 +23,22 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-/* =========================================================
- * 常數
- * ========================================================= */
 if ( ! defined( 'SMACG_MAX_LEVEL' ) ) {
     define( 'SMACG_MAX_LEVEL', 200 );
 }
 
 /* =========================================================
- * 1. 等級計算
+ * 1. 等級計算（核心）
  * ========================================================= */
 
 /**
- * 由 EXP 計算等級
+ * 由 EXP 計算等級（純函式）
  * 公式：level = floor(sqrt(exp / 5))，上限 200
  *
  * @param int $exp 累積 EXP
- * @return int 等級
+ * @return int 等級（1-200）
  */
-function smacg_calc_level( $exp ) {
+function smacg_calc_user_level( $exp ) {
     $exp = max( 0, (int) $exp );
     if ( $exp < 5 ) return 1;
 
@@ -49,10 +47,20 @@ function smacg_calc_level( $exp ) {
 }
 
 /**
+ * smacg_get_user_level — 薄包裝（exp-events.php 使用此名稱）
+ *
+ * @param int $exp
+ * @return int
+ */
+function smacg_get_user_level( $exp ) {
+    return smacg_calc_user_level( $exp );
+}
+
+/**
  * 由等級反推所需 EXP
  *
- * @param int $level 目標等級
- * @return int 達到該等級所需的最低 EXP
+ * @param int $level
+ * @return int
  */
 function smacg_level_to_exp( $level ) {
     $level = max( 1, (int) $level );
@@ -60,57 +68,38 @@ function smacg_level_to_exp( $level ) {
 }
 
 /* =========================================================
- * 2. 稱號階段（5 階）
+ * 2. 稱號階段（6 階）
  * ========================================================= */
 
-/**
- * 由等級取得稱號階段
- * 
- * Lv.1-9    新進會員
- * Lv.10-29  新客
- * Lv.30-69  常客
- * Lv.70-119 熟客
- * Lv.120-199 VIP
- * Lv.200    黑卡會員
- *
- * @param int $level
- * @return array ['tier'=>1-6, 'title'=>'稱號', 'icon'=>'emoji']
- */
 function smacg_get_level_tier( $level ) {
     $level = (int) $level;
 
-    if ( $level >= 200 ) {
-        return array( 'tier' => 6, 'title' => '黑卡會員', 'icon' => '💎' );
-    }
-    if ( $level >= 120 ) {
-        return array( 'tier' => 5, 'title' => 'VIP',        'icon' => '👑' );
-    }
-    if ( $level >= 70 ) {
-        return array( 'tier' => 4, 'title' => '熟客',       'icon' => '🎬' );
-    }
-    if ( $level >= 30 ) {
-        return array( 'tier' => 3, 'title' => '常客',       'icon' => '📺' );
-    }
-    if ( $level >= 10 ) {
-        return array( 'tier' => 2, 'title' => '新客',       'icon' => '🌿' );
-    }
-
+    if ( $level >= 200 ) return array( 'tier' => 6, 'title' => '黑卡會員',  'icon' => '💎' );
+    if ( $level >= 120 ) return array( 'tier' => 5, 'title' => 'VIP',         'icon' => '👑' );
+    if ( $level >= 70  ) return array( 'tier' => 4, 'title' => '熟客',        'icon' => '🎬' );
+    if ( $level >= 30  ) return array( 'tier' => 3, 'title' => '常客',        'icon' => '📺' );
+    if ( $level >= 10  ) return array( 'tier' => 2, 'title' => '新客',        'icon' => '🌿' );
     return array( 'tier' => 1, 'title' => '新進會員', 'icon' => '🌱' );
+}
+
+/**
+ * 取得等級稱號（不含 icon）— exp-events.php 用
+ *
+ * @param int $level
+ * @return string
+ */
+function smacg_get_level_title( $level ) {
+    $tier = smacg_get_level_tier( $level );
+    return $tier['icon'] . ' ' . $tier['title'];
 }
 
 /* =========================================================
  * 3. 等級進度條資訊
  * ========================================================= */
 
-/**
- * 取得用戶等級完整資訊（給 UI 渲染用）
- *
- * @param int $uid 用戶 ID
- * @return array
- */
 function smacg_get_user_level_info( $uid ) {
     $exp           = smacg_get_user_exp( $uid );
-    $level         = smacg_calc_level( $exp );
+    $level         = smacg_calc_user_level( $exp );
     $current_floor = smacg_level_to_exp( $level );
     $next_floor    = smacg_level_to_exp( $level + 1 );
     $tier          = smacg_get_level_tier( $level );
@@ -139,26 +128,15 @@ function smacg_get_user_level_info( $uid ) {
  * 4. 轉職階段判定
  * ========================================================= */
 
-/**
- * 取得用戶當前可達的轉職階段
- * 
- * @param int $level
- * @return int 0=未轉職, 1=一轉, 2=二轉, 3=三轉, 4=四轉
- */
 function smacg_get_career_stage( $level ) {
     $level = (int) $level;
     if ( $level >= 120 ) return 4;
-    if ( $level >= 70 )  return 3;
-    if ( $level >= 30 )  return 2;
-    if ( $level >= 10 )  return 1;
+    if ( $level >= 70  ) return 3;
+    if ( $level >= 30  ) return 2;
+    if ( $level >= 10  ) return 1;
     return 0;
 }
 
-/**
- * 取得轉職里程碑列表
- *
- * @return array
- */
 function smacg_get_career_milestones() {
     return array(
         1 => array( 'level' => 10,  'label' => '一轉：解鎖職業',     'icon' => '🎓' ),
@@ -169,19 +147,168 @@ function smacg_get_career_milestones() {
 }
 
 /* =========================================================
- * 5. EXP 給予 + 升等檢測（核心 wrapper）
+ * 5. 8 個職業 + 4 階稱號表（給 Career tab 使用）
  * ========================================================= */
 
 /**
- * 給予 EXP 並自動檢測升等
- * （業務程式碼建議呼叫此函式而非直接 smacg_award_exp）
+ * 取得 8 大職業清單
  *
- * @param int    $uid    用戶 ID
- * @param int    $amount EXP 數量
- * @param string $reason 原因
- * @param array  $args   額外參數
- * @return array ['success'=>bool, 'leveled_up'=>bool, 'old_level'=>int, 'new_level'=>int, 'milestones'=>array]
+ * @return array  job_key => array( label, icon, titles[4] )
  */
+function smacg_get_jobs() {
+    return array(
+        'student' => array(
+            'label'  => '學生',
+            'icon'   => '🎓',
+            'titles' => array(
+                1 => array( 'name' => '懵懂新生',     'ref' => '我的英雄學院' ),
+                2 => array( 'name' => '優等生',       'ref' => '為美好的世界獻上祝福' ),
+                3 => array( 'name' => '學生會長',     'ref' => '輝夜姬想讓人告白' ),
+                4 => array( 'name' => '神級學者',     'ref' => '文豪Stray Dogs' ),
+            ),
+        ),
+        'it' => array(
+            'label'  => '資訊／軟體業',
+            'icon'   => '💻',
+            'titles' => array(
+                1 => array( 'name' => '程式新手',     'ref' => '無職轉生' ),
+                2 => array( 'name' => '鏈鋸碼農',     'ref' => '鏈鋸人' ),
+                3 => array( 'name' => '咒術工程師',   'ref' => '咒術迴戰' ),
+                4 => array( 'name' => '開發超人',     'ref' => 'SPY×FAMILY' ),
+            ),
+        ),
+        'design' => array(
+            'label'  => '設計／創作',
+            'icon'   => '🎨',
+            'titles' => array(
+                1 => array( 'name' => '美術新手',     'ref' => '排球少年' ),
+                2 => array( 'name' => '色彩魔法師',   'ref' => '魔法少女小圓' ),
+                3 => array( 'name' => '藝術鬼才',     'ref' => '進擊的巨人' ),
+                4 => array( 'name' => '神之筆者',     'ref' => '哆啦A夢' ),
+            ),
+        ),
+        'office' => array(
+            'label'  => '行政／內勤',
+            'icon'   => '💼',
+            'titles' => array(
+                1 => array( 'name' => '社畜新血',     'ref' => 'NEW GAME!' ),
+                2 => array( 'name' => '會議達人',     'ref' => '我推的孩子' ),
+                3 => array( 'name' => '部門核心',     'ref' => '半澤直樹' ),
+                4 => array( 'name' => '辦公室之神',   'ref' => '魔法少女小圓' ),
+            ),
+        ),
+        'sales' => array(
+            'label'  => '業務／行銷',
+            'icon'   => '📊',
+            'titles' => array(
+                1 => array( 'name' => '業務新兵',     'ref' => '機動戰士鋼彈' ),
+                2 => array( 'name' => '簽單獵人',     'ref' => '獵人' ),
+                3 => array( 'name' => '王牌業務',     'ref' => 'JOJO的奇妙冒險' ),
+                4 => array( 'name' => '銷售之神',     'ref' => '海賊王' ),
+            ),
+        ),
+        'medical' => array(
+            'label'  => '醫療／護理',
+            'icon'   => '🏥',
+            'titles' => array(
+                1 => array( 'name' => '見習醫師',     'ref' => '怪醫黑傑克' ),
+                2 => array( 'name' => '白衣天使',     'ref' => '工作細胞' ),
+                3 => array( 'name' => '主治醫師',     'ref' => '怪醫黑傑克' ),
+                4 => array( 'name' => '醫術之神',     'ref' => 'Dr. STONE' ),
+            ),
+        ),
+        'service' => array(
+            'label'  => '餐飲／服務業',
+            'icon'   => '🍽️',
+            'titles' => array(
+                1 => array( 'name' => '服務員',       'ref' => '異世界食堂' ),
+                2 => array( 'name' => '迎賓武士',     'ref' => '銀魂' ),
+                3 => array( 'name' => '微笑大使',     'ref' => 'SPY×FAMILY' ),
+                4 => array( 'name' => '傳奇店長',     'ref' => '中華一番' ),
+            ),
+        ),
+        'freelance' => array(
+            'label'  => '自由／其他',
+            'icon'   => '🌱',
+            'titles' => array(
+                1 => array( 'name' => '自由人',       'ref' => '葬送的芙莉蓮' ),
+                2 => array( 'name' => '斜槓達人',     'ref' => '為美好的世界獻上祝福' ),
+                3 => array( 'name' => '人生玩家',     'ref' => 'JOJO的奇妙冒險' ),
+                4 => array( 'name' => '逍遙之神',     'ref' => '聖哥傳' ),
+            ),
+        ),
+    );
+}
+
+/**
+ * 取得用戶當前職業 key（user_meta = smacg_job_key）
+ *
+ * @param int $uid
+ * @return string|''
+ */
+function smacg_get_user_job( $uid ) {
+    return (string) get_user_meta( (int) $uid, 'smacg_job_key', true );
+}
+
+/**
+ * 設定用戶職業（一轉時呼叫）
+ *
+ * @param int    $uid
+ * @param string $job_key
+ * @return bool
+ */
+function smacg_set_user_job( $uid, $job_key ) {
+    $uid     = (int) $uid;
+    $job_key = sanitize_key( $job_key );
+    $jobs    = smacg_get_jobs();
+
+    if ( $uid <= 0 || ! isset( $jobs[ $job_key ] ) ) return false;
+
+    // 記下選擇時間（之後可做 3 個月冷卻）
+    update_user_meta( $uid, 'smacg_job_key',         $job_key );
+    update_user_meta( $uid, 'smacg_job_chosen_at',   current_time( 'mysql' ) );
+
+    do_action( 'smacg_user_job_chosen', $uid, $job_key );
+
+    return true;
+}
+
+/**
+ * 取得用戶當前的職業稱號（依目前等級判定第幾轉）
+ *
+ * @param int $uid
+ * @return array  ['job_key','job_label','job_icon','stage','title_name','title_ref'] 或空陣列
+ */
+function smacg_get_user_job_title( $uid ) {
+    $uid = (int) $uid;
+    if ( $uid <= 0 ) return array();
+
+    $job_key = smacg_get_user_job( $uid );
+    if ( ! $job_key ) return array();
+
+    $jobs = smacg_get_jobs();
+    if ( ! isset( $jobs[ $job_key ] ) ) return array();
+
+    $info  = smacg_get_user_level_info( $uid );
+    $stage = max( 1, smacg_get_career_stage( $info['level'] ) );
+    if ( $stage < 1 ) return array();
+
+    $title = $jobs[ $job_key ]['titles'][ $stage ];
+
+    return array(
+        'job_key'    => $job_key,
+        'job_label'  => $jobs[ $job_key ]['label'],
+        'job_icon'   => $jobs[ $job_key ]['icon'],
+        'stage'      => $stage,
+        'title_name' => $title['name'],
+        'title_ref'  => $title['ref'],
+    );
+}
+
+/* =========================================================
+ * 6. EXP 給予 + 升等檢測（核心 wrapper，向下相容）
+ * ========================================================= */
+
 function smacg_grant_exp( $uid, $amount, $reason = '', $args = array() ) {
     $uid    = (int) $uid;
     $amount = (int) $amount;
@@ -196,24 +323,20 @@ function smacg_grant_exp( $uid, $amount, $reason = '', $args = array() ) {
 
     if ( $uid <= 0 || $amount <= 0 ) return $result;
 
-    // 取得舊等級
     $old_exp   = smacg_get_user_exp( $uid );
-    $old_level = smacg_calc_level( $old_exp );
+    $old_level = smacg_calc_user_level( $old_exp );
 
-    // 發放 EXP
     $success = smacg_award_exp( $uid, $amount, $reason, $args );
     if ( ! $success ) return $result;
 
-    // 取得新等級
     $new_exp   = smacg_get_user_exp( $uid );
-    $new_level = smacg_calc_level( $new_exp );
+    $new_level = smacg_calc_user_level( $new_exp );
 
     $result['success']    = true;
     $result['old_level']  = $old_level;
     $result['new_level']  = $new_level;
     $result['leveled_up'] = ( $new_level > $old_level );
 
-    // 檢測是否跨越轉職里程碑
     if ( $result['leveled_up'] ) {
         $milestones = smacg_get_career_milestones();
         foreach ( $milestones as $stage => $info ) {
@@ -226,8 +349,6 @@ function smacg_grant_exp( $uid, $amount, $reason = '', $args = array() ) {
                 );
             }
         }
-
-        // 觸發升等事件（給通知系統等模組監聽）
         do_action( 'smacg_user_leveled_up', $uid, $old_level, $new_level, $result );
     }
 
