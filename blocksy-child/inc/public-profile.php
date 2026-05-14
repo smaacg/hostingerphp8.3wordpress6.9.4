@@ -320,3 +320,38 @@ function smacg_pp_admin_bar_link( $wp_admin_bar ) {
         'meta'  => [ 'title' => '查看你的公開個人頁' ],
     ] );
 }
+/* ============================================================
+   8. Hero 區等級徽章注入（Batch 2A-4）
+   ------------------------------------------------------------
+   page-public-profile.php 可在 hero 顯示名稱旁呼叫：
+       do_action( 'smacg_public_profile_hero_meta', $user->ID );
+
+   實作位於 inc/level-badge-display.php（在 functions.php 中後載入）
+   ============================================================ */
+add_action( 'wp_footer', function () {
+    if ( ! smacg_is_public_profile_page() ) return;
+
+    $user = smacg_get_public_profile_user();
+    if ( ! $user ) return;
+
+    // 若模板未在 hero 主動呼叫 hook，這裡用 JS 將徽章注入到名稱後方
+    // （fallback；推薦做法仍是直接在 page-public-profile.php 加入 do_action）
+    $badge = function_exists( 'smacg_render_level_badge' )
+        ? smacg_render_level_badge( $user->ID, 'lg', [ 'show_job' => true ] )
+        : '';
+    if ( ! $badge ) return;
+    ?>
+    <script>
+    (function(){
+        if (document.querySelector('.smacg-pp-hero .smacg-lvbadge')) return;
+        var anchor = document.querySelector('.smacg-pp-hero h1, .smacg-pp-hero .pp-name, .pp-hero h1');
+        if (!anchor) return;
+        var wrap = document.createElement('div');
+        wrap.className = 'smacg-pp-hero__lvbadge';
+        wrap.style.marginTop = '8px';
+        wrap.innerHTML = <?php echo wp_json_encode( $badge ); ?>;
+        anchor.parentNode.insertBefore(wrap, anchor.nextSibling);
+    })();
+    </script>
+    <?php
+}, 99 );
