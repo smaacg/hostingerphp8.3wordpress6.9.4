@@ -4,7 +4,7 @@
  *
  * @package weixiaoacg
  * @subpackage Enqueue
- * @version 2.6.0 (2026-05-14)
+ * @version 2.6.1 (2026-05-14)
  *
  * v2.1.0 變更 — Batch C #14：
  *   - 新增 page-year-review.php 範本的條件式 CSS/JS 載入
@@ -31,7 +31,13 @@
  *   - 全站載入 gamification.css（會員中心、公開頁、其他需顯示等級/徽章處都需要）
  *   - 依賴 weixiaoacg-fa6（圖示）
  *   - 不需 JS（此 batch 僅樣式；級別計算在 PHP 端）
+ * 
+ *  * v2.6.1 變更 — Batch 2A-4 職業選擇 + 等級徽章：
+ *   - 全站載入 level-badge.css（留言區小徽章 + 公開頁大徽章）
+ *   - 僅在 /mc/?tab=career 載入 career.js + 注入 smacgCareer localize
+ *   - 依賴 smacg-gamification（共用變數 / 顏色）
  */
+
 defined( 'ABSPATH' ) || exit;
 
 /* ============================================================
@@ -456,6 +462,71 @@ add_action( 'wp_enqueue_scripts', function () {
         );
     }
 }, 24 );
+
+/* ============================================================
+   Level Badge 等級徽章（v2.6.1 - 2026-05-14）
+   ------------------------------------------------------------
+   - Batch 2A-4：留言區 / 公開頁 / 排行榜共用樣式
+   - 全站載入（CSS 體積 < 3KB）
+   ============================================================ */
+add_action( 'wp_enqueue_scripts', function () {
+    $base_dir = weixiaoacg_THEME_DIR;
+    $base_url = weixiaoacg_THEME_URL;
+
+    $css_path = $base_dir . '/assets/css/level-badge.css';
+    if ( file_exists( $css_path ) ) {
+        wp_enqueue_style(
+            'smacg-level-badge',
+            $base_url . '/assets/css/level-badge.css',
+            [ 'smacg-gamification' ],
+            filemtime( $css_path )
+        );
+    }
+}, 25 );
+
+/* ============================================================
+   Career Selection 職業選擇（v2.6.1 - 2026-05-14）
+   ------------------------------------------------------------
+   - 僅在會員中心 career tab 載入 JS
+   - 偵測條件：is_page_template('page-member.php') && ?tab=career
+   ============================================================ */
+add_action( 'wp_enqueue_scripts', function () {
+    if ( ! is_user_logged_in() ) return;
+    if ( ! is_page_template( 'page-member.php' ) ) return;
+
+    $tab = isset( $_GET['tab'] ) ? sanitize_key( $_GET['tab'] ) : '';
+    if ( $tab !== 'career' ) return;
+
+    $base_dir = weixiaoacg_THEME_DIR;
+    $base_url = weixiaoacg_THEME_URL;
+
+    $js_path = $base_dir . '/assets/js/career.js';
+    if ( ! file_exists( $js_path ) ) return;
+
+    wp_enqueue_script(
+        'smacg-career',
+        $base_url . '/assets/js/career.js',
+        [],
+        filemtime( $js_path ),
+        true
+    );
+
+    $uid       = get_current_user_id();
+    $lvl_info  = function_exists( 'smacg_get_user_level_info' ) ? smacg_get_user_level_info( $uid ) : [ 'level' => 0 ];
+    $current   = function_exists( 'smacg_get_user_career_job' ) ? smacg_get_user_career_job( $uid ) : '';
+
+    wp_localize_script( 'smacg-career', 'smacgCareer', [
+        'ajax'       => admin_url( 'admin-ajax.php' ),
+        'nonce'      => wp_create_nonce( 'smacg_career_nonce' ),
+        'loggedIn'   => true,
+        'userLevel'  => (int) ( $lvl_info['level'] ?? 0 ),
+        'currentJob' => $current,
+        'loginUrl'   => function_exists( 'um_get_core_page' )
+            ? um_get_core_page( 'login' )
+            : wp_login_url(),
+    ] );
+}, 26 );
+
 
 /* ============================================================
    wpForo 論壇樣式覆蓋（玻璃擬態主題對齊）
