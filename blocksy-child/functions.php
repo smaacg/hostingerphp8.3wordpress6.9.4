@@ -3,30 +3,25 @@
  * 微笑動漫 Child Theme — functions.php
  *
  * @package weixiaoacg
- * @version 2.7.2 (2026-05-14)
+ * @version 2.7.3 (2026-05-14)
  *
  * Changelog（近期）：
+ *   2.7.3 (2026-05-14) Batch 2B-5 — season-event-tracker + settle + single 模板
  *   2.7.2 (2026-05-14) Batch 2B-4 — season-event CPT + admin UI
- *   2.7.1 (2026-05-14) Batch 2B-3 — leaderboard-widget（widget + shortcode）
- *   2.7.0 (2026-05-14) Batch 2B-2 — leaderboard-ajax + /ranking-users/
- *   2.6.0 (2026-05-14) Batch 2B-1 — ranking-system + cron + privacy
- *   2.5.4 (2026-05-14) Batch 2A-4 — career-ajax + level-badge-display
- *   2.5.3 (2026-05-14) Batch 2A-3 — 命名衝突修正
- *   2.5.2 (2026-05-14) Batch 2A-2 — gamipress-notif-bridge
- *   2.5.1 (2026-05-14) Batch 2A-1 — exp-config + exp-events
- *   2.5.0 (2026-05-14) Batch 2A-0 — gamipress-integration + level-system
- *   2.4.x              Batch 1C   — 通知中心
- *   2.3.x              Batch 1B   — 追蹤系統
- *   2.2.0              Batch 1A   — 公開個人頁
- *   2.1.0              Batch C    — image-optimizer
+ *   2.7.1 (2026-05-14) Batch 2B-3 — leaderboard widget + shortcode
+ *   2.7.0 (2026-05-14) Batch 2B-2 — leaderboard ajax + /ranking-users/
+ *   2.6.0 (2026-05-14) Batch 2B-1 — ranking system + cron + privacy
+ *   2.5.4 (2026-05-14) Batch 2A-4 — career + level badge
+ *   2.5.0~2.5.3        Batch 2A — gamification
+ *   2.4.x              Batch 1C — 通知中心
+ *   2.3.x              Batch 1B — 追蹤系統
+ *   2.2.0              Batch 1A — 公開個人頁
+ *   2.1.0              Batch C  — image-optimizer
  *   2.0.0              重構：functions.php → inc/*.php
  */
 defined( 'ABSPATH' ) || exit;
 
-/* ============================================================
-   常數
-   ============================================================ */
-define( 'weixiaoacg_VERSION',   '2.7.2' );
+define( 'weixiaoacg_VERSION',   '2.7.3' );
 define( 'weixiaoacg_THEME_URL', get_stylesheet_directory_uri() );
 define( 'weixiaoacg_THEME_DIR', get_stylesheet_directory() );
 
@@ -46,54 +41,28 @@ define( 'SMACG_FOLLOW_COOLDOWN',    1   );
 const WEIXIAOACG_ID_CATS  = [ 'announcement', 'news' ];
 const WEIXIAOACG_LLM_CATS = [ 'review', 'feature' ];
 
-/* ============================================================
-   載入 inc/*.php
-   ============================================================ */
 $inc = weixiaoacg_THEME_DIR . '/inc/';
 
-// ---- core ----
 foreach ( [
-    'member-functions',
-    'member-stats',
-    'member-render',
-    'setup-theme',
-    'class-nav-walker',
-    'setup-enqueue',
-    'member-ajax',
-    'api-rest',
-    'um-integration',
-    'content-slug',
-    'external-links',
+    'member-functions','member-stats','member-render','setup-theme',
+    'class-nav-walker','setup-enqueue','member-ajax','api-rest',
+    'um-integration','content-slug','external-links',
 ] as $f ) {
     require_once $inc . $f . '.php';
 }
 
-// ---- optional ----
 $optional = [
     'image-optimizer',
-    'public-profile',
-    'public-profile-render',
-    'follow-system',
-    'follow-ajax',
-    'notifications-system',
-    'notifications-events',
-    'notifications-ajax',
-    'notifications-render',
-    'notifications-email',
+    'public-profile','public-profile-render',
+    'follow-system','follow-ajax',
+    'notifications-system','notifications-events','notifications-ajax','notifications-render','notifications-email',
 
     // Phase 2A
-    'gamipress-integration',
-    'level-system',
-    'exp-config',
-    'exp-events',
-    'gamipress-notif-bridge',
-    'career-ajax',
-    'level-badge-display',
+    'gamipress-integration','level-system','exp-config','exp-events',
+    'gamipress-notif-bridge','career-ajax','level-badge-display',
 
     // Phase 2B-1
-    'ranking-system',
-    'ranking-cron',
-    'ranking-privacy',
+    'ranking-system','ranking-cron','ranking-privacy',
 
     // Phase 2B-2
     'leaderboard-ajax',
@@ -102,8 +71,11 @@ $optional = [
     'leaderboard-widget',
 
     // Phase 2B-4
-    'season-event-cpt',    // CPT 註冊 + helper API
-    'season-event-admin',  // 後台 meta box / 列表欄位 / 複製
+    'season-event-cpt','season-event-admin',
+
+    // Phase 2B-5
+    'season-event-tracker',   // 進度表 + 事件監聽
+    'season-event-settle',    // 即時/Cron 結算 + 結束公告
 ];
 
 foreach ( $optional as $f ) {
