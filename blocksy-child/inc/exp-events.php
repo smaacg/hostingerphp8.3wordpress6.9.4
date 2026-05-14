@@ -9,11 +9,15 @@
  *   - user_register             → 註冊獎勵
  *   - wp_login                  → 每日首次登入 + 連續登入判定
  *   - comment_post              → 發表留言
- *   - smacg_user_followed       → 追蹤他人（follow-system.php 已觸發）
+ *   - smacg_user_followed       → 追蹤他人（follow-system.php 觸發）
  *   - smacg_watchlist_completed → 完成觀看（自訂 hook，預留給 anime-sync-pro）
  *   - smacg_watchlist_added     → 加入清單
  *   - smacg_rating_added        → 評分
  *   - gamipress_award_achievement → 徽章解鎖
+ *
+ * Version: 1.2.0 (2026-05-14) Hotfix:
+ *   - [修正] 所有 smacg_get_user_level($exp) → smacg_calc_user_level($exp)
+ *           （level-system.php v1.2.0 已移除 smacg_get_user_level 包裝）
  *
  * Version: 1.1.0 (2026-05-14)
  *   - [修正] 'smacg_followed' → 'smacg_user_followed'（對齊 follow-system.php）
@@ -78,16 +82,16 @@ function smacg_award_exp_with_cap( $uid, $action_key, $extra_args = array() ) {
     // $cap === 0 → 無上限
 
     // === 升級偵測：發放前先記下舊等級 ===
-    $level_before = function_exists( 'smacg_get_user_level' )
-        ? smacg_get_user_level( smacg_get_user_exp( $uid ) )
+    $level_before = function_exists( 'smacg_calc_user_level' )
+        ? smacg_calc_user_level( smacg_get_user_exp( $uid ) )
         : 0;
 
     // === 實際發放 ===
     $result = smacg_award_exp( $uid, $exp, $label, $extra_args );
 
     // === 升級偵測：發放後檢查 ===
-    if ( $result && function_exists( 'smacg_get_user_level' ) ) {
-        $level_after = smacg_get_user_level( smacg_get_user_exp( $uid ) );
+    if ( $result && function_exists( 'smacg_calc_user_level' ) ) {
+        $level_after = smacg_calc_user_level( smacg_get_user_exp( $uid ) );
         if ( $level_after > $level_before ) {
             smacg_handle_level_up( $uid, $level_before, $level_after );
         }
@@ -222,8 +226,7 @@ add_action( 'transition_comment_status', function( $new_status, $old_status, $co
 }, 20, 3 );
 
 /* =========================================================
- * 4. 追蹤系統（修正：對齊 follow-system.php 的 hook 名稱）
- *    follow-system.php 觸發 'smacg_user_followed'
+ * 4. 追蹤系統（對齊 follow-system.php 的 hook 名稱）
  * ========================================================= */
 add_action( 'smacg_user_followed', function( $follower_id, $target_id ) {
     smacg_award_exp_with_cap( (int) $follower_id, 'follow_action', array(
@@ -259,7 +262,6 @@ add_action( 'smacg_rating_added', function( $uid, $anime_id, $rating ) {
 
 /* =========================================================
  * 6. 徽章解鎖 → 發 EXP
- *    （通知由 notifications-events.php 處理，本檔只發 EXP）
  * ========================================================= */
 add_action( 'gamipress_award_achievement', function( $user_id, $achievement_id ) {
     $achievement = get_post( $achievement_id );
@@ -274,8 +276,8 @@ add_action( 'gamipress_award_achievement', function( $user_id, $achievement_id )
     $custom_exp = (int) get_post_meta( $achievement_id, '_smacg_badge_exp', true );
 
     // 升級偵測：先記下舊等級
-    $level_before = function_exists( 'smacg_get_user_level' )
-        ? smacg_get_user_level( smacg_get_user_exp( $user_id ) )
+    $level_before = function_exists( 'smacg_calc_user_level' )
+        ? smacg_calc_user_level( smacg_get_user_exp( $user_id ) )
         : 0;
 
     if ( $custom_exp > 0 ) {
@@ -289,8 +291,8 @@ add_action( 'gamipress_award_achievement', function( $user_id, $achievement_id )
     }
 
     // 升級偵測（custom_exp 走 smacg_award_exp 不會自動偵測，需手動）
-    if ( $custom_exp > 0 && function_exists( 'smacg_get_user_level' ) ) {
-        $level_after = smacg_get_user_level( smacg_get_user_exp( $user_id ) );
+    if ( $custom_exp > 0 && function_exists( 'smacg_calc_user_level' ) ) {
+        $level_after = smacg_calc_user_level( smacg_get_user_exp( $user_id ) );
         if ( $level_after > $level_before ) {
             smacg_handle_level_up( $user_id, $level_before, $level_after );
         }
