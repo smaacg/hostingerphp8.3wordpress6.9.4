@@ -1,137 +1,133 @@
 <?php
-/**
- * Level Badge Display - 等級徽章顯示元件
- *
- * 原檔：blocksy-child/inc/level-badge-display.php v1.0.0
- *
- * @package SMACG_Gamification
- */
-
-namespace SMACG\Gamification\Level;
+namespace SMACG\Gamification;
 
 defined( 'ABSPATH' ) || exit;
 
-class Badge {
+/**
+ * 等級徽章顯示（搬自 theme/inc/level-badge-display.php）
+ *
+ * 用途：
+ *   - 留言作者名稱旁顯示等級徽章
+ *   - 公開個人頁顯示英雄徽章
+ *   - 提供 render_badge( $uid, $opts ) helper
+ */
+class Level_Badge {
 
-    public static function init() {
-        add_filter( 'get_comment_author', [ __CLASS__, 'filter_comment_author' ], 20, 3 );
-        add_action( 'smacg_public_profile_hero_meta', [ __CLASS__, 'render_hero_badge' ], 10, 1 );
+    private static $instance = null;
+
+    public static function instance() {
+        if ( self::$instance === null ) self::$instance = new self();
+        return self::$instance;
     }
 
-    /**
-     * 渲染等級徽章
-     */
-    public static function render( $uid, $size = 'sm', $args = [] ) {
+    private function __construct() {
+        add_filter( 'get_comment_author', [ __CLASS__, 'append_to_comment_author' ], 10, 3 );
+    }
+
+    /* ==========================================================
+     * 主要 render
+     * ========================================================== */
+    public static function render_badge( $uid, $opts = [] ) {
         $uid = (int) $uid;
-        if ( ! $uid ) return '';
-        if ( ! function_exists( 'smacg_get_user_level_info' ) ) return '';
+        if ( $uid <= 0 ) return '';
 
-        $size = in_array( $size, [ 'sm', 'md', 'lg' ], true ) ? $size : 'sm';
-        $args = wp_parse_args( $args, [
-            'show_job' => ( $size === 'lg' ),
-            'link'     => false,
-        ] );
+        $info = Level_System::get_user_level( $uid );
+        if ( $info['level'] <= 0 ) return '';
 
-        $info  = \smacg_get_user_level_info( $uid );
-        $level = (int) ( $info['level'] ?? 1 );
-        $tier  = $info['tier']  ?? [];
-        $title = $tier['title'] ?? '新進會員';
-        $icon  = $tier['icon']  ?? '🌱';
-        $color = $tier['color'] ?? '#94a3b8';
+        $size      = $opts['size']      ?? 'sm';      // sm / md / lg
+        $with_job  = $opts['with_job']  ?? true;
+        $with_link = $opts['with_link'] ?? false;
 
-        $job_html = '';
-        if ( $args['show_job'] && function_exists( 'smacg_get_user_career_job' ) ) {
-            $job_key = \smacg_get_user_career_job( $uid );
-            if ( $job_key && function_exists( 'smacg_get_career_job_label' ) ) {
-                $job = \smacg_get_career_job_label( $job_key );
-                if ( $job ) {
-                    $job_html = sprintf(
-                        '<span class="smacg-lvbadge__job" style="color:%s">%s %s</span>',
-                        esc_attr( $job['color'] ),
-                        esc_html( $job['icon'] ),
-                        esc_html( $job['label'] )
-                    );
-                }
-            }
-        }
+        $tier_class = 'smacg-tier-' . $info['tier'];
+        $size_class = 'smacg-badge-' . $size;
+        $career     = $info['custom_career'] ?: $info['job_title'];
 
-        ob_start(); ?>
-        <span class="smacg-lvbadge smacg-lvbadge--<?php echo esc_attr( $size ); ?>"
-              style="--lv-color: <?php echo esc_attr( $color ); ?>"
-              title="<?php echo esc_attr( sprintf( 'Lv.%d %s %s', $level, $icon, $title ) ); ?>">
-            <span class="smacg-lvbadge__icon" aria-hidden="true"><?php echo esc_html( $icon ); ?></span>
-            <span class="smacg-lvbadge__lv">Lv.<?php echo (int) $level; ?></span>
-            <?php if ( $size !== 'sm' ) : ?>
-                <span class="smacg-lvbadge__title"><?php echo esc_html( $title ); ?></span>
+        $title = sprintf( 'Lv.%d %s', $info['level'], esc_attr( $career ) );
+
+        ob_start();
+        ?>
+        <span class="smacg-level-badge <?php echo esc_attr( $tier_class . ' ' . $size_class ); ?>"
+              title="<?php echo esc_attr( $title ); ?>">
+            <span class="smacg-level-num">Lv.<?php echo (int) $info['level']; ?></span>
+            <?php if ( $with_job ) : ?>
+                <span class="smacg-level-job"><?php echo esc_html( $career ); ?></span>
             <?php endif; ?>
-            <?php if ( $size === 'lg' && ! empty( $info['percent'] ) ) : ?>
-                <span class="smacg-lvbadge__bar">
-                    <span class="smacg-lvbadge__bar-fill" style="width: <?php echo (float) $info['percent']; ?>%"></span>
-                </span>
-            <?php endif; ?>
-            <?php echo $job_html; ?>
         </span>
         <?php
         $html = ob_get_clean();
 
-        if ( $args['link'] && function_exists( 'smacg_get_public_profile_url' ) ) {
-            $url  = \smacg_get_public_profile_url( $uid );
-            $html = sprintf( '<a class="smacg-lvbadge-link" href="%s">%s</a>', esc_url( $url ), $html );
+        if ( $with_link && function_exists( 'smacg_get_public_profile_url' ) ) {
+            $url = smacg_get_public_profile_url( $uid );
+            if ( $url ) {
+                $html = '<a href="' . esc_url( $url ) . '" class="smacg-level-badge-link">' . $html . '</a>';
+            }
         }
 
         return $html;
     }
 
-    /**
-     * 留言區作者名後方插入小徽章
-     */
-    public static function filter_comment_author( $author, $comment_ID, $comment ) {
-        if ( is_admin() || is_feed() ) return $author;
+    /* ==========================================================
+     * Hero 大徽章（公開個人頁用）
+     * ========================================================== */
+    public static function render_hero_badge( $uid ) {
+        $uid = (int) $uid;
+        if ( $uid <= 0 ) return '';
 
-        if ( ! $comment instanceof \WP_Comment ) {
-            $comment = get_comment( $comment_ID );
-            if ( ! $comment ) return $author;
-        }
+        $info = Level_System::get_user_level( $uid );
+        $career = $info['custom_career'] ?: $info['job_title'];
+        $tier   = (int) $info['tier'];
 
-        $user_id = (int) $comment->user_id;
-        if ( ! $user_id ) return $author;
-        if ( strpos( $author, 'smacg-lvbadge' ) !== false ) return $author;
+        ob_start();
+        ?>
+        <div class="smacg-hero-badge smacg-hero-tier-<?php echo $tier; ?>">
+            <div class="smacg-hero-level">
+                <span class="smacg-hero-lv-label">Lv.</span>
+                <span class="smacg-hero-lv-num"><?php echo (int) $info['level']; ?></span>
+            </div>
+            <div class="smacg-hero-job"><?php echo esc_html( $career ); ?></div>
+            <div class="smacg-hero-progress">
+                <div class="smacg-hero-progress-bar" style="width:<?php echo (int) $info['progress_pct']; ?>%"></div>
+            </div>
+            <div class="smacg-hero-exp">
+                <?php
+                if ( $info['is_max'] ) {
+                    echo '滿級 (' . number_format( $info['exp'] ) . ' EXP)';
+                } else {
+                    printf(
+                        '%s / %s EXP（距離下一級 %s）',
+                        number_format( $info['exp'] ),
+                        number_format( $info['exp_next_level'] ),
+                        number_format( $info['exp_needed'] )
+                    );
+                }
+                ?>
+            </div>
+            <?php
+            $badge_count = (int) $info['badge_count'];
+            if ( $badge_count > 0 ) :
+                ?>
+                <div class="smacg-hero-badges">
+                    🏆 持有 <?php echo $badge_count; ?> 枚徽章
+                </div>
+            <?php endif; ?>
+        </div>
+        <?php
+        return ob_get_clean();
+    }
 
-        // 避免被信件函式呼叫到
-        $bt = debug_backtrace( DEBUG_BACKTRACE_IGNORE_ARGS, 6 );
-        foreach ( $bt as $frame ) {
-            if ( ! isset( $frame['function'] ) ) continue;
-            if ( in_array( $frame['function'], [
-                'wp_notify_postauthor',
-                'wp_notify_moderator',
-                'wp_new_comment_notify_postauthor',
-                'wp_new_comment_notify_moderator',
-            ], true ) ) {
-                return $author;
-            }
-        }
+    /* ==========================================================
+     * Hook: comment author append
+     * ========================================================== */
+    public static function append_to_comment_author( $author, $comment_id, $comment ) {
+        if ( is_admin() ) return $author;
+        if ( ! $comment instanceof \WP_Comment ) return $author;
 
-        $badge = self::render( $user_id, 'sm', [ 'link' => true ] );
+        $uid = (int) $comment->user_id;
+        if ( $uid <= 0 ) return $author;
+
+        $badge = self::render_badge( $uid, [ 'size' => 'sm', 'with_job' => false ] );
         if ( ! $badge ) return $author;
+
         return $author . ' ' . $badge;
     }
-
-    /**
-     * 公開頁 hero
-     */
-    public static function render_hero_badge( $user_id ) {
-        echo self::render( (int) $user_id, 'lg', [ 'show_job' => true, 'link' => false ] );
-    }
-
-    /**
-     * 公開頁徽章數量文字
-     */
-    public static function get_badge_count_text( $user_id ) {
-        if ( ! function_exists( 'smacg_get_user_badge_count' ) ) return '';
-        $count = (int) \smacg_get_user_badge_count( $user_id );
-        if ( $count <= 0 ) return '';
-        return sprintf( '🏅 %d 枚徽章', $count );
-    }
 }
-
-Badge::init();
