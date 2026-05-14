@@ -3,10 +3,11 @@
  * 微笑動漫 Child Theme — functions.php
  *
  * @package weixiaoacg
- * @version 2.7.0 (2026-05-14)
+ * @version 2.7.1 (2026-05-14)
  *
- * Changelog（只列近期；完整歷史見 git log）：
- *   2.7.0 (2026-05-14) Batch 2B-2 — leaderboard-ajax (會員排行榜頁面前端)
+ * Changelog（近期）：
+ *   2.7.1 (2026-05-14) Batch 2B-3 — leaderboard-widget（Top N widget + shortcode）
+ *   2.7.0 (2026-05-14) Batch 2B-2 — leaderboard-ajax + /ranking-users/ 頁面
  *   2.6.0 (2026-05-14) Batch 2B-1 — ranking-system + ranking-cron + ranking-privacy
  *   2.5.4 (2026-05-14) Batch 2A-4 — career-ajax + level-badge-display
  *   2.5.3 (2026-05-14) Batch 2A-3 — 解決 smacg_calc_level 命名衝突
@@ -24,7 +25,7 @@ defined( 'ABSPATH' ) || exit;
 /* ============================================================
    常數
    ============================================================ */
-define( 'weixiaoacg_VERSION',   '2.7.0' );
+define( 'weixiaoacg_VERSION',   '2.7.1' );
 define( 'weixiaoacg_THEME_URL', get_stylesheet_directory_uri() );
 define( 'weixiaoacg_THEME_DIR', get_stylesheet_directory() );
 
@@ -79,7 +80,7 @@ $optional = [
     'notifications-render',
     'notifications-email',
 
-    // Phase 2A：Gamification
+    // Phase 2A
     'gamipress-integration',
     'level-system',
     'exp-config',
@@ -88,13 +89,16 @@ $optional = [
     'career-ajax',
     'level-badge-display',
 
-    // Phase 2B-1：Ranking 資料層
+    // Phase 2B-1
     'ranking-system',
     'ranking-cron',
     'ranking-privacy',
 
-    // Phase 2B-2：Ranking 前端
+    // Phase 2B-2
     'leaderboard-ajax',
+
+    // Phase 2B-3
+    'leaderboard-widget',
 ];
 
 foreach ( $optional as $f ) {
