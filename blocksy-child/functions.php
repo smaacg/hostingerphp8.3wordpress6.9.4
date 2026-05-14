@@ -3,14 +3,15 @@
  * 微笑動漫 Child Theme — functions.php
  *
  * @package weixiaoacg
- * @version 2.7.1 (2026-05-14)
+ * @version 2.7.2 (2026-05-14)
  *
  * Changelog（近期）：
- *   2.7.1 (2026-05-14) Batch 2B-3 — leaderboard-widget（Top N widget + shortcode）
- *   2.7.0 (2026-05-14) Batch 2B-2 — leaderboard-ajax + /ranking-users/ 頁面
- *   2.6.0 (2026-05-14) Batch 2B-1 — ranking-system + ranking-cron + ranking-privacy
+ *   2.7.2 (2026-05-14) Batch 2B-4 — season-event CPT + admin UI
+ *   2.7.1 (2026-05-14) Batch 2B-3 — leaderboard-widget（widget + shortcode）
+ *   2.7.0 (2026-05-14) Batch 2B-2 — leaderboard-ajax + /ranking-users/
+ *   2.6.0 (2026-05-14) Batch 2B-1 — ranking-system + cron + privacy
  *   2.5.4 (2026-05-14) Batch 2A-4 — career-ajax + level-badge-display
- *   2.5.3 (2026-05-14) Batch 2A-3 — 解決 smacg_calc_level 命名衝突
+ *   2.5.3 (2026-05-14) Batch 2A-3 — 命名衝突修正
  *   2.5.2 (2026-05-14) Batch 2A-2 — gamipress-notif-bridge
  *   2.5.1 (2026-05-14) Batch 2A-1 — exp-config + exp-events
  *   2.5.0 (2026-05-14) Batch 2A-0 — gamipress-integration + level-system
@@ -25,7 +26,7 @@ defined( 'ABSPATH' ) || exit;
 /* ============================================================
    常數
    ============================================================ */
-define( 'weixiaoacg_VERSION',   '2.7.1' );
+define( 'weixiaoacg_VERSION',   '2.7.2' );
 define( 'weixiaoacg_THEME_URL', get_stylesheet_directory_uri() );
 define( 'weixiaoacg_THEME_DIR', get_stylesheet_directory() );
 
@@ -99,6 +100,10 @@ $optional = [
 
     // Phase 2B-3
     'leaderboard-widget',
+
+    // Phase 2B-4
+    'season-event-cpt',    // CPT 註冊 + helper API
+    'season-event-admin',  // 後台 meta box / 列表欄位 / 複製
 ];
 
 foreach ( $optional as $f ) {
