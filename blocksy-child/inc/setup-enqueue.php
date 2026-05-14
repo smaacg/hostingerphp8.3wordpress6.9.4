@@ -4,7 +4,7 @@
  *
  * @package weixiaoacg
  * @subpackage Enqueue
- * @version 2.4.0 (2026-05-13)
+ * @version 2.6.0 (2026-05-14)
  *
  * v2.1.0 變更 — Batch C #14：
  *   - 新增 page-year-review.php 範本的條件式 CSS/JS 載入
@@ -17,15 +17,20 @@
  *
  * v2.3.0 變更 — Batch 1A 公開個人頁：
  *   - 新增公開個人頁 CSS/JS 條件式載入（僅在 smacg_is_public_profile_page() 為 true 時）
+ *
  * v2.4.0 變更 — Batch 1B-2 追蹤系統：
  *   - 全站載入 follow.js / follow.css
  *   - 注入 smacgFollow（ajax / nonce / loggedIn / loginUrl）
  *   - 在 functions.php 載入 inc/follow-ajax.php
- *  * v2.5.0 變更 — Batch 1C-3 通知中心 UI：
+ *
+ * v2.5.0 變更 — Batch 1C-3 通知中心 UI：
  *   - 全站載入 notifications.js / notifications.css（僅登入使用者）
  *   - 注入 smacgNotif（ajax / nonce / loggedIn / mcUrl / pollInterval）
-
-
+ *
+ * v2.6.0 變更 — Batch 2A-0 GamiPress 整合層：
+ *   - 全站載入 gamification.css（會員中心、公開頁、其他需顯示等級/徽章處都需要）
+ *   - 依賴 weixiaoacg-fa6（圖示）
+ *   - 不需 JS（此 batch 僅樣式；級別計算在 PHP 端）
  */
 defined( 'ABSPATH' ) || exit;
 
@@ -282,11 +287,7 @@ add_filter( 'litespeed_optimize_css_excludes', function ( $excludes ) {
 } );
 
 /* ============================================================
-   Public Profile 公開個人頁（v2.3.0 - 2026-05-13 新增）
-   ------------------------------------------------------------
-   - 僅在 smacg_is_public_profile_page() 為 true 時載入
-   - 不需 jQuery（純 vanilla JS）
-   - 同時注入 toast 內聯樣式（避免另開 CSS 檔）
+   Public Profile 公開個人頁（v2.3.0 - 2026-05-13）
    ============================================================ */
 add_action( 'wp_enqueue_scripts', function () {
     if ( ! function_exists( 'smacg_is_public_profile_page' ) || ! smacg_is_public_profile_page() ) {
@@ -345,6 +346,7 @@ add_action( 'wp_enqueue_scripts', function () {
         );
     }
 }, 20 );
+
 /* ============================================================
    Follow System 追蹤按鈕（v2.4.0 - 2026-05-13）
    ------------------------------------------------------------
@@ -432,6 +434,30 @@ add_action( 'wp_enqueue_scripts', function () {
 }, 23 );
 
 /* ============================================================
+   Gamification 等級／徽章系統（v2.6.0 - 2026-05-14）
+   ------------------------------------------------------------
+   - Batch 2A-0：GamiPress 整合層基礎樣式
+   - 全站載入（會員中心、公開個人頁、留言、排行榜都需顯示等級徽章）
+   - 依賴 weixiaoacg-fa6（圖示）
+   - 體積小（< 5KB），全站載入 OK
+   - 此 batch 暫無 JS（級別計算在 PHP 端）
+   ============================================================ */
+add_action( 'wp_enqueue_scripts', function () {
+    $base_dir = weixiaoacg_THEME_DIR;
+    $base_url = weixiaoacg_THEME_URL;
+
+    $css_path = $base_dir . '/assets/css/gamification.css';
+    if ( file_exists( $css_path ) ) {
+        wp_enqueue_style(
+            'smacg-gamification',
+            $base_url . '/assets/css/gamification.css',
+            [ 'weixiaoacg-fa6' ],
+            filemtime( $css_path )
+        );
+    }
+}, 24 );
+
+/* ============================================================
    wpForo 論壇樣式覆蓋（玻璃擬態主題對齊）
    ============================================================ */
 add_action( 'wp_enqueue_scripts', function () {
@@ -457,4 +483,3 @@ add_action( 'wp_enqueue_scripts', function () {
     );
 
 }, 30 );
-
