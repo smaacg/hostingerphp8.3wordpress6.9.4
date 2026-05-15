@@ -1,222 +1,207 @@
 <?php
-/**
- * Season Event Tracker - 進度追蹤
- *
- * 原檔：blocksy-child/inc/season-event-tracker.php v1.0.0
- *
- * @package SMACG_Gamification
- */
-
-namespace SMACG\Gamification\SeasonEvent;
+namespace SMACG\Gamification;
 
 defined( 'ABSPATH' ) || exit;
 
-class Tracker {
+/**
+ * 季賽進度追蹤（搬自 theme/inc/season-event-tracker.php）
+ *
+ * 監聽各種業務事件，依「進行中活動」的 action_type 將進度寫入 wp_smacg_event_progress 表；
+ * 達標時即時觸發 settle_one()，並寫入 reached_at + awarded_at。
+ */
+class Event_Tracker {
 
-    public static function init() {
-        // 事件監聽
-        add_action( 'smacg_exp_awarded',         [ __CLASS__, 'on_exp_awarded' ], 30, 3 );
-        add_action( 'smacg_watchlist_completed', [ __CLASS__, 'on_watchlist_completed' ], 30, 2 );
-        add_action( 'comment_post',              [ __CLASS__, 'on_comment_post' ], 30, 2 );
-        add_action( 'smacg_rating_added',        [ __CLASS__, 'on_rating_added' ], 30, 3 );
+    private static $instance = null;
+
+    public static function instance() {
+        if ( self::$instance === null ) self::$instance = new self();
+        return self::$instance;
     }
 
-    /* ---------------------------------------------
-     * 取得目前進行中且任務類型符合的活動 ID（含 request-level 快取）
-     * --------------------------------------------- */
-    public static function active_ids_by_task( $task_type ) {
-        static $cache = [];
-        if ( isset( $cache[ $task_type ] ) ) return $cache[ $task_type ];
+    private function __construct() {
+        /* 留言 */
+        add_action( 'comment_post', function ( $cid, $approved, $data ) {
+            if ( $approved !== 1 ) return;
+            $uid = (int) ( $data['user_id'] ?? 0 );
+            if ( $uid > 0 ) self::bump( $uid, 'comment', 1 );
+        }, 30, 3 );
 
-        global $wpdb;
-        $now = current_time( 'mysql' );
+        /* 追蹤 */
+        add_action( 'smacg_user_followed', function ( $follower_id, $followee_id ) {
+            if ( $follower_id > 0 ) self::bump( $follower_id, 'follow', 1 );
+        }, 30, 2 );
 
-        $sql = $wpdb->prepare(
-            "SELECT p.ID
-             FROM {$wpdb->posts} p
-             INNER JOIN {$wpdb->postmeta} mt ON mt.post_id = p.ID AND mt.meta_key = '_smacg_event_task_type'
-             INNER JOIN {$wpdb->postmeta} ms ON ms.post_id = p.ID AND ms.meta_key = '_smacg_event_start'
-             INNER JOIN {$wpdb->postmeta} me ON me.post_id = p.ID AND me.meta_key = '_smacg_event_end'
-             WHERE p.post_type = %s
-               AND p.post_status = 'publish'
-               AND mt.meta_value = %s
-               AND ms.meta_value <= %s
-               AND me.meta_value >= %s",
-            SMACG_EVENT_CPT, $task_type, $now, $now
-        );
+        /* anime-sync-pro 觀看 */
+        add_action( 'smacg_watchlist_added', function ( $uid ) {
+            self::bump( $uid, 'watchlist_add', 1 );
+        }, 30 );
+        add_action( 'smacg_watchlist_completed', function ( $uid ) {
+            self::bump( $uid, 'watchlist_complete', 1 );
+        }, 30 );
+        add_action( 'smacg_rating_added', function ( $uid ) {
+            self::bump( $uid, 'rating', 1 );
+        }, 30 );
 
-        $ids = $wpdb->get_col( $sql );
-        $cache[ $task_type ] = array_map( 'intval', $ids ?: [] );
-        return $cache[ $task_type ];
+        /* EXP 賺取（給 exp_earned 類型活動用） */
+        add_action( 'smacg_exp_awarded', function ( $uid, $amount ) {
+            self::bump( $uid, 'exp_earned', (int) $amount );
+        }, 30, 2 );
     }
 
-    /* ---------------------------------------------
-     * 對使用者所有符合的進行中活動，遞增進度
-     * --------------------------------------------- */
-    public static function bump_progress( $uid, $task_type, $delta = 1 ) {
+    /* ==========================================================
+     * 核心：對所有「進行中、action_type 符合」的活動 +delta 進度
+     * ========================================================== */
+    public static function bump( $uid, $action_type, $delta = 1 ) {
         $uid   = (int) $uid;
         $delta = (int) $delta;
         if ( $uid <= 0 || $delta <= 0 ) return;
 
-        $event_ids = self::active_ids_by_task( $task_type );
-        if ( empty( $event_ids ) ) return;
+        $events = Event_CPT::get_active_events();
+        foreach ( $events as $ev ) {
+            if ( $ev['action_type'] !== $action_type ) continue;
+            self::update_progress( $ev['id'], $uid, $delta, $ev );
+        }
+    }
 
+    private static function update_progress( $event_id, $uid, $delta, $ev ) {
         global $wpdb;
         $tbl = $wpdb->prefix . 'smacg_event_progress';
         $now = current_time( 'mysql' );
 
-        foreach ( $event_ids as $eid ) {
-            $wpdb->query( $wpdb->prepare(
-                "INSERT INTO {$tbl} (event_id, user_id, progress, updated_at)
-                 VALUES (%d, %d, %d, %s)
-                 ON DUPLICATE KEY UPDATE progress = progress + VALUES(progress), updated_at = VALUES(updated_at)",
-                $eid, $uid, $delta, $now
-            ) );
-            self::check_reached( $eid, $uid );
-        }
-    }
-
-    /* ---------------------------------------------
-     * 偵測達標
-     * --------------------------------------------- */
-    public static function check_reached( $event_id, $uid ) {
-        global $wpdb;
-        $tbl = $wpdb->prefix . 'smacg_event_progress';
-
-        $row = $wpdb->get_row( $wpdb->prepare(
-            "SELECT progress, reached_at FROM {$tbl} WHERE event_id = %d AND user_id = %d",
-            $event_id, $uid
-        ) );
-        if ( ! $row || ! is_null( $row->reached_at ) ) return false;
-
-        $meta = CPT::get_meta( $event_id );
-        if ( $meta['task_target'] <= 0 ) return false;
-        if ( (int) $row->progress < (int) $meta['task_target'] ) return false;
-
-        // 檢查名額
-        if ( $meta['max_participants'] > 0 ) {
-            $reached_count = (int) $wpdb->get_var( $wpdb->prepare(
-                "SELECT COUNT(*) FROM {$tbl} WHERE event_id = %d AND reached_at IS NOT NULL",
-                $event_id
-            ) );
-            if ( $reached_count >= $meta['max_participants'] ) {
-                // 標記為超額（reached_at = 1970-01-01）
-                $wpdb->update( $tbl,
-                    [ 'reached_at' => '1970-01-01 00:00:00' ],
-                    [ 'event_id' => $event_id, 'user_id' => $uid ],
-                    [ '%s' ], [ '%d', '%d' ]
-                );
-                do_action( 'smacg_event_over_limit', $event_id, $uid );
-                return false;
-            }
-        }
-
-        // 正式達標
-        $wpdb->update( $tbl,
-            [ 'reached_at' => current_time( 'mysql' ) ],
-            [ 'event_id' => $event_id, 'user_id' => $uid ],
-            [ '%s' ], [ '%d', '%d' ]
-        );
-
-        do_action( 'smacg_event_reached', $event_id, $uid, $meta );
-        return true;
-    }
-
-    /* ---------------------------------------------
-     * Hook handlers
-     * --------------------------------------------- */
-    public static function on_exp_awarded( $uid, $amount, $reason = '' ) {
-        self::bump_progress( $uid, 'exp_gain', (int) $amount );
-    }
-
-    public static function on_watchlist_completed( $uid, $anime_id ) {
-        self::bump_progress( $uid, 'watchlist_completed', 1 );
-    }
-
-    public static function on_comment_post( $comment_id, $approved ) {
-        if ( $approved !== 1 && $approved !== '1' ) return;
-        $c = get_comment( $comment_id );
-        if ( ! $c || empty( $c->user_id ) ) return;
-        self::bump_progress( (int) $c->user_id, 'comment_count', 1 );
-    }
-
-    public static function on_rating_added( $uid, $anime_id, $rating ) {
-        self::bump_progress( $uid, 'rating_count', 1 );
-    }
-
-    /* ---------------------------------------------
-     * 公開 API
-     * --------------------------------------------- */
-    public static function get_user_progress( $event_id, $uid ) {
-        global $wpdb;
-        $tbl = $wpdb->prefix . 'smacg_event_progress';
-
-        $row = $wpdb->get_row( $wpdb->prepare(
-            "SELECT progress, reached_at, awarded_at
-             FROM {$tbl} WHERE event_id = %d AND user_id = %d",
-            $event_id, $uid
-        ), ARRAY_A );
-
-        $meta = CPT::get_meta( $event_id );
-        $tgt  = max( 1, (int) $meta['task_target'] );
-
-        $progress = $row ? (int) $row['progress'] : 0;
-        $reached  = $row && $row['reached_at'] && $row['reached_at'] !== '1970-01-01 00:00:00' ? $row['reached_at'] : null;
-        $over     = $row && $row['reached_at'] === '1970-01-01 00:00:00';
-
-        return [
-            'progress'   => $progress,
-            'target'     => $tgt,
-            'percent'    => min( 100, round( $progress / $tgt * 100, 1 ) ),
-            'reached_at' => $reached,
-            'awarded_at' => $row ? ( $row['awarded_at'] ?: null ) : null,
-            'over_limit' => $over,
-        ];
-    }
-
-    public static function top_progress( $event_id, $limit = 100 ) {
-        global $wpdb;
-        $tbl = $wpdb->prefix . 'smacg_event_progress';
-
-        return $wpdb->get_results( $wpdb->prepare(
-            "SELECT user_id, progress, reached_at, awarded_at
-             FROM {$tbl}
-             WHERE event_id = %d
-               AND (reached_at IS NULL OR reached_at != '1970-01-01 00:00:00')
-             ORDER BY progress DESC, reached_at ASC
-             LIMIT %d",
-            $event_id, max( 1, (int) $limit )
-        ), ARRAY_A ) ?: [];
-    }
-
-    public static function counts( $event_id ) {
-        global $wpdb;
-        $tbl = $wpdb->prefix . 'smacg_event_progress';
-
-        $total   = (int) $wpdb->get_var( $wpdb->prepare(
-            "SELECT COUNT(*) FROM {$tbl} WHERE event_id = %d AND (reached_at IS NULL OR reached_at != '1970-01-01 00:00:00')",
-            $event_id
-        ) );
-        $reached = (int) $wpdb->get_var( $wpdb->prepare(
-            "SELECT COUNT(*) FROM {$tbl} WHERE event_id = %d AND reached_at IS NOT NULL AND reached_at != '1970-01-01 00:00:00'",
-            $event_id
-        ) );
-        return [ 'total' => $total, 'reached' => $reached ];
-    }
-
-    public static function manual_grant_progress( $event_id, $uid, $delta = 1 ) {
-        global $wpdb;
-        $tbl = $wpdb->prefix . 'smacg_event_progress';
-        $now = current_time( 'mysql' );
-
+        /* 1) UPSERT 進度 */
         $wpdb->query( $wpdb->prepare(
             "INSERT INTO {$tbl} (event_id, user_id, progress, updated_at)
              VALUES (%d, %d, %d, %s)
              ON DUPLICATE KEY UPDATE progress = progress + VALUES(progress), updated_at = VALUES(updated_at)",
-            $event_id, $uid, max( 1, (int) $delta ), $now
+            $event_id, $uid, $delta, $now
         ) );
-        self::check_reached( $event_id, $uid );
+
+        /* 2) 讀回現況 */
+        $row = $wpdb->get_row( $wpdb->prepare(
+            "SELECT progress, reached_at, awarded_at FROM {$tbl} WHERE event_id = %d AND user_id = %d",
+            $event_id, $uid
+        ), ARRAY_A );
+
+        if ( ! $row ) return;
+        $progress = (int) $row['progress'];
+
+        /* 3) 達標 → 寫 reached_at + 立即結算 */
+        if ( $progress >= (int) $ev['target'] && empty( $row['reached_at'] ) ) {
+            $wpdb->update( $tbl,
+                [ 'reached_at' => $now ],
+                [ 'event_id' => $event_id, 'user_id' => $uid ],
+                [ '%s' ], [ '%d', '%d' ]
+            );
+            self::settle_one( $event_id, $uid, $ev );
+        }
+    }
+
+    /* ==========================================================
+     * 立即結算（達標瞬間）：發 EXP + Badge + Title + 通知
+     * ========================================================== */
+    public static function settle_one( $event_id, $uid, $ev = null ) {
+        if ( ! $ev ) $ev = Event_CPT::get_meta( $event_id );
+        if ( ! $ev ) return false;
+
+        global $wpdb;
+        $tbl = $wpdb->prefix . 'smacg_event_progress';
+
+        /* 防雙發 */
+        $row = $wpdb->get_row( $wpdb->prepare(
+            "SELECT awarded_at FROM {$tbl} WHERE event_id = %d AND user_id = %d",
+            $event_id, $uid
+        ), ARRAY_A );
+        if ( ! $row || ! empty( $row['awarded_at'] ) ) return false;
+
+        /* EXP */
+        if ( $ev['reward_exp'] > 0 ) {
+            Gamipress_Bridge::award_exp( $uid, (int) $ev['reward_exp'], 'Event: ' . $ev['title'] );
+        }
+        /* Badge */
+        if ( $ev['reward_badge'] > 0 ) {
+            Gamipress_Bridge::award_badge( $uid, (int) $ev['reward_badge'] );
+        }
+        /* Title（user_meta smacg_event_titles 為 array） */
+        if ( ! empty( $ev['reward_title'] ) ) {
+            $titles = get_user_meta( $uid, 'smacg_event_titles', true );
+            if ( ! is_array( $titles ) ) $titles = [];
+            if ( ! in_array( $ev['reward_title'], $titles, true ) ) {
+                $titles[] = $ev['reward_title'];
+                update_user_meta( $uid, 'smacg_event_titles', $titles );
+            }
+        }
+
+        /* 標記 awarded */
+        $wpdb->update( $tbl,
+            [ 'awarded_at' => current_time( 'mysql' ) ],
+            [ 'event_id' => $event_id, 'user_id' => $uid ],
+            [ '%s' ], [ '%d', '%d' ]
+        );
+
+        /* 通知 */
+        if ( function_exists( 'smacg_create_notification' ) ) {
+            smacg_create_notification( [
+                'user_id'     => $uid,
+                'type'        => 'event_completed',
+                'object_type' => 'event',
+                'object_id'   => $event_id,
+                'data'        => [
+                    'title'   => sprintf( '🎯 完成活動「%s」', $ev['title'] ),
+                    'excerpt' => sprintf(
+                        '獲得 +%d EXP%s%s',
+                        $ev['reward_exp'],
+                        $ev['reward_badge'] ? '、徽章' : '',
+                        $ev['reward_title'] ? '、稱號「' . $ev['reward_title'] . '」' : ''
+                    ),
+                    'url'     => $ev['permalink'],
+                    'icon'    => 'fa-bullseye',
+                ],
+                'force'       => true,
+            ] );
+        }
+
+        do_action( 'smacg_event_completed', $uid, $event_id, $ev );
+        return true;
+    }
+
+    /* ==========================================================
+     * 對外 API
+     * ========================================================== */
+    public static function get_progress( $event_id, $uid ) {
+        global $wpdb;
+        $tbl = $wpdb->prefix . 'smacg_event_progress';
+        $row = $wpdb->get_row( $wpdb->prepare(
+            "SELECT progress, reached_at, awarded_at FROM {$tbl} WHERE event_id = %d AND user_id = %d",
+            (int) $event_id, (int) $uid
+        ), ARRAY_A );
+        if ( ! $row ) return [ 'progress' => 0, 'reached' => false, 'awarded' => false ];
+        return [
+            'progress' => (int) $row['progress'],
+            'reached'  => ! empty( $row['reached_at'] ),
+            'awarded'  => ! empty( $row['awarded_at'] ),
+        ];
+    }
+
+    public static function get_leaderboard( $event_id, $limit = 20 ) {
+        global $wpdb;
+        $tbl = $wpdb->prefix . 'smacg_event_progress';
+        $rows = $wpdb->get_results( $wpdb->prepare(
+            "SELECT user_id, progress, reached_at
+             FROM {$tbl}
+             WHERE event_id = %d
+             ORDER BY progress DESC, reached_at ASC
+             LIMIT %d",
+            (int) $event_id, (int) $limit
+        ), ARRAY_A );
+        return $rows ?: [];
+    }
+
+    public static function get_progress_count( $event_id ) {
+        global $wpdb;
+        $tbl = $wpdb->prefix . 'smacg_event_progress';
+        return (int) $wpdb->get_var( $wpdb->prepare(
+            "SELECT COUNT(*) FROM {$tbl} WHERE event_id = %d AND reached_at IS NOT NULL",
+            (int) $event_id
+        ) );
     }
 }
-
-Tracker::init();
