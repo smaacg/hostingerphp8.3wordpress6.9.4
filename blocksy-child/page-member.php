@@ -1,20 +1,6 @@
 <?php
 /**
  * Template Name: 會員中心
- * Version: 2.6.0 (2026-05-15)
- *
- * v2.6.0 (2026-05-15) 修復 Fatal Error：
- *   - 配合 functions.php v2.14.0 將 member-* 搬遷至 smacg-members 外掛
- *   - 移除硬性 require_once /inc/member-stats.php、/inc/member-render.php
- *     （這些檔案已不在主題內，會造成 fatal error 導致 /mc/ 無法開啟）
- *   - 全部 smacg_* 函式呼叫改為 function_exists() 防護
- *   - 外掛未啟用時顯示友善提示，不再 500
- *
- * v2.5.0：Batch 2A-3 GamiPress 整合 + 徽章 + 職業
- * v2.4.0：Batch 1C-3 通知中心
- * v2.3.0：Batch 1B-3 追蹤系統 UI
- * v2.2.0：Batch 1A 公開個人頁
- * v2.1.0：頭像上傳優化
  */
 
 if ( ! defined( 'ABSPATH' ) ) exit;
@@ -24,10 +10,7 @@ if ( ! is_user_logged_in() ) {
     exit;
 }
 
-/* ---------- 外掛狀態檢查 ----------
-   member-stats / member-render 已搬至 smacg-members 外掛
-   若外掛未啟用，顯示友善提示而非 fatal error
-*/
+/* ---------- 外掛狀態檢查 ---------- */
 $smacg_members_ready = defined( 'SMACG_MEMBERS_VERSION' )
     && function_exists( 'smacg_build_watchlist' )
     && function_exists( 'smacg_calc_member_stats' )
@@ -60,12 +43,12 @@ if ( ! $smacg_members_ready ) {
 }
 
 /* ---------- 基本資料 ---------- */
-$user        = wp_get_current_user();
-$uid         = $user->ID;
-$display     = $user->display_name ?: $user->user_login;
-$email       = $user->user_email;
-$reg_date    = mysql2date( 'Y-m-d', $user->user_registered );
-$bio         = get_user_meta( $uid, 'description', true );
+$user     = wp_get_current_user();
+$uid      = $user->ID;
+$display  = $user->display_name ?: $user->user_login;
+$email    = $user->user_email;
+$reg_date = mysql2date( 'Y-m-d', $user->user_registered );
+$bio      = get_user_meta( $uid, 'description', true );
 
 /* ---------- 頭像：自訂上傳 > UM > Gravatar ---------- */
 $avatar_url = '';
@@ -84,31 +67,29 @@ if ( ! $avatar_url ) {
 }
 $account_url = get_permalink();
 
-/* ---------- v2.5.0: EXP / 等級（GamiPress） ---------- */
+/* ---------- EXP / 等級 ---------- */
 $lvl_info = function_exists( 'smacg_get_user_level_info' )
     ? smacg_get_user_level_info( $uid )
     : [
-        'exp'             => 0,
-        'level'           => 1,
-        'title'           => '新進會員',
-        'icon'            => '🌱',
-        'percent'         => 0,
-        'in_level_exp'    => 0,
-        'level_total_exp' => 1,
-        'to_next'         => 5,
-        'is_max'          => false,
-        'next_floor'      => 5,
+        'exp' => 0, 'level' => 1, 'title' => '新進會員', 'icon' => '🌱',
+        'percent' => 0, 'in_level_exp' => 0, 'level_total_exp' => 1,
+        'to_next' => 5, 'is_max' => false, 'next_floor' => 5,
     ];
 
+/* ---------- TFT 段位賽季 ---------- */
+$rank_info = function_exists( 'smacg_get_user_rank_season_info' )
+    ? smacg_get_user_rank_season_info( $uid )
+    : null;
+$career_peak = function_exists( 'smacg_get_user_career_peak_tier' )
+    ? smacg_get_user_career_peak_tier( $uid )
+    : null;
+$rank_page_url = home_url( '/ranking-users/?tab=rank_season' );
+
 /* ---------- 職業稱號 ---------- */
-$job_title = function_exists( 'smacg_get_user_job_title' )
-    ? smacg_get_user_job_title( $uid )
-    : [];
+$job_title = function_exists( 'smacg_get_user_job_title' ) ? smacg_get_user_job_title( $uid ) : [];
 
 /* ---------- 會員方案 ---------- */
-$plan_label = function_exists( 'smacg_get_plan_label' )
-    ? smacg_get_plan_label( $user )
-    : '一般會員';
+$plan_label = function_exists( 'smacg_get_plan_label' ) ? smacg_get_plan_label( $user ) : '一般會員';
 
 /* ---------- 隱私設定 + Email 遮罩 ---------- */
 $privacy = function_exists( 'smacg_get_user_privacy' )
@@ -116,9 +97,7 @@ $privacy = function_exists( 'smacg_get_user_privacy' )
     : [ 'show_email' => 0, 'show_continue_watching' => 1 ];
 
 $is_owner = ( get_current_user_id() === $uid );
-if ( $is_owner ) {
-    $display_email = $user->user_email;
-} elseif ( ! empty( $privacy['show_email'] ) ) {
+if ( $is_owner || ! empty( $privacy['show_email'] ) ) {
     $display_email = $user->user_email;
 } else {
     $display_email = function_exists( 'smacg_mask_email' )
@@ -127,10 +106,10 @@ if ( $is_owner ) {
 }
 
 /* ---------- 清單 / 評分 / 經驗 / 留言 ---------- */
-$watchlist  = function_exists( 'smacg_build_watchlist' )    ? smacg_build_watchlist( $uid )    : [];
-$ratings    = function_exists( 'smacg_get_user_ratings' )   ? smacg_get_user_ratings( $uid )   : [];
-$points_log = function_exists( 'smacg_get_exp_log' )        ? smacg_get_exp_log( $uid, 50 )    : [];
-$recent_cmt = function_exists( 'smacg_get_recent_comments' )? smacg_get_recent_comments( $uid, 5 ) : [];
+$watchlist  = function_exists( 'smacg_build_watchlist' )     ? smacg_build_watchlist( $uid )    : [];
+$ratings    = function_exists( 'smacg_get_user_ratings' )    ? smacg_get_user_ratings( $uid )   : [];
+$points_log = function_exists( 'smacg_get_exp_log' )         ? smacg_get_exp_log( $uid, 50 )    : [];
+$recent_cmt = function_exists( 'smacg_get_recent_comments' ) ? smacg_get_recent_comments( $uid, 5 ) : [];
 
 /* ---------- 統計 ---------- */
 $stats = function_exists( 'smacg_calc_member_stats' )
@@ -146,11 +125,9 @@ $public_profile_url = function_exists( 'smacg_get_public_profile_url' )
     ? smacg_get_public_profile_url( $uid )
     : '';
 
-/* ---------- 追蹤數 ---------- */
-$mc_followers = function_exists( 'smacg_get_followers_count' ) ? smacg_get_followers_count( $uid ) : 0;
-$mc_following = function_exists( 'smacg_get_following_count' ) ? smacg_get_following_count( $uid ) : 0;
-
-/* ---------- 徽章數 ---------- */
+/* ---------- 追蹤數 / 徽章數 ---------- */
+$mc_followers   = function_exists( 'smacg_get_followers_count' )  ? smacg_get_followers_count( $uid )  : 0;
+$mc_following   = function_exists( 'smacg_get_following_count' )  ? smacg_get_following_count( $uid )  : 0;
 $mc_badge_count = function_exists( 'smacg_get_user_badge_count' ) ? smacg_get_user_badge_count( $uid ) : 0;
 
 get_header(); ?>
@@ -169,10 +146,7 @@ get_header(); ?>
                     <i class="fa-solid fa-camera"></i>
                     <span>更換頭像</span>
                 </div>
-                <input type="file"
-                       id="mc-avatar-input"
-                       accept="image/jpeg,image/png,image/webp"
-                       hidden>
+                <input type="file" id="mc-avatar-input" accept="image/jpeg,image/png,image/webp" hidden>
             </label>
 
             <div class="mc-avatar-hint">
@@ -203,6 +177,30 @@ get_header(); ?>
                     <span class="mc-job-badge" title="<?php echo esc_attr( $job_title['title_ref'] ?? '' ); ?>">
                         <?php echo esc_html( $job_title['job_icon'] ?? '' ); ?>
                         <?php echo esc_html( $job_title['title_name'] ?? '' ); ?>
+                    </span>
+                <?php endif; ?>
+
+                <?php if ( $rank_info && $rank_info['score'] > 0 ) :
+                    $tier = $rank_info['tier'];
+                ?>
+                    <a href="<?php echo esc_url( $rank_page_url ); ?>"
+                       class="mc-tier-mini"
+                       style="--tier-color: <?php echo esc_attr( $tier['color'] ); ?>;"
+                       title="<?php echo esc_attr( sprintf( '%s · %s 分 · #%s',
+                           $rank_info['season_label'],
+                           number_format( $rank_info['score'] ),
+                           $rank_info['rank'] > 0 ? $rank_info['rank'] : '—' ) ); ?>">
+                        <span class="mc-tier-mini__icon"><?php echo esc_html( $tier['icon'] ); ?></span>
+                        <span class="mc-tier-mini__label"><?php echo esc_html( $tier['label'] ); ?></span>
+                        <?php if ( $rank_info['rank'] > 0 && $rank_info['rank'] <= 200 ) : ?>
+                            <span class="mc-tier-mini__rank">#<?php echo (int) $rank_info['rank']; ?></span>
+                        <?php endif; ?>
+                    </a>
+                <?php elseif ( $career_peak ) : ?>
+                    <span class="mc-tier-mini mc-tier-mini--peak"
+                          title="生涯最高段位（本季尚未獲得積分）">
+                        <span class="mc-tier-mini__icon"><?php echo esc_html( $career_peak['icon'] ); ?></span>
+                        <span class="mc-tier-mini__label">生涯 <?php echo esc_html( $career_peak['label'] ); ?></span>
                     </span>
                 <?php endif; ?>
 
@@ -255,6 +253,29 @@ get_header(); ?>
                 </span>
             </div>
 
+            <?php if ( $rank_info && $rank_info['score'] > 0 ) :
+                $prog = $rank_info['progress'];
+            ?>
+                <a href="<?php echo esc_url( $rank_page_url ); ?>"
+                   class="mc-rank-bar"
+                   style="--tier-color: <?php echo esc_attr( $rank_info['tier']['color'] ); ?>;"
+                   title="<?php echo esc_attr( $rank_info['season_label'] ); ?>">
+                    <div class="mc-rank-fill" style="width:<?php echo (int) $prog['percent']; ?>%"></div>
+                    <span class="mc-rank-text">
+                        <?php echo esc_html( $rank_info['tier']['icon'] ); ?>
+                        <?php echo esc_html( $rank_info['tier']['label'] ); ?>
+                        ·
+                        <?php echo number_format( $rank_info['score'] ); ?> 賽季積分
+                        <?php if ( $prog['is_max'] ) : ?>
+                            <span class="mc-rank-max">MAX</span>
+                        <?php else : ?>
+                            （距 <?php echo esc_html( $prog['next_label'] ); ?> 還差
+                            <?php echo number_format( $prog['to_next'] ); ?> 分）
+                        <?php endif; ?>
+                    </span>
+                </a>
+            <?php endif; ?>
+
             <div class="mc-hero-stats">
                 <div><b><?php echo (int) ( $stats['counts']['watching']  ?? 0 ); ?></b><span>追番中</span></div>
                 <div><b><?php echo (int) ( $stats['counts']['completed'] ?? 0 ); ?></b><span>已看完</span></div>
@@ -298,9 +319,7 @@ get_header(); ?>
             <?php
             if ( function_exists( 'smacg_render_dashboard' ) ) {
                 smacg_render_dashboard( $watchlist, $stats, $recent_cmt, $points_log, $plan_label, $uid );
-            } else {
-                echo '<p class="mc-empty">總覽模組尚未載入</p>';
-            }
+            } else { echo '<p class="mc-empty">總覽模組尚未載入</p>'; }
             ?>
         </section>
 
@@ -308,9 +327,7 @@ get_header(); ?>
             <?php
             if ( function_exists( 'smacg_render_watchlist' ) ) {
                 smacg_render_watchlist( $watchlist, $stats['counts'] );
-            } else {
-                echo '<p class="mc-empty">清單模組尚未載入</p>';
-            }
+            } else { echo '<p class="mc-empty">清單模組尚未載入</p>'; }
             ?>
         </section>
 
@@ -318,9 +335,7 @@ get_header(); ?>
             <?php
             if ( function_exists( 'smacg_render_stats' ) ) {
                 smacg_render_stats( $stats );
-            } else {
-                echo '<p class="mc-empty">統計模組尚未載入</p>';
-            }
+            } else { echo '<p class="mc-empty">統計模組尚未載入</p>'; }
             ?>
         </section>
 
@@ -328,9 +343,7 @@ get_header(); ?>
             <?php
             if ( function_exists( 'smacg_render_ratings' ) ) {
                 smacg_render_ratings( $ratings, $stats['rating'] );
-            } else {
-                echo '<p class="mc-empty">評分模組尚未載入</p>';
-            }
+            } else { echo '<p class="mc-empty">評分模組尚未載入</p>'; }
             ?>
         </section>
 
@@ -338,9 +351,7 @@ get_header(); ?>
             <?php
             if ( function_exists( 'smacg_render_badges' ) ) {
                 smacg_render_badges( $uid );
-            } else {
-                echo '<p class="mc-empty">徽章模組尚未載入</p>';
-            }
+            } else { echo '<p class="mc-empty">徽章模組尚未載入</p>'; }
             ?>
         </section>
 
@@ -348,9 +359,7 @@ get_header(); ?>
             <?php
             if ( function_exists( 'smacg_render_career' ) ) {
                 smacg_render_career( $uid, $lvl_info, $job_title );
-            } else {
-                echo '<p class="mc-empty">職業模組尚未載入</p>';
-            }
+            } else { echo '<p class="mc-empty">職業模組尚未載入</p>'; }
             ?>
         </section>
 
@@ -358,9 +367,7 @@ get_header(); ?>
             <?php
             if ( function_exists( 'smacg_render_notifications_tab' ) ) {
                 smacg_render_notifications_tab();
-            } else {
-                echo '<p class="mc-empty">通知模組尚未載入</p>';
-            }
+            } else { echo '<p class="mc-empty">通知模組尚未載入</p>'; }
             ?>
         </section>
 
@@ -368,9 +375,7 @@ get_header(); ?>
             <?php
             if ( function_exists( 'smacg_render_comments' ) ) {
                 smacg_render_comments( $uid );
-            } else {
-                echo '<p class="mc-empty">留言模組尚未載入</p>';
-            }
+            } else { echo '<p class="mc-empty">留言模組尚未載入</p>'; }
             ?>
         </section>
 
@@ -378,9 +383,7 @@ get_header(); ?>
             <?php
             if ( function_exists( 'smacg_render_points' ) ) {
                 smacg_render_points( $uid, $lvl_info, $points_log );
-            } else {
-                echo '<p class="mc-empty">EXP 模組尚未載入</p>';
-            }
+            } else { echo '<p class="mc-empty">EXP 模組尚未載入</p>'; }
             ?>
         </section>
 
@@ -388,9 +391,7 @@ get_header(); ?>
             <?php
             if ( function_exists( 'smacg_render_settings' ) ) {
                 smacg_render_settings( $user, $privacy, $is_owner );
-            } else {
-                echo '<p class="mc-empty">設定模組尚未載入</p>';
-            }
+            } else { echo '<p class="mc-empty">設定模組尚未載入</p>'; }
             ?>
         </section>
     </div>
@@ -412,7 +413,6 @@ get_header(); ?>
             <div class="mc-cropper-canvas">
                 <img id="mc-cropper-image" src="" alt="裁切預覽">
             </div>
-
             <div class="mc-cropper-tips">
                 <i class="fa-solid fa-lightbulb"></i>
                 拖曳調整裁切框，滾輪縮放。輸出為 400×400 方形頭像。
