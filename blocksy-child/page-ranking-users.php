@@ -2,35 +2,31 @@
 /**
  * Template Name: 會員排行榜
  * Template Post Type: page
- *
  * @package weixiaoacg
- * @version 1.0.0 (2026-05-14)  Batch 2B-2
- *
- * 4 個 tab：累計 EXP / 本月 EXP / 粉絲數 / 徽章數
- * 資料來自 wp_smacg_rankings 快取表（由 ranking-cron 每小時更新）
- *
- * 建立頁面：後台→頁面→新增→Template=「會員排行榜」→ Slug 設為 ranking-users
  */
 
 if ( ! defined( 'ABSPATH' ) ) exit;
 get_header();
 
-$current_uid   = get_current_user_id();
-$is_logged_in  = is_user_logged_in();
-$updated_at    = get_option( 'smacg_ranking_last_rebuild', '' );
-$privacy_data  = function_exists( 'smacg_ranking_privacy_localize_data' )
+$current_uid  = get_current_user_id();
+$is_logged_in = is_user_logged_in();
+$updated_at   = get_option( 'smacg_ranking_last_rebuild', '' );
+$privacy_data = function_exists( 'smacg_ranking_privacy_localize_data' )
     ? smacg_ranking_privacy_localize_data()
     : [ 'visible' => true ];
 
-// 預設 tab（可由 ?tab=monthly 切換）
 $default_tab = isset( $_GET['tab'] ) ? sanitize_key( $_GET['tab'] ) : 'exp_total';
-$valid_tabs  = [ 'exp_total', 'exp_monthly', 'followers', 'badges' ];
+$valid_tabs  = [ 'exp_total', 'exp_monthly', 'followers', 'badges', 'rank_season' ];
 if ( ! in_array( $default_tab, $valid_tabs, true ) ) $default_tab = 'exp_total';
+
+// 賽季資訊（給 hero 顯示）
+$season_info = null;
+if ( $is_logged_in && function_exists( 'smacg_get_user_rank_season_info' ) ) {
+    $season_info = smacg_get_user_rank_season_info( $current_uid );
+}
+$season_label = function_exists( 'smacg_get_season_label' ) ? smacg_get_season_label() : '';
 ?>
 
-<!-- ================================================================
-     HERO
-     ================================================================ -->
 <section class="ranku-hero">
   <canvas id="ranku-particles" class="ranku-hero__particles" aria-hidden="true"></canvas>
   <div class="ranku-hero__overlay"></div>
@@ -38,6 +34,9 @@ if ( ! in_array( $default_tab, $valid_tabs, true ) ) $default_tab = 'exp_total';
     <div class="ranku-hero__eyebrow">
       <span class="chip"><i class="fa-solid fa-users"></i> <?php esc_html_e( '社群會員排名', 'weixiaoacg' ); ?></span>
       <span class="chip chip--green"><i class="fa-solid fa-clock-rotate-left"></i> <?php esc_html_e( '每小時更新', 'weixiaoacg' ); ?></span>
+      <?php if ( $season_label ) : ?>
+        <span class="chip chip--violet"><i class="fa-solid fa-trophy"></i> <?php echo esc_html( $season_label ); ?></span>
+      <?php endif; ?>
     </div>
     <h1 class="ranku-hero__title">
       <span class="ranku-hero__trophy">🏆</span>
@@ -47,48 +46,72 @@ if ( ! in_array( $default_tab, $valid_tabs, true ) ) $default_tab = 'exp_total';
 
     <?php if ( $is_logged_in ) :
         $my_pos = function_exists( 'smacg_ranking_user_position' )
-            ? smacg_ranking_user_position( $current_uid, $default_tab )
+            ? smacg_ranking_user_position( $default_tab, $current_uid )
             : null;
     ?>
-    <div class="ranku-hero__me" id="ranku-hero-me" data-tab="<?php echo esc_attr( $default_tab ); ?>">
-      <span class="ranku-hero__me-label"><?php esc_html_e( '我的名次：', 'weixiaoacg' ); ?></span>
-      <span class="ranku-hero__me-pos" id="ranku-me-pos">
-        <?php echo $my_pos ? '#' . esc_html( $my_pos ) : esc_html__( '未上榜', 'weixiaoacg' ); ?>
-      </span>
-    </div>
+      <div class="ranku-hero__me" id="ranku-hero-me" data-tab="<?php echo esc_attr( $default_tab ); ?>">
+        <span class="ranku-hero__me-label"><?php esc_html_e( '我的名次：', 'weixiaoacg' ); ?></span>
+        <span class="ranku-hero__me-pos" id="ranku-me-pos">
+          <?php echo $my_pos ? '#' . esc_html( $my_pos ) : esc_html__( '未上榜', 'weixiaoacg' ); ?>
+        </span>
+      </div>
+
+      <?php if ( $season_info ) :
+          $tier = $season_info['tier'];
+          $prog = $season_info['progress'];
+      ?>
+      <div class="ranku-hero__tier" style="--tier-color: <?php echo esc_attr( $tier['color'] ); ?>;">
+        <div class="ranku-hero__tier-badge">
+          <span class="ranku-hero__tier-icon"><?php echo esc_html( $tier['icon'] ); ?></span>
+          <span class="ranku-hero__tier-label"><?php echo esc_html( $tier['label'] ); ?></span>
+        </div>
+        <div class="ranku-hero__tier-meta">
+          <span><?php echo esc_html( number_format( $season_info['score'] ) ); ?> <?php esc_html_e( '賽季積分', 'weixiaoacg' ); ?></span>
+          <?php if ( ! $prog['is_max'] ) : ?>
+            <span class="ranku-hero__tier-to-next">
+              <?php echo esc_html( sprintf( __( '距離 %s 還差 %d 分', 'weixiaoacg' ),
+                  $prog['next_label'], $prog['to_next'] ) ); ?>
+            </span>
+          <?php else : ?>
+            <span class="ranku-hero__tier-to-next"><?php esc_html_e( '已達最高段位', 'weixiaoacg' ); ?></span>
+          <?php endif; ?>
+        </div>
+        <div class="ranku-hero__tier-bar">
+          <div class="ranku-hero__tier-fill" style="width: <?php echo (int) $prog['percent']; ?>%;"></div>
+        </div>
+      </div>
+      <?php endif; ?>
     <?php endif; ?>
   </div>
 </section>
 
-<!-- ================================================================
-     主體
-     ================================================================ -->
 <section class="ranku-body section">
   <div class="container">
     <div class="ranku-layout">
 
-      <!-- 左欄：排行榜主區 -->
       <div class="ranku-main">
 
-        <!-- Tabs -->
         <div class="ranku-tabs-row">
           <div class="ranku-tabs" id="ranku-tabs" role="tablist" aria-label="<?php esc_attr_e( '排行榜類別', 'weixiaoacg' ); ?>">
-            <button type="button" class="ranku-tab<?php echo $default_tab==='exp_total'?' active':''; ?>"
-                    data-type="exp_total" role="tab" aria-selected="<?php echo $default_tab==='exp_total'?'true':'false'; ?>">
-              <i class="fa-solid fa-bolt"></i> <?php esc_html_e( '累計 EXP', 'weixiaoacg' ); ?>
-            </button>
-            <button type="button" class="ranku-tab<?php echo $default_tab==='exp_monthly'?' active':''; ?>"
-                    data-type="exp_monthly" role="tab" aria-selected="<?php echo $default_tab==='exp_monthly'?'true':'false'; ?>">
-              <i class="fa-solid fa-fire"></i> <?php esc_html_e( '本月 EXP', 'weixiaoacg' ); ?>
-            </button>
-            <button type="button" class="ranku-tab<?php echo $default_tab==='followers'?' active':''; ?>"
-                    data-type="followers" role="tab" aria-selected="<?php echo $default_tab==='followers'?'true':'false'; ?>">
-              <i class="fa-solid fa-user-group"></i> <?php esc_html_e( '粉絲數', 'weixiaoacg' ); ?>
-            </button>
-            <button type="button" class="ranku-tab<?php echo $default_tab==='badges'?' active':''; ?>"
-                    data-type="badges" role="tab" aria-selected="<?php echo $default_tab==='badges'?'true':'false'; ?>">
-              <i class="fa-solid fa-medal"></i> <?php esc_html_e( '徽章數', 'weixiaoacg' ); ?>
-            </button>
+            <?php
+            $tabs = [
+              'exp_total'   => [ 'fa-bolt',       __( '累計 EXP', 'weixiaoacg' ) ],
+              'exp_monthly' => [ 'fa-fire',       __( '本月 EXP', 'weixiaoacg' ) ],
+              'rank_season' => [ 'fa-trophy',     __( '賽季排位', 'weixiaoacg' ) ],
+              'followers'   => [ 'fa-user-group', __( '粉絲數', 'weixiaoacg' ) ],
+              'badges'      => [ 'fa-medal',      __( '徽章數', 'weixiaoacg' ) ],
+            ];
+            foreach ( $tabs as $key => $info ) {
+                [ $icon, $label ] = $info;
+                $active = ( $key === $default_tab ) ? ' active' : '';
+                printf(
+                    '<button type="button" class="ranku-tab%s" data-type="%s" role="tab" aria-selected="%s"><i class="fa-solid %s"></i> %s</button>',
+                    esc_attr( $active ), esc_attr( $key ),
+                    $active ? 'true' : 'false',
+                    esc_attr( $icon ), esc_html( $label )
+                );
+            }
+            ?>
           </div>
           <div class="ranku-tabs-meta">
             <span class="ranku-count-info" id="ranku-count-info">
@@ -97,18 +120,14 @@ if ( ! in_array( $default_tab, $valid_tabs, true ) ) $default_tab = 'exp_total';
           </div>
         </div>
 
-        <!-- 排行列表 -->
         <div class="ranku-list" id="ranku-list" aria-live="polite">
           <div class="ranku-loading">
-            <div class="skeleton" style="height:78px;border-radius:14px;"></div>
-            <div class="skeleton" style="height:78px;border-radius:14px;margin-top:10px;"></div>
-            <div class="skeleton" style="height:78px;border-radius:14px;margin-top:10px;"></div>
-            <div class="skeleton" style="height:78px;border-radius:14px;margin-top:10px;"></div>
-            <div class="skeleton" style="height:78px;border-radius:14px;margin-top:10px;"></div>
+            <?php for ( $i = 0; $i < 5; $i++ ) : ?>
+              <div class="skeleton" style="height:78px;border-radius:14px;margin-top:<?php echo $i ? 10 : 0; ?>px;"></div>
+            <?php endfor; ?>
           </div>
         </div>
 
-        <!-- 分頁 -->
         <div class="ranku-pagination" id="ranku-pagination" hidden>
           <button type="button" class="ranku-page-btn" id="ranku-prev" disabled>
             <i class="fa-solid fa-chevron-left"></i> <?php esc_html_e( '上一頁', 'weixiaoacg' ); ?>
@@ -127,10 +146,8 @@ if ( ! in_array( $default_tab, $valid_tabs, true ) ) $default_tab = 'exp_total';
 
       </div>
 
-      <!-- 右欄：側欄 -->
       <aside class="ranku-sidebar">
 
-        <!-- 排行規則 -->
         <div class="ranku-sidebar-card glass-mid">
           <h3 class="ranku-sidebar-title">
             <i class="fa-solid fa-scale-balanced" style="color:var(--accent-cyan);"></i>
@@ -139,21 +156,19 @@ if ( ! in_array( $default_tab, $valid_tabs, true ) ) $default_tab = 'exp_total';
           <ul class="ranku-rules">
             <li><i class="fa-solid fa-bolt"></i> <strong><?php esc_html_e( '累計 EXP', 'weixiaoacg' ); ?></strong> — <?php esc_html_e( '註冊以來累計獲得的全部 EXP', 'weixiaoacg' ); ?></li>
             <li><i class="fa-solid fa-fire"></i> <strong><?php esc_html_e( '本月 EXP', 'weixiaoacg' ); ?></strong> — <?php esc_html_e( '本月新獲得的 EXP（每月 1 日歸零）', 'weixiaoacg' ); ?></li>
+            <li><i class="fa-solid fa-trophy"></i> <strong><?php esc_html_e( '賽季排位', 'weixiaoacg' ); ?></strong> — <?php esc_html_e( '本季活躍積分，按 TFT 段位制（鐵～菁英），每季結束結算並重置', 'weixiaoacg' ); ?></li>
             <li><i class="fa-solid fa-user-group"></i> <strong><?php esc_html_e( '粉絲數', 'weixiaoacg' ); ?></strong> — <?php esc_html_e( '追蹤你的會員人數', 'weixiaoacg' ); ?></li>
             <li><i class="fa-solid fa-medal"></i> <strong><?php esc_html_e( '徽章數', 'weixiaoacg' ); ?></strong> — <?php esc_html_e( '解鎖的成就徽章總數', 'weixiaoacg' ); ?></li>
           </ul>
         </div>
 
-        <!-- 隱私設定（僅登入） -->
         <?php if ( $is_logged_in ) : ?>
         <div class="ranku-sidebar-card glass-mid">
           <h3 class="ranku-sidebar-title">
             <i class="fa-solid fa-user-shield" style="color:var(--accent-violet);"></i>
             <?php esc_html_e( '隱私設定', 'weixiaoacg' ); ?>
           </h3>
-          <p class="ranku-priv-desc">
-            <?php esc_html_e( '是否要讓自己出現在排行榜？', 'weixiaoacg' ); ?>
-          </p>
+          <p class="ranku-priv-desc"><?php esc_html_e( '是否要讓自己出現在排行榜？', 'weixiaoacg' ); ?></p>
           <label class="ranku-toggle">
             <input type="checkbox" id="ranku-visibility-toggle"
                    <?php checked( ! empty( $privacy_data['visible'] ) ); ?>>
@@ -171,7 +186,6 @@ if ( ! in_array( $default_tab, $valid_tabs, true ) ) $default_tab = 'exp_total';
         </div>
         <?php endif; ?>
 
-        <!-- 升級提示（未登入） -->
         <?php if ( ! $is_logged_in ) : ?>
         <div class="ranku-sidebar-card glass-mid ranku-cta">
           <h3 class="ranku-sidebar-title">
@@ -188,7 +202,6 @@ if ( ! in_array( $default_tab, $valid_tabs, true ) ) $default_tab = 'exp_total';
         <?php endif; ?>
 
       </aside>
-
     </div>
   </div>
 </section>
