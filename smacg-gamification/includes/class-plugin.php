@@ -20,11 +20,11 @@ class Plugin {
     private function load() {
         $base = SMACG_GAMIFY_DIR . 'includes/';
 
-        // 1. GamiPress Bridge（最底層，必須最先；後面 EXP / Badge 都依賴它）
+        // 1. GamiPress Bridge
         require_once $base . 'gamipress/class-gamipress-bridge.php';
         Gamipress_Bridge::instance();
 
-        // 2. Level（EXP 升級偵測需要用 level table）
+        // 2. Level
         require_once $base . 'level/class-level-system.php';
         Level_System::instance();
 
@@ -51,6 +51,11 @@ class Plugin {
         require_once $base . 'ranking/class-leaderboard-widget.php';
         Leaderboard_Widget::instance();
 
+        // 5b. Rank Season（TFT 段位賽季系統）
+        require_once $base . 'ranking/class-rank-tier.php';
+        require_once $base . 'ranking/class-rank-season.php';
+        Rank_Season::instance();
+
         // 6. Season Event
         require_once $base . 'season-event/class-event-cpt.php';
         Event_CPT::instance();
@@ -63,7 +68,7 @@ class Plugin {
             Event_Admin::instance();
         }
 
-        // 7. GamiPress Notification Bridge（依賴 1 + 通知中心）
+        // 7. GamiPress Notification Bridge
         require_once $base . 'gamipress/class-gamipress-notif-bridge.php';
         Gamipress_Notif_Bridge::instance();
 
@@ -71,13 +76,14 @@ class Plugin {
         require_once $base . 'rest/class-rest-api.php';
         Rest_Api::instance();
 
-        // 9. Compat（function wrappers，主題模板要用）
+        // 9. Compat
         require_once $base . 'compat/legacy-functions.php';
 
         // === Hooks ===
         add_action( 'wp_enqueue_scripts', [ $this, 'localize_career_nonce' ], 20 );
         add_action( 'wp_enqueue_scripts', [ $this, 'enqueue_leaderboard_css' ], 20 );
         add_action( 'wp_enqueue_scripts', [ $this, 'enqueue_season_event_css' ], 20 );
+        add_action( 'wp_enqueue_scripts', [ $this, 'enqueue_rank_season_css' ], 20 );
         add_action( 'init', [ $this, 'maybe_upgrade_db' ], 5 );
         add_action( 'init', [ $this, 'maybe_flush_rewrite' ], 99 );
     }
@@ -98,19 +104,31 @@ class Plugin {
     }
 
     public function enqueue_leaderboard_css() {
-        $theme_css = get_stylesheet_directory()     . '/assets/css/leaderboard-widget.css';
-        $theme_url = get_stylesheet_directory_uri() . '/assets/css/leaderboard-widget.css';
-        if ( file_exists( $theme_css ) ) {
-            wp_enqueue_style( 'smacg-leaderboard-widget', $theme_url, [], filemtime( $theme_css ) );
+        $f = get_stylesheet_directory() . '/assets/css/leaderboard-widget.css';
+        if ( file_exists( $f ) ) {
+            wp_enqueue_style( 'smacg-leaderboard-widget',
+                get_stylesheet_directory_uri() . '/assets/css/leaderboard-widget.css',
+                [], filemtime( $f ) );
         }
     }
 
     public function enqueue_season_event_css() {
         if ( ! ( is_singular( SMACG_EVENT_CPT ) || is_post_type_archive( SMACG_EVENT_CPT ) ) ) return;
-        $theme_css = get_stylesheet_directory()     . '/assets/css/season-event.css';
-        $theme_url = get_stylesheet_directory_uri() . '/assets/css/season-event.css';
-        if ( file_exists( $theme_css ) ) {
-            wp_enqueue_style( 'smacg-season-event', $theme_url, [], filemtime( $theme_css ) );
+        $f = get_stylesheet_directory() . '/assets/css/season-event.css';
+        if ( file_exists( $f ) ) {
+            wp_enqueue_style( 'smacg-season-event',
+                get_stylesheet_directory_uri() . '/assets/css/season-event.css',
+                [], filemtime( $f ) );
+        }
+    }
+
+    public function enqueue_rank_season_css() {
+        if ( ! is_page_template( 'page-ranking-users.php' ) && ! is_page( 'mc' ) ) return;
+        $f = get_stylesheet_directory() . '/assets/css/rank-season.css';
+        if ( file_exists( $f ) ) {
+            wp_enqueue_style( 'smacg-rank-season',
+                get_stylesheet_directory_uri() . '/assets/css/rank-season.css',
+                [], filemtime( $f ) );
         }
     }
 
@@ -122,12 +140,11 @@ class Plugin {
         if ( get_option( 'smacg_event_db_version', '0' ) !== SMACG_EVENT_DB_VERSION ) {
             Activator::install_event_tables();
         }
+        if ( get_option( 'smacg_rank_season_db_version', '0' ) !== SMACG_RANK_SEASON_DB_VERSION ) {
+            Activator::install_rank_season_tables();
+        }
     }
 
-    /**
-     * CPT 註冊在 init priority 10，因此 flush 必須在 ≥ 11；
-     * 我們在 init 99 檢查一次性 flag，flush 完即清除。
-     */
     public function maybe_flush_rewrite() {
         if ( get_option( 'smacg_event_cpt_flushed', '1' ) === '0' ) {
             flush_rewrite_rules( false );
