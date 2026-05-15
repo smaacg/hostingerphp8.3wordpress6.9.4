@@ -1,586 +1,417 @@
-# CONTEXT.md — Anime Sync Pro 插件開發紀錄
+# Anime Sync Pro 2 — 專案總覽 CONTEXT.md
 
-最後更新：2026-05-07
-版本：1.1.0
-
----
-
-## 專案基本資訊
-
-- **插件名稱**：Anime Sync Pro
-- **GitHub**：https://github.com/smaacg/anime-sync-pro-2-
-- **主分支**：main
-- **WordPress 版本**：6.9.4
-- **PHP 最低需求**：8.0
-- **ACF 版本**：6.8.0（免費版，無 conditional_logic）
-- **自訂文章類型**：`anime`
-- **網站**：https://dev.weisianacg.com/
-- **作者標記**：weixiaoacg
-
-> 本文件涵蓋範圍：插件本體（anime-sync-pro/）。
-> 主題（blocksy-child/）不在本文件管轄範圍內。
+> 最後更新：2026-05-15
+> 文件版本：2.0.0（Phase 3 大重構後完整版）
+> 維運：微笑動漫 https://smile-acg.com
+> 線上站：https://dev.weisianacg.com/
+> GitHub：https://github.com/smaacg/hostingerphp8.3wordpress6.9.4
 
 ---
 
-## 1. 檔案結構（plugin 本體）
+## 0. 環境
 
-```
-anime-sync-pro/
-├── anime-sync-pro.php              主入口 v1.1.0
-├── CONTEXT.md
-├── anime_map.json                  ID 對應快取（4MB+）
-├── admin/
-│   ├── class-admin.php             AJAX handlers + 資源載入 + 簡繁轉換 metabox
-│   ├── assets/
-│   │   ├── css/admin.css
-│   │   └── js/admin.js
-│   └── pages/
-│       ├── dashboard.php
-│       ├── import-tool.php
-│       ├── logs.php
-│       ├── published-list.php
-│       ├── review-queue.php
-│       └── settings.php
-├── includes/
-│   ├── class-acf-fields.php        ACF 欄位群組（10 群組）
-│   ├── class-api-handler.php       v1.1.0 — 加 anilist_request() helper
-│   ├── class-cn-converter.php      OpenCC S2TWP + 字典 fallback
-│   ├── class-cron-manager.php      v1.1.0 — 新增 themes_episodes hook
-│   ├── class-custom-post-type.php  v1.1.0 — 後台欄位排序修正
-│   ├── class-editorial-routing.php v3 — channel taxonomy + rewrite
-│   ├── class-error-logger.php      v1.0.3
-│   ├── class-id-mapper.php         多層 Bangumi ID 對應
-│   ├── class-image-handler.php     v1.1.0 — atomic resize + UA
-│   ├── class-import-manager.php    v1.1.0 — taxonomy 中英對照
-│   ├── class-installer.php         v1.3.0 — taxonomy seeder 內建
-│   ├── class-performance.php       批次 / 快取 / 記憶體工具
-│   ├── class-rate-limiter.php      v1.1.0 — Singleton + API 統計
-│   ├── class-rating-manager.php    多維度評分 + REST + 7 項 bug 修正
-│   ├── class-review-queue.php      審核佇列（gzcompress）
-│   ├── class-security.php
-│   ├── class-user-status-cron.php  v1.1.0 — UPSERT 統計
-│   └── class-user-status-manager.php 觀看狀態 CRUD + REST
-└── public/
-    ├── class-frontend.php          前台模板載入 + 搜尋擴展 + REST
-    ├── assets/
-    │   ├── css/anime-single.css
-    │   ├── css/public.css
-    │   ├── img/providers/          台灣串流平台 icon
-    │   └── js/frontend.js
-    └── templates/
-        ├── single-anime.php        v14.0
-        ├── archive-anime.php
-        └── archive-series.php
-```
-
-> **重要**：`includes/class-youranimes-fetcher.php` **不存在於目前 main 分支**（之前的對話誤植），請勿誤用。
-
-> **重要**：`admin/pages/review-preview.php` **不存在**。審核流程直接在 `review-queue.php` 操作 `post_status=draft` 的 anime 文章。
+| 項目 | 版本 |
+|---|---|
+| Hosting | Hostinger |
+| PHP | 8.3 |
+| WordPress | 6.9.4 |
+| 父主題 | Blocksy |
+| 子主題 | weixiaoacg（blocksy-child） |
+| 必要第三方外掛 | Ultimate Member、GamiPress、wpForo（論壇） |
 
 ---
 
-## 2. API 資料來源與 Rate Limit
+## 1. 專案頂層結構
 
-| 來源 | Endpoint | 用途 | 最小間隔 |
-|------|----------|------|----------|
-| AniList GraphQL | `https://graphql.anilist.co` | 主資料、人氣、Series tree | 2000ms |
-| Bangumi TV | `https://api.bgm.tv/v0/subjects/`、`/episodes` | 中文標題/簡介、Staff/Cast、集數、評分 | 1000ms |
-| AnimeThemes | `https://api.animethemes.moe/anime` | OP/ED 主題曲（OGG 音訊、WebM 影片） | 700ms |
-| Jikan (MAL) | `https://api.jikan.moe/v4/anime/` | MAL 評分回填、external links bridge | 1200ms |
-| Wikipedia ZH | `https://zh.wikipedia.org/w/api.php` | 中文 wiki 連結 | – |
-| Wikipedia EN | `https://en.wikipedia.org/api/rest_v1/page/summary/` | 英文摘要 | – |
+hostingerphp8.3wordpress6.9.4/ ├─ CONTEXT.md ← 本檔 ├─ anime-sync-pro/ ← 動畫資料同步外掛（AniList/Bangumi/AnimeThemes/Jikan） ├─ blocksy-child/ ← 子主題（前端、模板、樣式、JS） ├─ smacg-api/ ← REST API + 內容 slug + 外連結處理 ├─ smacg-gamification/ ← EXP / 等級 / 徽章 / 排行榜 / 季節活動 ├─ smacg-members/ ← 會員中心（資料、統計、渲染、AJAX、UM 整合） └─ smacg-social/ ← 追蹤系統 + 通知中心 + 公開個人頁
 
-**統一 User-Agent**：
-- AniList helper：`Mozilla/5.0 (compatible; AnimeSyncPro/1.1; +https://anime-sync-pro)`（image-handler 也用同一 UA）
-- 其他：`Anime_Sync_API_Handler::USER_AGENT = 'weixiaoacg-Project/1.0 (https://weixiaoacg.com)'`
+Copy
+### 1.1 外掛 / 主題載入順序（priority 越小越早）
+
+| 載入順序 | 模組 | `plugins_loaded` priority |
+|---|---|---|
+| 1 | smacg-api | 5 |
+| 2 | smacg-gamification | 5（內含 GamiPress bridge） |
+| 3 | smacg-members | 10 |
+| 4 | smacg-social | 12 |
+| 5 | blocksy-child functions.php | after_setup_theme |
+| 6 | anime-sync-pro | plugins_loaded 預設 |
+
+依賴方向（A → B 表示 A 依賴 B）：
+smacg-social ─┐ smacg-members ─┼─► smacg-gamification ─► smacg-api blocksy-child ─┘ anime-sync-pro 獨立（僅依賴 smacg-api 的 user-status 路由）
+
+Copy
+---
+
+## 2. anime-sync-pro 外掛（動畫資料同步）
+
+### 2.1 基本資料
+- 版本：1.1.0（2026-05-07）
+- 用途：抓取 AniList / Bangumi / AnimeThemes / Jikan 資料、寫入 CPT `anime`、提供前端評分與觀看狀態。
+
+### 2.2 CPT 與分類
+- CPT：`anime`
+- Taxonomies：`anime_genre`、`anime_studio`、`anime_season`、`anime_tag`
+
+### 2.3 API 速率（最小間隔毫秒）
+| 來源 | 間隔 |
+|---|---|
+| AniList | 2000 ms |
+| Bangumi | 1000 ms |
+| AnimeThemes | 700 ms |
+| Jikan | 1200 ms |
+
+### 2.4 使用者互動限制
+- 評分 POST：5 次/分鐘
+- user-status 寫入：30 次/分鐘
+
+### 2.5 主要資料夾
+anime-sync-pro/ ├─ admin/ （後台 dashboard / import-tool / logs） ├─ includes/ （class-api-handler、class-user-status-manager、class-review-queue…） ├─ public/ （前端模板 archive-anime.php / single-anime.php） ├─ anime_map.json └─ anime-sync-pro.php
+
+Copy
+---
+
+## 3. smacg-api 外掛（REST + Slug + 外連結）
+
+### 3.1 基本資料
+- 版本：1.0.0
+- 入口：`smacg-api.php`（autoloader + bootstrap，priority 5）
+- 來源：Phase 3-C 從 blocksy-child v2.7.3 拆出並 OOP 化
+
+### 3.2 結構
+smacg-api/ ├─ smacg-api.php ├─ uninstall.php └─ includes/ ├─ class-plugin.php （主類，singleton，載入 3 個模組） ├─ class-rest-routes.php （REST 路由） ├─ class-content-slug.php （Gemini 翻譯產生 ASCII slug） ├─ class-external-links.php （自動 target=_blank + rel=noopener） └─ leagcy/ ⚠️ 拼字錯誤，待改為 legacy ├─ api-rest.php （備份，未載入） ├─ content-slug.php （備份，未載入） └─ external-links.php （備份，未載入）
+
+Copy
+### 3.3 REST 命名空間
+- `weixiaoacg/v1/ranking`
+- `weixiaoacg/v1/user/favorites`
+- `weixiaoacg/v1/anime-url`
+- `smacg/v1/user-level`（由 smacg-gamification 提供，這裡只是宣告慣例）
+
+### 3.4 常數
+`SMACG_API_VERSION`、`SMACG_API_FILE`、`SMACG_API_DIR`、`SMACG_API_URL`、`SMACG_API_BASENAME`
+依賴外部常數：`WEIXIAOACG_GEMINI_API_KEY`、`WEIXIAOACG_ID_CATS`、`WEIXIAOACG_LLM_CATS`（在 functions.php 或 wp-config.php 定義）
 
 ---
 
-## 3. 自訂 Post Type 與 Taxonomy
+## 4. smacg-gamification 外掛（EXP / 等級 / 徽章 / 排行榜 / 活動）
 
-**Post Type**：`anime`（slug `anime`，hierarchical=false，supports title/editor/thumbnail/custom-fields/comments，has_archive=true）
+### 4.1 基本資料
+- 版本：2.5.0
+- 命名空間：`SMACG\Gamification\*`
+- 入口：`smacg-gamification.php`（priority 5）
+- 健康檢查：偵測 GamiPress 是否安裝、子主題版本是否 ≥ 2.12.0
 
-**Taxonomy**：
+### 4.2 結構（19 個檔案，全 OOP）
+smacg-gamification/ ├─ smacg-gamification.php ├─ uninstall.php └─ includes/ ├─ class-plugin.php ├─ class-activator.php ├─ class-deactivator.php ├─ gamipress/ │ ├─ class-gamipress-bridge.php │ └─ class-gamipress-notif-bridge.php ├─ level/ │ ├─ class-level-system.php │ ├─ class-level-badge.php │ └─ class-career-ajax.php ├─ exp/ │ ├─ class-exp-config.php │ └─ class-exp-events.php ├─ ranking/ │ ├─ class-ranking-system.php │ ├─ class-ranking-cron.php │ ├─ class-ranking-privacy.php │ ├─ class-leaderboard-ajax.php │ └─ class-leaderboard-widget.php ├─ season-event/ │ ├─ class-event-cpt.php │ ├─ class-event-admin.php （僅 is_admin() 時載入） │ ├─ class-event-tracker.php │ └─ class-event-settle.php ├─ rest/ │ └─ class-rest-api.php （/smacg/v1/user-level） └─ compat/ └─ legacy-functions.php （24 個舊程序式函式相容層）
 
-| Slug | 說明 | hierarchical | 備註 |
-|------|------|--------------|------|
-| `genre` | 類型 | true | seed 27 個中文 term，配合 import-manager 19 項中英對照 |
-| `anime_season_tax` | 播出季度 | true | 父=年份、子=`{年份} 春/夏/秋/冬季`；seed 動態範圍 = 當年-3 ~ 當年+1（5 年） |
-| `anime_format_tax` | 動畫格式 | true | seed：TV / TV短篇 / 劇場版 / OVA / ONA / 特別篇 / 音樂MV |
-| `anime_series_tax` | 系列 | false | slug=romaji sanitized、name=中文、term meta `anime_series_root_id` |
-| `anime_studio_tax` | 製作公司 | false | – |
-| `post_tag` | 標籤 | – | 與一般文章共用 |
-| `channel` | 文章頻道 | false | 綁定 `post`，配合 Editorial Routing |
+Copy
+### 4.3 等級系統
+- 等級範圍：Lv 1 ~ Lv 200
+- 五級職業 Tier：rookie / apprentice / expert / master / guru / sage / legend / celestial
+- EXP 公式：
+  - Lv 1-10：`level × 100`
+  - Lv 11-30：`1000 + (level-10) × 250`
+  - Lv 31-70：`6000 + (level-30) × 600`
+  - Lv 71-120：`30000 + (level-70) × 1500`
+  - Lv 121-200：`105000 + (level-120) × 3000`
+- 里程碑：Lv 10 / 30 / 70 / 120 / 200 觸發 `smacg_level_milestone_{N}` action
 
-**channel 允許值**（共 12）：anime / manga / novel / game / vtuber / cosplay / ai-tools / voice-actor / music / merchandise / event / industry
+### 4.4 EXP 規則（`Exp_Config::$rules`）
+| Action key | EXP | Cap |
+|---|---|---|
+| register | 100 | once |
+| daily_login | 10 | daily |
+| streak_7 | 100 | once |
+| streak_30 | 500 | once |
+| comment_post | 5 | daily |
+| follow_action | 2 | daily（追蹤者拿） |
+| followed_by | 5 | daily（被追蹤者拿） |
+| watchlist_add | 1 | daily |
+| watchlist_complete | 8 | none |
+| rating_add | 3 | daily |
+| badge_unlock | 20 | none |
 
-**內容型 category**（共 4）：announcement / news / review / feature
-**channelless types**：announcement（即 `/announcement/post-slug/`，其餘走 `/{type}/{channel}/{post-slug}/`）
+過濾器：`apply_filters( 'smacg_exp_rules', $rules )` 可擴充。
 
----
+### 4.5 排行榜
+- 類型：`exp_total` / `exp_monthly` / `followers` / `badges`
+- 上限：Top 100，每頁 20 筆
+- 使用者隱私 meta：`smacg_appear_in_ranking`（user_meta，預設出現）
+- Cron 自訂排程：`smacg_10min`（每 600 秒一次）
 
-## 4. Meta 欄位
+### 4.6 季節活動
+- CPT：`smacg_season_event`（常數 `SMACG_EVENT_CPT`）
+- 模板：`single-smacg_season_event.php`
+- 流程：`Event_Tracker` 累積進度 → `Event_Settle` 結算發 EXP/徽章
 
-### 識別 ID
-| Key | 說明 |
-|-----|------|
-| `anime_anilist_id` | AniList ID（required=0，避免 wp_insert_post race） |
-| `anime_mal_id` | MyAnimeList ID（由 AniList idMal 自動填入） |
-| `anime_bangumi_id` | Bangumi ID（多層查找；舊欄位 `bangumi_id` 也會被讀取） |
-| `anime_animethemes_id` | AnimeThemes anime.id（純數字） |
-| `anime_animethemes_slug` | AnimeThemes slug（fallback；舊欄位 `animethemes_slug` 也會被讀取） |
+### 4.7 GamiPress 整合
+- `Gamipress_Bridge`：EXP slug = `exp`、Badge slug = `badge`
+- `Gamipress_Notif_Bridge`：徽章解鎖時呼叫 smacg-social 的 `smacg_create_notification()`
 
-### 標題
-| Key | 來源 |
-|-----|------|
-| `anime_title_chinese` | Bangumi name_cn → AniList english → romaji（僅在現有為空時 fallback） |
-| `anime_title_native` | AniList native（日文） |
-| `anime_title_romaji` | AniList romaji（同時作為 post_name slug 來源） |
-| `anime_title_english` | AniList english |
-
-### 屬性
-`anime_format` / `anime_status` / `anime_season` / `anime_season_year` / `anime_episodes` / `anime_episodes_aired` / `anime_duration` / `anime_start_date` / `anime_end_date` / `anime_studios`（複數，逗號分隔，**注意 key 是複數型 studios**） / `anime_source` / `anime_popularity`
-
-### 評分（**0–100 整數儲存，前台 ÷10 顯示**）
-- `anime_score_anilist`（AniList averageScore，原始 0–100）
-- `anime_score_mal`（Jikan score × 10）
-- `anime_score_bangumi`（Bangumi rating.score × 10）
-
-### JSON 欄位
-| Key | 結構 | 來源 |
-|-----|------|------|
-| `anime_staff_json` | `[{id,name,role,image,source:'bangumi'}]` | Bangumi（**直接取代** AniList，不合併） |
-| `anime_cast_json` | `[{id,name,role,image,voice_actors:[{id,name,image}],source}]` | Bangumi（直接取代） |
-| `anime_relations_json` | `[{id,type,relation_type,title}]` | AniList |
-| `anime_episodes_json` | `[{id,ep,name,name_cn,airdate,comment}]` | Bangumi |
-| `anime_themes` | `[{type,sequence,slug,song_title,audio_url,video_url,resolution}]` | AnimeThemes（含 videos.audio） |
-| `anime_streaming` | `[{site,url}]` | AniList externalLinks |
-| `anime_external_links` | AniList 原始格式 | AniList |
-| `anime_next_airing` | `{airingAt,episode}` | AniList |
-| `anime_faq_json` | `[{q,a}]` | 手動填寫 |
-
-### 台灣在地化
-- `anime_tw_streaming`（checkbox 陣列）
-- `anime_tw_streaming_other`（其他平台，逗號分隔文字）
-- `anime_tw_streaming_url_{key}`（21 個個別 URL 欄位，見下方 key 列表）
-- `anime_tw_distributor` / `anime_tw_distributor_custom` / `anime_tw_broadcast`
-
-**台灣串流平台 key 列表（21 個，由 single-anime.php v14.0 確認）**：
-bahamut、hami、myvideo、linetv、friday、ofiii、catchplay、bilibili、ani_one、muse、mighty、ani_mi、netflix、disney、litv、tropicsanime、iqiyi、renta、anipass、amazon、crunchyroll
-
-> ⚠️ checkbox key 與 URL meta key 對應規則：底線分隔（`ani_one`），但有 legacy alias `ani-one` → `ani_one`、`myVideo` → `myvideo`、`line_tv` → `linetv` 由 single-anime.php 自動修正。
-
-### 控制 Meta
-| Key | 說明 |
-|-----|------|
-| `_needs_enrich` | 1 = 待補抓 |
-| `_enriched_at` | 最後 enrich 完成時間 |
-| `_enrich_retry` | enrich 重試次數（最多 3） |
-| `_enrich_failed` | enrich 最終失敗時間 |
-| `_import_source` | manual / anilist / cron |
-| `_bangumi_id_manually_set` | 1 = 不被覆蓋 |
-| `_bangumi_id_pending` | 待自動補抓 Bangumi ID |
-| `_series_root_anilist_id` | 系列根 AniList ID |
-| `anime_locked_fields` | 鎖定欄位陣列（不被自動更新） |
-| `anime_themes_locked_keys` | 主題曲鎖定 key（type+sequence） |
-| `anime_episodes_locked_ids` | 集數鎖定 ID |
-
-### 同步時間（**注意：兩處 key 不一致，仍是 known issue**）
-| Key | 寫入處 | 讀取處 |
-|-----|--------|--------|
-| `anime_last_sync` | `import-manager.php` 寫 | – |
-| `anime_sync_time` | （目前主流程**沒有寫入**） | `class-custom-post-type.php` 1.1.0 後台列表讀此 key |
-| `anime_last_updated` | `import-manager.php` | – |
-| `anime_themes_synced_at` | `cron-manager` themes_episodes 任務 | – |
-| `anime_episodes_synced_at` | `cron-manager` themes_episodes 任務 | – |
+### 4.8 相容層
+`compat/legacy-functions.php` 提供 24 個程序式函式（如 `smacg_get_user_level_info`、`smacg_award_exp`），讓主題與其他外掛 0 改動。
 
 ---
 
-## 5. 資料表（由 Anime_Sync_Installer 建立）
+## 5. smacg-members 外掛（會員中心）
 
-| 表名 | 用途 |
-|------|------|
-| `{prefix}anime_review_queue` | API 資料暫存（gzcompress 壓縮 BLOB） |
-| `{prefix}anime_sync_logs` | 錯誤/事件日誌（level: info/warning/error/critical） |
-| `{prefix}anime_ratings` | 多維度評分（story/music/animation/voice/overall + weight） |
-| `{prefix}anime_user_status` | 觀看狀態（status 0–3、progress、started_at、completed_at、favorited、private、note） |
-| `{prefix}anime_user_status_stats` | 每部動畫狀態統計（want/watching/completed/dropped/favorited/total，UPSERT 維護） |
+### 5.1 基本資料
+- 版本：1.0.0
+- 命名空間：`SMACG\Members\*`
+- 載入策略：**薄包裝（Thin Wrapper）** — `class-plugin.php` 依序 `require` 5 個 legacy 檔案，保留所有舊函式名稱與簽名。
+- 入口：`smacg-members.php`（priority 10）
 
-`SEASON_YEARS_RANGE = 5`：每次升級自動補當年新季度 term，不再寫死年份。
+### 5.2 結構
+smacg-members/ ├─ smacg-members.php ├─ uninstall.php └─ includes/ ├─ class-plugin.php ├─ class-activator.php ├─ class-deactivator.php └─ legacy/ ├─ member-functions.php （核心 helper 與等級/點數） ├─ member-stats.php ├─ member-render.php ├─ member-ajax.php └─ um-integration.php
 
----
+Copy
+### 5.3 對外公開函式（reverse dependency）
+- `weixiaoacg_get_user_level_int($uid)`
+- `weixiaoacg_get_user_points($uid)`
+- `weixiaoacg_get_news_thumb($post_id)`
+- `weixiaoacg_acf($key, $post_id)` — `get_field` 安全包裝
+- `smacg_is_member_page()`
+- `smacg_get_member_center_url()`（內含 wp_cache）
+- `smacg_flush_member_center_url_cache()`
+- `smacg_get_levels()`
+- `smacg_get_user_level_legacy($uid)`（舊 anime_total_points 演算法，保留避免 fatal）
+- `smacg_add_points($uid, $points, $reason)`（legacy；新功能應改用 smacg-gamification 的 EXP）
+- `smacg_check_cooldown($uid, $action, $seconds)`
+- `smacg_sort_watchlist($list, $sort_by)`
 
-## 6. REST API
+### 5.4 軟依賴
+- smacg-gamification：`smacg_get_user_level_info` / `smacg_award_exp`
+- smacg-social：`smacg_get_public_profile_url`
+- Ultimate Member：`um-integration.php` 會檢查 `function_exists()` 才掛 hook
+- GamiPress：透過 smacg-gamification 間接依賴
 
-### 6.1 評分系統 — namespace `weixiaoacg/v1`
-
-| Method | Path | 說明 |
-|--------|------|------|
-| GET | `/ratings/{anime_id}` | 取得統計 + 當前使用者分數 |
-| POST | `/ratings/{anime_id}` | 提交/更新評分（**rate limit 5/min**） |
-| GET | `/ranking/site?limit=N` (1–50) | 全站加權排行（撈 N×3 後 PHP 重排） |
-
-**參數**：score_story、score_music、score_animation、score_voice 各 1.0–10.0（0.1 步進）。
-**Bayesian 加權**：低於 `min_votes=5` 時向全站均值靠近；全站平均 transient 快取 10 分鐘。
-**使用者權重**：註冊 ≥30 天且評分 ≥10 部 → 1.5、註冊 <7 天 → 0.5、其他 → 1.0。
-
-### 6.2 觀看狀態 — namespace `weixiaoacg/v1`
-
-| Method | Path | 說明 |
-|--------|------|------|
-| GET | `/user-status/list` | 個人清單（需登入） |
-| GET | `/user-status/{anime_id}` | 單部狀態（未登入回空） |
-| POST | `/user-status/{anime_id}` | 更新（action: status/progress/progress_set/favorite/fullclear/note/private） |
-| DELETE | `/user-status/{anime_id}` | 移除 |
-
-**寫入 rate limit**：30 次/分鐘。
-**狀態值**：want=0, watching=1, completed=2, dropped=3。
-**業務規則**：未播出（`anime_status=NOT_YET_RELEASED`）只能設 want / dropped；設為 completed 時自動補滿 progress = `anime_episodes`；progress 上限 = `anime_episodes`（沒有則 9999）。
-**全部使用 atomic UPSERT**（`INSERT ... ON DUPLICATE KEY UPDATE`）。
-
-### 6.3 前台資料 — namespace `anime-sync/v1`
-
-由 `Anime_Sync_Frontend::register_rest_routes()` 註冊（給既有前端使用，向後相容）。
-JS 端透過 `animeSyncData.restUrl` / `.animeRestUrl` / `.ratingRestUrl` 三個 URL 取用。
+### 5.5 健康檢查
+缺少 smacg-gamification 時顯示 admin notice（warning，非阻擋），自動降級運作。
 
 ---
 
-## 7. Cron 排程（Anime_Sync_Cron_Manager）
+## 6. smacg-social 外掛（追蹤 + 通知 + 公開頁）
 
-| Hook 常數 | 頻率 | Lock TTL | 啟動時間 | 內容 |
-|-----------|------|----------|----------|------|
-| `HOOK_DAILY_SCORE_UPDATE`（`anime_sync_daily_score_update`） | daily | 1800s | 設定中 `anime_sync_daily_hour`（預設 03:00 UTC） | RELEASING + 90 天內 FINISHED 的評分回填 |
-| `HOOK_THEMES_EPISODES_UPDATE`（`anime_sync_themes_episodes_update`） | daily | 1800s | hour+2:30（預設 05:30 UTC） | 當季 RELEASING themes/episodes（**尊重 locked**） |
-| `HOOK_WEEKLY_CLEANUP`（`anime_sync_weekly_cleanup`） | weekly（自訂） | – | 每週日 04:00 | 清舊 log |
-| `HOOK_UPDATE_MAP`（`anime_sync_update_anime_map`） | weekly | – | 每週一 02:00 | 更新 anime_map.json |
-| `HOOK_SEASON_IMPORT`（`anime_sync_season_auto_import`） | single event（手動觸發） | 3600s | – | 季度批次匯入 |
+### 6.1 基本資料
+- 版本：1.0.0
+- 命名空間：`SMACG\Social\*`
+- 載入策略：**薄包裝（Thin Wrapper）** — `class-plugin.php` 依序 `require` 9 個 legacy 檔案。
+- 入口：`smacg-social.php`（priority 12）
 
-**自訂排程間隔**：`anime_sync_twice_daily`（12h）、`anime_sync_weekly`（7d）
+### 6.2 結構
+smacg-social/ ├─ smacg-social.php ├─ uninstall.php └─ includes/ ├─ class-plugin.php ├─ class-activator.php ├─ class-deactivator.php └─ legacy/ ├─ follow-system.php （追蹤核心 + 資料表） ├─ follow-ajax.php ├─ notifications-system.php （通知核心 + 偏好 + 資料表） ├─ notifications-events.php （事件監聽 → 寫入通知） ├─ notifications-ajax.php （鈴鐺 polling） ├─ notifications-render.php （前端 HTML 渲染） ├─ notifications-email.php （Email 即時 / 摘要） ├─ public-profile.php （公開個人頁邏輯） └─ public-profile-render.php （公開個人頁 HTML）
 
-### 觀看狀態統計（Anime_Sync_User_Status_Cron）
+Copy
+### 6.3 資料表
+- `{prefix}smacg_follows`
+  - 欄位：`id, follower_id, following_id, created_at`
+  - 索引：UNIQUE(follower_id, following_id) + idx_following + idx_follower_created
+  - db_version option：`smacg_follows_db_version` = 1.0.0
+- `{prefix}smacg_notifications`
+  - 欄位：`id, user_id, type, actor_id, object_type, object_id, data(JSON), is_read, created_at`
+  - 索引：idx_user_read、idx_created、idx_user_type
+  - db_version option：`smacg_notif_db_version` = 1.0.0
 
-| Hook | 頻率 | 內容 |
-|------|------|------|
-| `anime_sync_recalc_user_status_stats` | every 15 min（`asp_every_15_minutes`） | UPSERT user_status_stats、清孤兒 anime_id |
+### 6.4 追蹤限制（從主題 functions.php 取常數）
+- `SMACG_FOLLOW_DAILY_LIMIT = 200`（每日追蹤上限）
+- `SMACG_FOLLOW_COOLDOWN = 1`（秒，同一對使用者連點冷卻）
 
----
+### 6.5 對外公開函式
+- `smacg_follow_user($a, $b)` / `smacg_unfollow_user($a, $b)`
+- `smacg_is_following($a, $b)`
+- `smacg_get_following_count($uid)` / `smacg_get_followers_count($uid)`
+- `smacg_get_following_ids($uid, $limit, $offset)` / `smacg_get_followers_ids(...)`
+- `smacg_get_follow_today_count($uid)`
+- `smacg_create_notification($args)`
+- `smacg_get_notifications($uid, $args)`
+- `smacg_get_unread_count($uid)`
+- `smacg_mark_notification_read($id)` / `smacg_mark_all_read($uid)`
+- `smacg_delete_notification($id)` / `smacg_purge_old_notifications()`
+- `smacg_get_notification_prefs($uid)` / `smacg_update_notification_prefs($uid, $partial)`
+- `smacg_should_notify($uid, $type, $channel)`
+- `smacg_get_public_profile_url($uid)`
 
-## 8. Singleton / 共享實例
+### 6.6 通知類型
+| type | 說明 |
+|---|---|
+| follow | 被追蹤 |
+| comment_reply | 留言被回覆 |
+| rating | 動畫被評分 |
+| badge | 解鎖徽章 |
+| level_up | 等級提升 |
+| system | 系統公告（可 `force=true` 略過偏好） |
 
-| 類別 | 取得方式 | 注意 |
-|------|----------|------|
-| `Anime_Sync_Rate_Limiter` | `Anime_Sync_Rate_Limiter::get_instance()` | constructor private、**禁止 `new`**、clone/unserialize 已封鎖 |
-| `Anime_Sync_Error_Logger` | static helper：`info()` / `warning()` / `error()` / `critical()` / `static_log()` | 內部會 `new self()` 寫入 `anime_sync_logs` 表 |
+### 6.7 偏好機制
+- user_meta key：`smacg_notification_prefs`（陣列）
+- 每個 type 有 `*_site` 與 `*_email` 兩個開關
+- Email 摘要頻率：`email_digest` = off / daily / weekly
+- 新註冊時自動寫入預設值
 
-### Rate Limiter 用法
+### 6.8 Action hooks
+- `do_action( 'smacg_user_followed', $follower_id, $following_id )`
+- `do_action( 'smacg_user_unfollowed', $follower_id, $following_id )`
+- `do_action( 'smacg_notification_created', $notif_id, $user_id, $type, $args )`
 
-```php
-$rl = Anime_Sync_Rate_Limiter::get_instance();
-$rl->wait_if_needed( 'anilist' );
+### 6.9 Cron
+- `smacg_notifications_daily_purge`：每日 03:00 清理 30 天前的通知（常數 `SMACG_NOTIF_RETENTION_DAYS = 30`）
 
-$resp = wp_remote_post( 'https://graphql.anilist.co', [...] );
-
-if ( wp_remote_retrieve_response_code( $resp ) === 429 ) {
-    $wait = $rl->handle_rate_limit_error( $resp, 'anilist' ); // 回傳 5–300 秒
-    sleep( $wait );
-    $rl->record_stat( 'anilist', 'rate_limited' );
-    // 重試…
-} else {
-    $rl->record_stat( 'anilist', 'success' );
-}
-$rl->check_remaining( $resp, 'anilist' );  // <10% 配額時警告 + sleep 5s
-```
-
-> 1.1.0 起：`handle_rate_limit_error()` **不再內部 sleep**，由呼叫端決定時機（用於 `Anime_Sync_API_Handler::anilist_request()` 重試迴圈）。
-
----
-
-## 9. AJAX Actions 對照表（Anime_Sync_Admin）
-
-| Action 字串 | PHP Handler | 說明 |
-|-------------|-------------|------|
-| `anime_sync_import_single` | `handle_ajax_import_single` | 單筆匯入（內含 auto enrich） |
-| `anime_sync_enrich_single` | `handle_ajax_enrich_single` | 手動補抓 |
-| `anime_sync_query_season` | `handle_ajax_query_season` | 季度查詢 |
-| `anime_sync_bulk_action` | `handle_ajax_bulk_action` | 批次操作 |
-| `anime_sync_save_bangumi_id` | `handle_ajax_save_bangumi_id` | 儲存 Bangumi ID |
-| `anime_sync_update_map` | `handle_ajax_update_map` | 更新 anime_map.json |
-| `anime_sync_clear_cache` | `handle_ajax_clear_cache` | 清快取 |
-| `anime_sync_clear_logs` | `handle_ajax_clear_logs` | 清日誌 |
-| `anime_clear_old_logs` | `handle_ajax_clear_logs` | 同上（向後相容 alias） |
-| `anime_sync_analyze_series` | `handle_ajax_analyze_series` | 系列分析 |
-| `anime_sync_import_series` | `handle_ajax_import_series` | 系列批次匯入 |
-| `anime_sync_popularity_ranking` | `handle_ajax_popularity_ranking` | 人氣排行 |
-| **`anime_resync_bangumi`** | `handle_ajax_resync_bangumi` | **注意：無 `_sync_` 中綴** |
-| `anime_sync_scan_series_gaps` | `handle_ajax_scan_series_gaps` | 系列缺漏掃描 |
-| `anime_sync_convert_post` | `ajax_convert_post_to_tw` | 簡繁轉換 metabox |
-
-### 觀看狀態手動重算（Anime_Sync_User_Status_Cron）
-
-| Action | Handler | Nonce |
-|--------|---------|-------|
-| `asp_recalc_user_status_stats` | `ajax_manual_recalc` | `asp_recalc_stats` |
-
-### YourAnimes 同步（**目前 main 無此檔案**）
-
-之前提到的 `asp_sync_youranimes` 在 main 分支不存在。如未來實作，nonce 規則為 `asp_sync_youranimes_{post_id}`。
+### 6.10 健康檢查
+偵測主題是否定義 `SMACG_FOLLOW_DAILY_LIMIT` 與 `SMACG_FOLLOW_COOLDOWN`，未定義時 admin notice error。
 
 ---
 
-## 10. Nonce 規範
+## 7. blocksy-child 子主題
 
-| 用途 | 建立 | 驗證 |
-|------|------|------|
-| 後台主流程 AJAX | `wp_create_nonce('anime_sync_admin_nonce')` | `check_ajax_referer('anime_sync_admin_nonce', 'nonce')` |
-| 簡繁轉換 metabox | `wp_create_nonce('anime_sync_nonce')` | `check_ajax_referer('anime_sync_nonce', 'nonce')` |
-| 觀看狀態重算 | `asp_recalc_stats` | – |
-| 前台 REST | `wp_create_nonce('wp_rest')`（`animeSyncData.nonce`） | – |
+### 7.1 基本資料
+- 版本：2.14.0（2026-05-15，Phase 3-B 完成）
+- 入口：`functions.php`（4.0 KB，已精簡為純常數宣告與外掛存在檢查）
 
-**JS 端取值**：`animeSyncAdmin.nonce`、`animeSyncAdmin.actions.{key}`、`animeSyncAdmin.i18n.{key}`（admin.js 使用 helper `t(key, fallback)`）。
+### 7.2 根目錄檔案（27 個）
+blocksy-child/ ├─ functions.php 4.0 KB （主題啟動） ├─ style.css 0.5 KB ├─ header.php 22.0 KB ├─ footer.php 8.9 KB ├─ 404.php 5.8 KB ├─ category.php 12.6 KB ├─ search.php 6.2 KB ├─ single.php 16.6 KB ├─ single-smacg_season_event.php 15.8 KB ├─ front-page.php 33.4 KB ├─ page-about.php 13.7 KB ├─ page-columns.php 4.9 KB ├─ page-contact.php 24.0 KB ├─ page-disclaimer.php 11.1 KB ├─ page-go.php 6.9 KB ├─ page-join.php 19.1 KB ├─ page-member.php 13.9 KB ├─ page-privacy.php 12.0 KB ├─ page-public-profile.php 7.9 KB ├─ page-ranking-users.php 9.9 KB ├─ page-ranking.php 12.4 KB ├─ page-season.php 13.9 KB ├─ page-sponsor.php 33.1 KB ├─ page-terms.php 8.3 KB ├─ page-year-review.php 11.1 KB ├─ assets/ （css + js） └─ inc/ （4 支模組）
 
-> ⚠️ `anime-sync-pro.php` **不可**重複註冊 `wp_ajax_anime_resync_bangumi` 或 `admin_enqueue_scripts`，統一由 `Anime_Sync_Admin` 建構子處理。
+Copy
+### 7.3 inc/ 模組（精簡至 4 個）
+| 檔案 | 大小 | 用途 |
+|---|---|---|
+| `setup-theme.php` | 4.9 KB | 主題基礎（menu、image size、textdomain） |
+| `setup-enqueue.php` | 28.1 KB | 所有 CSS/JS 註冊與條件 enqueue（v2.6.1） |
+| `class-nav-walker.php` | 2.3 KB | 自訂選單 walker |
+| `image-optimizer.php` | 13.1 KB | WebP 自動轉換 + `<picture>` 包裝 + 後台批次工具 |
 
----
+### 7.4 assets/css（27 檔，總計 ~410 KB）
+404、account、admin-sync（0 B*）、anime-status（39 B*）、anime（38 B*）、columns、follow、gamification、glass、home（0 B*）、leaderboard-widget、leaderboard、level-badge、member、news、notifications、public-profile、ranking、search、season-event、single、static、style、track-bar、wpforo-override、year-review
 
-## 11. animeSyncAdmin localize 物件
+\* 標星為近空檔，可清理。
 
-```php
-wp_localize_script( 'anime-sync-admin', 'animeSyncAdmin', [
-    'ajaxUrl' => admin_url( 'admin-ajax.php' ),
-    'nonce'   => wp_create_nonce( 'anime_sync_admin_nonce' ),
-    'actions' => [ /* PHP 端真實 action 名稱對照表 */ ],
-    'i18n'    => [ /* 所有訊息字串 */ ],
-] );
-```
+### 7.5 assets/js（16 檔，總計 ~297 KB）
+anime-rating、anime-status、anime（104.9 KB）、api、career、follow、leaderboard、main、member、nav、notifications、page-template、public-profile、ranking、utils、year-review
 
-JS 一律走 `A.import_single` / `A.query_season` 而非硬編碼字串；i18n 一律 `t('key','fallback')`。
+### 7.6 functions.php 常數
+- 主題：`weixiaoacg_VERSION`、`weixiaoacg_THEME_URL`、`weixiaoacg_THEME_DIR`
+- 點數（舊系統相容）：
+  - `SMACG_POINT_FAVORITE = 5`
+  - `SMACG_POINT_WANT = 1`
+- 追蹤限制：
+  - `SMACG_FOLLOW_DAILY_LIMIT = 200`
+  - `SMACG_FOLLOW_COOLDOWN = 1`
+- API 分類：
+  - `WEIXIAOACG_ID_CATS = ['announcement','news']`
+  - `WEIXIAOACG_LLM_CATS = ['review','feature']`
+- Fallback：`SMACG_BADGE_SLUG`、`SMACG_EVENT_CPT`（若外掛未定義）
 
----
-
-## 12. animeSyncData localize 物件（前台）
-
-```php
-wp_localize_script( 'anime-sync-frontend', 'animeSyncData', [
-    'restUrl'       => esc_url_raw( rest_url( 'anime-sync/v1/' ) ),
-    'animeRestUrl'  => esc_url_raw( rest_url( 'anime-sync/v1/' ) ),
-    'ratingRestUrl' => esc_url_raw( rest_url( 'weixiaoacg/v1/' ) ),
-    'nonce'         => wp_create_nonce( 'wp_rest' ),
-    'debug'         => defined( 'WP_DEBUG' ) && WP_DEBUG,
-] );
-```
-
-`enqueue_assets()` 觸發條件：`is_singular('anime')` || `is_post_type_archive('anime')` || `is_tax(['genre','anime_season_tax','anime_format_tax','anime_series_tax','anime_studio_tax'])` || (`is_search()` && `post_type=anime`)。
-
-CSS / JS 版本號使用 `filemtime()` 取代 `time()`，避免每次都 cache miss。
-
----
-
-## 13. anime-sync-pro.php 載入順序
-
-1. **constants**（VERSION 1.1.0、DIR、URL、BASENAME）
-2. **autoloader**：`Anime_Sync_*` → `class-*.php`（搜尋 includes/、admin/、public/）
-3. **`init` priority 10**：register_post_type + 5 個 taxonomy
-4. **`init` priority 99**：`flush_rewrite_rules`（如有 `anime_sync_flush_rewrite` option）+ `Anime_Sync_Installer::run_pending_seed()`
-5. **3.5 段**：圖片尺寸最佳化（停用 medium_large / 1536 / 2048，由常數 `ANIME_SYNC_DISABLE_LARGE_SIZES` 控制，預設 true）
-6. **`activation_hook`**：installer.activate() + cron_manager.activate() + 設 `anime_sync_flush_rewrite=1`
-7. **`deactivation_hook`**：cron_manager.deactivate() + user_status_cron.unschedule() + installer.deactivate() + flush_rewrite_rules
-8. **`plugins_loaded`**：
-   - **6A** 不依賴 ACF：`Editorial_Routing` / `Rating_Manager` / `User_Status_Manager` / `User_Status_Cron`（**前端評分與追蹤系統在 ACF 缺失時仍可用**）
-   - **6C** `Installer::maybe_upgrade()`
-   - **6B** ACF 檢查；缺 ACF 時跳出 admin notice 並 return
-   - 建立 `ACF_Fields` / `Frontend`
-   - `is_admin() || DOING_CRON` 時建立：`Rate_Limiter::get_instance()` → `ID_Mapper` → `CN_Converter` → `API_Handler` → `Import_Manager` → `Admin`（**無條件 if `is_admin() && class_exists('Anime_Sync_Admin')`**）→ `Cron_Manager` → `Custom_Post_Type`
-   - 註冊 `anime_sync_enrich_post` action（含 3 次指數退避：HOUR × 4^(retry-1)）
-9. **`save_post_anime` priority 20**：`post_title` → `anime_title_chinese`（**僅在 meta 為空時 fallback**，避免覆蓋人工編輯）
+### 7.7 enqueue 條件總覽
+- jQuery 3.6.4（CDN 取代）+ Font Awesome 6.5
+- Cropper.js（僅 member page 頭像上傳時）
+- 各 page template 對應自己的 CSS/JS bundle
+- 登入使用者：notifications.js + level-badge.css
+- 全部以 `filemtime()` 自動 cache busting
+- LiteSpeed exclusions：Font Awesome、Cropper
 
 ---
 
-## 14. Bangumi ID 多層查找（Anime_Sync_ID_Mapper）
+## 8. 資料庫表清單
 
-| Layer | 來源 | 條件 |
-|-------|------|------|
-| 0 | WP post meta `anime_bangumi_id` / `bangumi_id` | post_id > 0 |
-| -1 | `STATIC_BGM_MAP` 靜態表 | anilist_id |
-| 0.5 | `al_index.json`（AniList ID → Bangumi ID） | anilist_id |
-| 1 | `mal_index.json`（anime-offline-database） | mal_id + 年份/集數驗證 |
-| 1.5 | BangumiExtLinker mal_id | mal_id + 年份差 ≤ 1 |
-| 1.6 | BangumiExtLinker 日文名 | title_native + season_year |
-| 1.7 | Jikan external links（`/anime/{id}/external`） | mal_id |
-| 1.8 | AniDB 橋接 | externalLinks 含 anidb.net |
-| 2 | AniList externalLinks → bgm.tv / bangumi.tv | URL 正則 |
-| 3 | Bangumi 搜尋 + 模糊比對 | 相似度 ≥ 45%（fallback） |
+| 資料表 | 建立來源 | db_version option |
+|---|---|---|
+| `wp_smacg_follows` | smacg-social | `smacg_follows_db_version` |
+| `wp_smacg_notifications` | smacg-social | `smacg_notif_db_version` |
+| `wp_smacg_ranking_*`（多張） | smacg-gamification | `EVENT_DB_VERSION` / `RANKING_DB_VERSION` |
+| anime-sync-pro 自有表 | anime-sync-pro | （見 anime-sync-pro 內文件） |
 
-匹配成功會**自動寫入 post meta** 並清除 `_bangumi_id_pending`（ACA 修正）。
-
-對應檔案：
-- `wp-content/uploads/anime-sync-pro/anime_map.json`（manami-project）
-- `mal_index.json` / `al_index.json` / `name_cache.json`
-- `bgm_ext_mal_index.json` / `bgm_ext_name_index.json` / `bgm_ext_anidb_index.json`
-- 對應 meta 檔：`anime_map_meta.json` / `bgm_ext_meta.json`
+GamiPress 自有表不在此列。
 
 ---
 
-## 15. Resync Bangumi 流程（已驗證可用）
+## 9. Cron 排程
 
-```
-ACF 欄位填 Bangumi ID
-  ↓
-admin.js 啟用「🔄 重新同步 Bangumi 資料」按鈕
-  ↓
-$.ajax POST → action: 'anime_resync_bangumi'（注意：非 anime_sync_resync_bangumi）
-  ↓
-Anime_Sync_Admin::handle_ajax_resync_bangumi()
-  → check_ajax_referer('anime_sync_admin_nonce','nonce')
-  → new Anime_Sync_API_Handler()->ajax_resync_bangumi($post_id, $bangumi_id)
-  ↓
-寫入 meta：anime_title_chinese / anime_synopsis_chinese / anime_cover_image
-       / anime_score_bangumi / anime_staff_json / anime_cast_json
-       / anime_episodes_json / anime_last_sync_time
-  → 尊重 anime_locked_fields
-  ↓
-{"success":true,"data":{"message":"✅ 同步完成","updated":[...]}}
-  ↓
-JS 1.5 秒後 location.reload()
-```
+| Hook | 頻率 | 來源 | 用途 |
+|---|---|---|---|
+| `smacg_notifications_daily_purge` | 每日 03:00 | smacg-social | 刪 30 天前通知 |
+| `smacg_exp_daily_reset` | 每日 | smacg-gamification | 清 `smacg_exp_daily_*` user_meta |
+| Ranking cron | `smacg_10min`（600s） | smacg-gamification | 重算排行榜快取 |
+| anime-sync-pro 自有 cron | — | anime-sync-pro | API 同步排程 |
 
 ---
 
-## 16. import_and_enrich 流程
+## 10. 已完成的 Phase 3 重構摘要
 
-由 `Anime_Sync_Admin::import_and_enrich()` 統一執行（所有匯入入口都走這裡）：
+| Phase | 目標 | 狀態 |
+|---|---|---|
+| 3-A | 拆分會員中心 → smacg-members | ✅ |
+| 3-B | 拆分追蹤/通知/公開頁 → smacg-social | ✅（2026-05-15） |
+| 3-C | 拆分 REST/Slug/外連結 → smacg-api（並 OOP 化） | ✅ |
+| 3-D | 強化 gamification（已完成 v2.5.0） | ✅ |
 
-1. `import_manager->import_single($anilist_id, null, $source, ['force' => …])`
-   - 取得 import lock（防同時匯入同一 ID）
-   - 寫入 / 更新文章（**標題：更新時優先保留現有 post_title**）
-   - 儲存 meta、taxonomy（genre 中英對照、season 動態補父年份、format 中文化、studio）
-   - **首次匯入** → `apply_first_import_locks()` 預設鎖定欄位
-   - 設定 featured image
-   - **依 post_id 尾數錯開 enrich 排程**：`delay = 60 + (post_id % 40) * 90` 秒（最多 60 分鐘分散）
-   - 釋放 lock
-2. `wp_cache_flush()`
-3. 寫入 `anime_mal_id`（如有）
-4. `delete_post_meta($post_id, '_enriched_at')`
-5. `new Anime_Sync_API_Handler()->enrich_anime_data($post_id)`
-6. `delete_transient('anime_sync_series_gaps')`
-
-### enrich 重試機制（anime-sync-pro.php 第 6 段）
-
-```
-失敗 → _enrich_retry++ → wp_schedule_single_event(time + HOUR × 4^(retry-1))
-retry ≥ 3 → update _enrich_failed = now，停止重試
-```
+主題從 v2.7.3（單體巨檔）→ v2.14.0（精簡 functions.php + 4 個純主題模組）。
 
 ---
 
-## 17. AniList Request Helper（v1.1.0 新）
+## 11. 已知待處理項目（Pending TODO）
 
-`Anime_Sync_API_Handler::anilist_request()`（private）：
-
-- 統一處理 `wp_remote_post`
-- timeout：主 query / popularity = 15s；relations / node_data = 12s
-- 429 → 讀 `Retry-After` / `X-RateLimit-Reset` → `handle_rate_limit_error()` → sleep → 重試
-- 重試上限 3 次
-- 每次呼叫寫入 `anime_sync_api_stats` option（`success` / `failed` / `rate_limited` / `retry`）
-
-`fetch_anilist_data` / `fetch_anilist_relations` / `fetch_anilist_node_data` / `fetch_anilist_popularity` 4 處統一改用此 helper。
-
-### API 統計 option 格式
-
-```json
-{
-  "anilist":     { "success": 1240, "failed": 3, "rate_limited": 12, "retry": 9 },
-  "jikan":       { "success": 850,  "failed": 1, "rate_limited": 4,  "retry": 4 },
-  "bangumi":     { "success": 770,  "failed": 0, "rate_limited": 0,  "retry": 0 },
-  "animethemes": { "success": 620,  "failed": 2, "rate_limited": 1,  "retry": 1 }
-}
-```
-
-> 規模 > 1500 部時建議改為「記憶體累加 + shutdown 一次性寫入」（已在 record_stat 註解標明升級時機）。
+| 優先 | 項目 | 動作 |
+|---|---|---|
+| P1 | smacg-api/includes/`leagcy` 拼字錯誤 | `git mv leagcy legacy` |
+| P2 | 主題 0 byte 殘檔 | 刪除 `admin-sync.css`、`home.css`（39 B 的 anime-status.css 與 38 B 的 anime.css 需先確認是否為刻意 stub） |
+| P3 | `image-optimizer.php` 去向 | 暫留主題 3-6 個月，未來視需要建立 `smacg-utils` 外掛 |
+| P3 | gamification 內 enqueue 與主題 setup-enqueue 重複 | 擇一保留（建議保留主題版） |
+| P4 | `functions.php` `$optional` 清單清理 | v2.15.0 移除社群相關殘留條目 |
 
 ---
 
-## 18. 圖片處理（Anime_Sync_Image_Handler v1.1.0）
+## 12. 常用對外公開 API（速查表）
 
-| 常數 | 值 |
-|------|----|
-| `COVER_WIDTH` × `COVER_HEIGHT` | 460 × 651 |
-| `VALIDATE_TIMEOUT` | 5s（H4：8 → 5） |
-| `DOWNLOAD_TIMEOUT` | 8s（O4：15 → 8） |
-| `HTTP_USER_AGENT` | `Mozilla/5.0 (compatible; AnimeSyncPro/1.1; +https://anime-sync-pro)` |
+### 12.1 會員
+- `weixiaoacg_get_user_level_int($uid) : int`
+- `weixiaoacg_get_user_points($uid) : int`
+- `smacg_get_member_center_url() : string`
 
-三種模式由 `anime_sync_image_method` option 決定：
-- **api_url**（預設）：只記原始 URL，不下載
-- **media_library**：下載 → sideload → set_post_thumbnail → resize（**atomic write**：寫 `.tmp` → rename）→ 重新生成 metadata → 清 intermediate sizes
-- **cdn**：建構 imgproxy / Cloudflare URL（base 為空時 fallback 原 URL）
+### 12.2 等級 / EXP
+- `smacg_get_user_level_info($uid) : array`
+- `smacg_award_exp($uid, $action_key) : array`
+- 過濾器 `smacg_exp_rules`
 
-resize 失敗保留原檔（前台 CSS aspect-ratio 救援）。所有 log 改走 `Anime_Sync_Error_Logger`。
+### 12.3 追蹤
+- `smacg_follow_user($a, $b)` / `smacg_unfollow_user($a, $b)`
+- `smacg_is_following($a, $b) : bool`
 
----
+### 12.4 通知
+- `smacg_create_notification([ 'user_id', 'type', 'actor_id', 'object_type', 'object_id', 'data', 'force' ])`
+- `smacg_get_unread_count($uid) : int`
 
-## 19. wpDiscuz 留言設定
-
-1. Settings → wpDiscuz → Forms → Post Types 勾選 `anime`
-2. `single-anime.php` 已內含 `comments_template()`（v14.0）
-
----
-
-## 20. 已知問題
-
-| # | 問題 | 狀態 |
-|---|------|------|
-| 1 | 既有動漫的 `anime_themes` 為空者，需重新 enrich（或等每日 themes_episodes cron） | ⚠️ 需手動觸發或等排程 |
-| 2 | `_enriched_at` 已設會擋重 enrich 回傳 `already_enriched` | ⚠️ 已知限制；`delete_post_meta` 後可重跑 |
-| 3 | Bangumi 找不到對應時，Staff/Cast 維持 AniList 英文 | ✅ 符合設計 |
-| 4 | `anime_tw_streaming_url_ani_one`（底線）對應 checkbox key `ani-one`（連字號） | ✅ single-anime.php v14.0 已用 legacy alias 修正 |
-| 5 | 系列 term 若以中文 slug 建立，需手動更新為 romaji slug | ⚠️ 需手動處理 |
-| 6 | `sort_series_archive()` 必須用 `$query->is_tax()` 而非全域 `is_tax()` | ✅ 已修正 |
-| 7 | 匯入後需清除 `anime_sync_series_gaps` transient | ✅ 已修正（import_and_enrich 內） |
-| 8 | `handle_ajax_scan_series_gaps()` 原本用錯誤 key | ✅ 已修正 |
-| 9 | admin.js Resync Bangumi handler 在 IIFE 閉包外 | ✅ 已修正 |
-| 10 | 主檔 Admin 實例化條件含 `&& $import_manager` | ✅ 已修正（無條件） |
-| 11 | 瀏覽器快取舊 admin.js | ✅ 已用 `filemtime()` |
-| 12 | Bangumi ID 對照表不含所有作品 | ⚠️ 多層 fallback；手動填入會寫 `_bangumi_id_manually_set=1` 不被覆蓋 |
-| 13 | **`anime_sync_time` 與 `anime_last_sync` meta key 不一致**：custom-post-type 1.1.0 讀 `anime_sync_time`，但 import-manager 寫的是 `anime_last_sync` | ⚠️ **後台「上次 API 同步時間」欄位實際仍會空白**，需擇一統一（建議 import-manager 也寫 `anime_sync_time`） |
-| 14 | Rate Limiter transient 寫入非原子，極端並發可能多 sleep（可接受） | ⚠️ 已知限制 |
-| 15 | user_status_stats 孤兒 anime_id 靠每 15 分鐘 cron 清 | ✅ 已實作 UPSERT + DELETE LEFT JOIN |
-| 16 | 評分公式變更後，舊資料需重算 | ⚠️ 待提供 admin 工具 |
-| 17 | CDN base 未設時影像走原 URL，無 imgproxy 變換 | ✅ fallback 已實作 |
-| 18 | OpenCC 未安裝時 fallback 字典精度較低 | ⚠️ 設計權衡 |
-| 19 | Editorial Routing 切換 channel 後舊 URL 301 redirect，注意 SEO | ✅ canonical redirect 已加 preview / password / customizer 跳過 |
-| 20 | review-queue 為直接掃 `post_type=anime, post_status=draft` 的後台頁，**而非**讀 `anime_review_queue` 表（該表是 import 中繼） | ✅ 符合設計，但容易誤解 |
+### 12.5 公開頁
+- `smacg_get_public_profile_url($uid) : string`
 
 ---
 
-## 21. Todo / 觀察清單
+## 13. AJAX action 命名慣例
 
-優先序高：
-- 修正 #13：統一 `anime_sync_time` / `anime_last_sync` meta key
-- 評分系統 admin 統計儀表板（投票分布、加權前後對比）
-- User Status 匯出 CSV / API token
-
-中：
-- AnimeThemes 多 OP/ED 顯示 UI 改善
-- Series tree 視覺化
-- 評分公式變更後的歷史資料重算工具
-
-低：
-- imgproxy preset 切換 UI
-- Cron schedule 後台可視化編輯
+| Action | 來源 | nonce 名稱 |
+|---|---|---|
+| `smacg_follow` / `smacg_unfollow` | smacg-social | `smacg_follow_nonce` |
+| `smacg_notif_*` | smacg-social | `smacg_notif_nonce` |
+| `smacg_career_*` | smacg-gamification | `smacg_career_nonce` |
+| `smacg_leaderboard_*` | smacg-gamification | `smacg_leaderboard_nonce` |
+| `smacg_member_*` | smacg-members | `smacg_member_nonce` |
 
 ---
 
-## 22. 部署驗證清單
+## 14. 部署 / 升級檢查清單
 
-1. `php -l` 對所有 .php 語法檢查
-2. 前台 anime archive / single 無 fatal、無 PHP notice
-3. 後台 anime 列表所有自訂欄位正確顯示且可排序
-4. 匯入測試：review_queue 寫入 → enrich 成功 → meta 完整
-5. `get_option('anime_sync_api_stats')` 數值上升（success 增加）
-6. user_status_stats 在 15 分鐘 cron 後正確更新（無孤兒）
-7. `anime_sync_logs` 表無新 critical
-8. 故意觸發 429 → log 顯示 `rate_limited` + retry
-9. `wp cron event list` 含 `anime_sync_themes_episodes_update`
-10. 評分提交 5 次後第 6 次回 429（rate limit 生效）
-11. 觀看狀態 30 次內可寫，第 31 次回 429
-12. CSS / JS 版本號跟 `filemtime` 對齊
-13. 部署後 24 小時：API 統計、log 錯誤率、cron 是否準時、評分 / 觀看狀態提交是否正常
+啟用 / 升級任一外掛後，依序檢查：
+1. **Site Health** 無 critical / warning。
+2. 全部 4 個 SMACG 外掛皆 active。
+3. 資料表存在：`wp_smacg_follows`、`wp_smacg_notifications`。
+4. Cron 列表含 `smacg_notifications_daily_purge`、`smacg_exp_daily_reset`。
+5. 前端鈴鐺、追蹤按鈕、公開個人頁皆可運作。
+6. 徽章解鎖時只收到 1 則通知（非 2 則）。
+7. REST：`/wp-json/weixiaoacg/v1/ranking` 與 `/wp-json/smacg/v1/user-level` 均回應 200（後者需登入）。
+8. 主題版本 ≥ 2.12.0，否則 smacg-gamification 會跳 warning。
+
+---
+
+## 15. Repository 連結
+
+- 主 repo：https://github.com/smaacg/hostingerphp8.3wordpress6.9.4
+- 舊主 repo（已併入）：https://github.com/smaacg/anime-sync-pro-2-
+- 線上站：https://dev.weisianacg.com/
