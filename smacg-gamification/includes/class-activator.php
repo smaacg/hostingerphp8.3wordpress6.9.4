@@ -8,6 +8,7 @@ class Activator {
     public static function run() {
         self::install_ranking_tables();
         self::install_event_tables();
+        self::install_rank_season_tables();
         self::schedule_crons();
 
         update_option( 'smacg_gamify_version',      SMACG_GAMIFY_VERSION );
@@ -15,6 +16,11 @@ class Activator {
 
         // 觸發 init 99 階段的 flush（CPT 此時尚未註冊，不能在此直接 flush）
         update_option( 'smacg_event_cpt_flushed', '0' );
+
+        // 紀錄當前賽季
+        if ( ! get_option( 'smacg_rank_current_season' ) ) {
+            update_option( 'smacg_rank_current_season', Rank_Tier::current_season_code() );
+        }
     }
 
     public static function install_ranking_tables() {
@@ -74,6 +80,41 @@ class Activator {
         update_option( 'smacg_event_db_version', SMACG_EVENT_DB_VERSION );
     }
 
+    public static function install_rank_season_tables() {
+        global $wpdb;
+        $charset = $wpdb->get_charset_collate();
+        $cur     = $wpdb->prefix . 'smacg_rank_season';
+        $arc     = $wpdb->prefix . 'smacg_rank_season_archive';
+
+        require_once ABSPATH . 'wp-admin/includes/upgrade.php';
+
+        $sql1 = "CREATE TABLE {$cur} (
+            user_id BIGINT(20) UNSIGNED NOT NULL,
+            season_code VARCHAR(20) NOT NULL,
+            season_score BIGINT(20) NOT NULL DEFAULT 0,
+            updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (user_id, season_code),
+            KEY season_score (season_code, season_score)
+        ) {$charset};";
+
+        $sql2 = "CREATE TABLE {$arc} (
+            user_id BIGINT(20) UNSIGNED NOT NULL,
+            season_code VARCHAR(20) NOT NULL,
+            final_rank INT UNSIGNED NOT NULL DEFAULT 0,
+            final_score BIGINT(20) NOT NULL DEFAULT 0,
+            tier_key VARCHAR(20) NOT NULL DEFAULT '',
+            tier_label VARCHAR(40) NOT NULL DEFAULT '',
+            settled_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (user_id, season_code),
+            KEY season_rank (season_code, final_rank)
+        ) {$charset};";
+
+        dbDelta( $sql1 );
+        dbDelta( $sql2 );
+
+        update_option( 'smacg_rank_season_db_version', SMACG_RANK_SEASON_DB_VERSION );
+    }
+
     public static function schedule_crons() {
         if ( ! wp_next_scheduled( 'smacg_exp_daily_reset' ) ) {
             $ts = strtotime( 'tomorrow 00:05:00', current_time( 'timestamp' ) );
@@ -90,6 +131,9 @@ class Activator {
         }
         if ( ! wp_next_scheduled( 'smacg_event_end_check' ) ) {
             wp_schedule_event( time() + 60, 'hourly', 'smacg_event_end_check' );
+        }
+        if ( ! wp_next_scheduled( 'smacg_rank_season_check' ) ) {
+            wp_schedule_event( time() + 300, 'hourly', 'smacg_rank_season_check' );
         }
     }
 }
