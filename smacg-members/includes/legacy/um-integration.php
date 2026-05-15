@@ -8,6 +8,15 @@
  * @subpackage UM
  *
  * Changelog:
+ * - v1.2.0 (2026-05-15)：
+ *   修復 /mc/ 頁面跑版（header 被擠成窄欄）：
+ *   1. enqueue hook 拆分 /account/ 與 /mc/ (page-member.php) 載入策略
+ *      - /account/：完整載入 UM 樣式（需要 UM 內建設定頁版面）
+ *      - /mc/ 與 /user/：只載入頭像上傳所需的 crop / modal / fileupload，
+ *        不再載入 um_styles / um_profile / um_misc，避免 800px 窄欄覆蓋整頁
+ *   2. dequeue hook 擴大涵蓋 page-member.php 模板，
+ *      補上 dequeue um_profile / um_misc（profile.css 是窄欄真正元兇）
+ *
  * - v1.1.0 (2026-05-13)：
  *   新增 smacg_um_user_404_redirect()
  *   攔截 /user/{找不到的 username}/ → 自動 302 重導到會員中心 (/mc/)，
@@ -17,15 +26,40 @@
 defined( 'ABSPATH' ) || exit;
 
 /* ============================================================
-   UM 資源 enqueue（user / account / page-member 才載）
+   UM 資源 enqueue
+   ------------------------------------------------------------
+   v1.2.0：拆分載入策略
+     - /account/：完整載入（UM 內建頁面需要）
+     - /mc/ 與 /user/xxx/：只載頭像上傳必要的 3 支 CSS / 6 支 JS，
+       不再載 um_styles / um_profile / um_misc（避免窄欄覆蓋）
    ============================================================ */
 add_action('wp_enqueue_scripts', function() {
     if (!function_exists('um_is_core_page')) return;
-    $is_um = um_is_core_page('user') || get_query_var('um_user') || um_is_core_page('account');
-    $is_mt = is_page_template('page-member.php');
-    if ($is_um || $is_mt) {
-        foreach (['um_scripts','um_profile','um_account','um_crop','um_modal','um_fileupload'] as $s) wp_enqueue_script($s);
-        foreach (['um_styles','um_profile','um_account','um_crop','um_misc','um_modal','um_fileupload'] as $s) wp_enqueue_style($s);
+
+    $is_um_account = um_is_core_page('account');
+    $is_um_user    = um_is_core_page('user') || get_query_var('um_user');
+    $is_mt         = is_page_template('page-member.php');
+
+    // /account/ 完整載入（UM 設定頁需要原生版面）
+    if ( $is_um_account ) {
+        foreach (['um_scripts','um_profile','um_account','um_crop','um_modal','um_fileupload'] as $s) {
+            wp_enqueue_script($s);
+        }
+        foreach (['um_styles','um_profile','um_account','um_crop','um_misc','um_modal','um_fileupload'] as $s) {
+            wp_enqueue_style($s);
+        }
+        return;
+    }
+
+    // /mc/（page-member.php）或 /user/xxx/：
+    // 只載入「頭像上傳裁切」必要的資源，不載入會撐窄欄的 um_styles / um_profile / um_misc
+    if ( $is_um_user || $is_mt ) {
+        foreach (['um_scripts','um_crop','um_modal','um_fileupload'] as $s) {
+            wp_enqueue_script($s);
+        }
+        foreach (['um_crop','um_modal','um_fileupload'] as $s) {
+            wp_enqueue_style($s);
+        }
     }
 }, 20);
 
@@ -39,13 +73,27 @@ add_filter('template_include', function($tpl) {
     return $tpl;
 }, 99);
 
-/* user 頁面拔掉 UM 預設 style（保留 account 頁的） */
+/* ============================================================
+   保險：再次 dequeue UM 窄欄樣式
+   ------------------------------------------------------------
+   v1.2.0：擴大涵蓋 page-member.php 模板，並補上 um_profile / um_misc。
+   UM 可能在 init 或其他 hook 上 enqueue 這些樣式，這裡用 99 順位再次
+   dequeue 確保乾淨。
+   ============================================================ */
 add_action('wp_enqueue_scripts', function() {
     if (!function_exists('um_is_core_page')) return;
-    if ((um_is_core_page('user') || get_query_var('um_user')) && !um_is_core_page('account')) {
+
+    $is_um_user = um_is_core_page('user') || get_query_var('um_user');
+    $is_mt      = is_page_template('page-member.php');
+    $is_account = um_is_core_page('account');
+
+    // /mc/ 或 /user/xxx/，但不是 /account/ 時，強制清除窄欄樣式
+    if ( ( $is_um_user || $is_mt ) && ! $is_account ) {
         wp_dequeue_style('um_styles');
         wp_dequeue_style('um_responsive');
         wp_dequeue_style('um_icons');
+        wp_dequeue_style('um_profile');   // ← v1.2.0 補上：profile.css 是窄欄真正元兇
+        wp_dequeue_style('um_misc');      // ← v1.2.0 補上：misc.css 含 .um-page-* body 規則
     }
 }, 99);
 
