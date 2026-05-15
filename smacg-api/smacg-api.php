@@ -22,7 +22,8 @@
  *     - weixiaoacg/v1/ranking
  *     - weixiaoacg/v1/user/favorites
  *     - weixiaoacg/v1/anime-url
- *     - smacg/v1/user-level
+ *
+ *   註：/smacg/v1/user-level 由 smacg-gamification 外掛提供，不在本外掛範圍。
  *
  *   常數 WEIXIAOACG_GEMINI_API_KEY、WEIXIAOACG_ID_CATS、WEIXIAOACG_LLM_CATS
  *   仍由 blocksy-child/functions.php 或 wp-config.php 定義，本外掛不重複定義。
