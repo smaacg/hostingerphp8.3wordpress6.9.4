@@ -1,448 +1,256 @@
 <?php
-/**
- * Season Event - 後台管理 UI
- *
- * 原檔：blocksy-child/inc/season-event-admin.php v1.0.0
- * 注意：本檔僅在 is_admin() 時 require。
- *
- * @package SMACG_Gamification
- */
-
-namespace SMACG\Gamification\SeasonEvent;
+namespace SMACG\Gamification;
 
 defined( 'ABSPATH' ) || exit;
 
-class Admin {
+/**
+ * 季賽事件後台 UI（搬自 theme/inc/season-event-admin.php）
+ *
+ * 功能：
+ *   - 編輯頁 metabox：時間、條件、獎勵、進度概況
+ *   - 列表頁自訂欄位：狀態、結束時間、完成人數
+ *   - 列表頁列操作：重新結算、複製
+ */
+class Event_Admin {
 
-    public static function init() {
-        add_action( 'add_meta_boxes',                       [ __CLASS__, 'register_metabox' ] );
-        add_action( 'save_post_' . SMACG_EVENT_CPT,         [ __CLASS__, 'save_metabox' ], 10, 1 );
+    private static $instance = null;
 
-        // 列表頁欄位
-        add_filter( 'manage_' . SMACG_EVENT_CPT . '_posts_columns',        [ __CLASS__, 'add_columns' ] );
-        add_action( 'manage_' . SMACG_EVENT_CPT . '_posts_custom_column',  [ __CLASS__, 'render_column' ], 10, 2 );
-
-        // 狀態 filter
-        add_action( 'restrict_manage_posts', [ __CLASS__, 'add_status_filter' ] );
-        add_action( 'pre_get_posts',         [ __CLASS__, 'apply_status_filter' ] );
-
-        // Row action：複製
-        add_filter( 'post_row_actions',                 [ __CLASS__, 'add_duplicate_action' ], 10, 2 );
-        add_action( 'admin_post_smacg_event_duplicate', [ __CLASS__, 'handle_duplicate' ] );
-
-        // List page notice
-        add_action( 'admin_notices', [ __CLASS__, 'list_notice' ] );
-
-        // 顯示 resettle / msg notice
-        add_action( 'admin_notices', [ __CLASS__, 'show_msg_notice' ] );
+    public static function instance() {
+        if ( self::$instance === null ) self::$instance = new self();
+        return self::$instance;
     }
 
-    /* ---------------------------------------------
-     * Meta Box
-     * --------------------------------------------- */
-    public static function register_metabox() {
-        add_meta_box(
-            'smacg_event_settings',
-            '🏆 活動設定',
-            [ __CLASS__, 'render_metabox' ],
-            SMACG_EVENT_CPT,
-            'normal',
-            'high'
-        );
+    private function __construct() {
+        add_action( 'add_meta_boxes',                                       [ __CLASS__, 'add_metaboxes' ] );
+        add_action( 'save_post_' . SMACG_EVENT_CPT,                         [ __CLASS__, 'save_meta' ], 10, 2 );
+        add_filter( 'manage_' . SMACG_EVENT_CPT . '_posts_columns',         [ __CLASS__, 'columns' ] );
+        add_action( 'manage_' . SMACG_EVENT_CPT . '_posts_custom_column',   [ __CLASS__, 'render_column' ], 10, 2 );
+        add_filter( 'post_row_actions',                                     [ __CLASS__, 'row_actions' ], 10, 2 );
+        add_action( 'admin_post_smacg_event_resettle',                      [ __CLASS__, 'handle_resettle' ] );
+        add_action( 'admin_post_smacg_event_duplicate',                     [ __CLASS__, 'handle_duplicate' ] );
     }
 
-    public static function render_metabox( $post ) {
+    /* ==========================================================
+     * Metabox
+     * ========================================================== */
+    public static function add_metaboxes() {
+        add_meta_box( 'smacg_event_settings', '🎯 活動設定', [ __CLASS__, 'render_settings_box' ], SMACG_EVENT_CPT, 'normal', 'high' );
+        add_meta_box( 'smacg_event_stats',    '📊 進度統計', [ __CLASS__, 'render_stats_box' ],    SMACG_EVENT_CPT, 'side',   'default' );
+    }
+
+    public static function render_settings_box( $post ) {
         wp_nonce_field( 'smacg_event_save', 'smacg_event_nonce' );
+        $m = [
+            'starts_at'    => get_post_meta( $post->ID, '_smacg_event_starts_at',    true ),
+            'ends_at'      => get_post_meta( $post->ID, '_smacg_event_ends_at',      true ),
+            'action_type'  => get_post_meta( $post->ID, '_smacg_event_action_type',  true ),
+            'target'       => (int) get_post_meta( $post->ID, '_smacg_event_target', true ),
+            'reward_exp'   => (int) get_post_meta( $post->ID, '_smacg_event_reward_exp', true ),
+            'reward_badge' => (int) get_post_meta( $post->ID, '_smacg_event_reward_badge', true ),
+            'reward_title' => get_post_meta( $post->ID, '_smacg_event_reward_title', true ),
+        ];
 
-        $meta = CPT::get_meta( $post->ID );
-        $opts = CPT::task_options();
-        $bads = CPT::get_badge_options();
+        $actions = [
+            'comment'             => '發表留言',
+            'follow'              => '追蹤用戶',
+            'watchlist_add'       => '加入觀看列表',
+            'watchlist_complete'  => '完成觀看',
+            'rating'              => '評分',
+            'exp_earned'          => '賺取 EXP',
+        ];
         ?>
-
-        <style>
-        .smacg-event-grid{display:grid;grid-template-columns:1fr 1fr;gap:18px;}
-        .smacg-event-grid > .full{grid-column:1 / -1;}
-        .smacg-event-field label{display:block;font-weight:600;margin-bottom:6px;font-size:13px;}
-        .smacg-event-field input[type=text],
-        .smacg-event-field input[type=number],
-        .smacg-event-field input[type=datetime-local],
-        .smacg-event-field select{width:100%;max-width:420px;}
-        .smacg-event-field .desc{font-size:12px;color:#666;margin:4px 0 0;}
-        .smacg-event-status{display:inline-block;padding:3px 12px;border-radius:999px;font-size:12px;font-weight:700;color:#fff;}
-        .smacg-event-status--upcoming{background:#3b82f6;}
-        .smacg-event-status--active{background:#10b981;}
-        .smacg-event-status--ended{background:#6b7280;}
-        .smacg-event-status--invalid{background:#ef4444;}
-        .smacg-event-preview-card{margin-top:12px;padding:14px 16px;background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;font-size:13px;line-height:1.7;}
-        .smacg-event-preview-card strong{color:#111;}
-        </style>
-
-        <p style="margin-bottom:14px;">
-            目前狀態：
-            <span class="smacg-event-status smacg-event-status--<?php echo esc_attr( $meta['status'] ); ?>">
-                <?php
-                $status_zh = [
-                    'upcoming' => '即將開始',
-                    'active'   => '進行中',
-                    'ended'    => '已結束',
-                    'invalid'  => '時間未設定',
-                ];
-                echo esc_html( $status_zh[ $meta['status'] ] ?? $meta['status'] );
-                ?>
-            </span>
-        </p>
-
-        <div class="smacg-event-grid">
-
-            <div class="smacg-event-field">
-                <label for="smacg_event_start">開始時間 <span style="color:#ef4444;">*</span></label>
-                <input type="datetime-local" id="smacg_event_start" name="smacg_event_start"
-                       value="<?php echo esc_attr( self::to_input( $meta['start'] ) ); ?>" required>
-                <p class="desc">伺服器時區，活動到此時間才開始計算進度</p>
-            </div>
-
-            <div class="smacg-event-field">
-                <label for="smacg_event_end">結束時間 <span style="color:#ef4444;">*</span></label>
-                <input type="datetime-local" id="smacg_event_end" name="smacg_event_end"
-                       value="<?php echo esc_attr( self::to_input( $meta['end'] ) ); ?>" required>
-                <p class="desc">過此時間後活動結束，由系統發放獎勵</p>
-            </div>
-
-            <div class="smacg-event-field">
-                <label for="smacg_event_task_type">任務類型</label>
-                <select id="smacg_event_task_type" name="smacg_event_task_type">
-                    <?php foreach ( $opts as $k => $v ) : ?>
-                        <option value="<?php echo esc_attr( $k ); ?>" <?php selected( $meta['task_type'], $k ); ?>>
-                            <?php echo esc_html( $v['label'] ); ?>
-                        </option>
-                    <?php endforeach; ?>
-                </select>
-                <p class="desc" id="smacg_event_task_desc"><?php echo esc_html( $opts[ $meta['task_type'] ]['desc'] ?? '' ); ?></p>
-            </div>
-
-            <div class="smacg-event-field">
-                <label for="smacg_event_task_target">任務目標數值</label>
-                <input type="number" min="1" step="1" id="smacg_event_task_target" name="smacg_event_task_target"
-                       value="<?php echo esc_attr( $meta['task_target'] ?: 100 ); ?>">
-                <p class="desc">完成此數值即達標（單位：<span id="smacg_event_unit"><?php echo esc_html( CPT::task_unit( $meta['task_type'] ) ); ?></span>）</p>
-            </div>
-
-            <div class="smacg-event-field">
-                <label for="smacg_event_reward_exp">獎勵 EXP</label>
-                <input type="number" min="0" step="1" id="smacg_event_reward_exp" name="smacg_event_reward_exp"
-                       value="<?php echo esc_attr( $meta['reward_exp'] ?: 0 ); ?>">
-                <p class="desc">達標後一次性發放</p>
-            </div>
-
-            <div class="smacg-event-field">
-                <label for="smacg_event_reward_badge">獎勵徽章</label>
-                <select id="smacg_event_reward_badge" name="smacg_event_reward_badge">
-                    <option value="0">— 不發放徽章 —</option>
-                    <?php foreach ( $bads as $bid => $bname ) : ?>
-                        <option value="<?php echo esc_attr( $bid ); ?>" <?php selected( $meta['reward_badge'], $bid ); ?>>
-                            <?php echo esc_html( $bname ); ?>
-                        </option>
-                    <?php endforeach; ?>
-                </select>
-                <p class="desc">從 GamiPress 徽章中選擇。沒看到？
-                    <a href="<?php echo esc_url( admin_url( 'post-new.php?post_type=' . ( defined( 'SMACG_BADGE_SLUG' ) ? SMACG_BADGE_SLUG : 'badge' ) ) ); ?>" target="_blank">新增徽章</a>
-                </p>
-            </div>
-
-            <div class="smacg-event-field">
-                <label for="smacg_event_reward_title">獎勵稱號（選填）</label>
-                <input type="text" id="smacg_event_reward_title" name="smacg_event_reward_title" maxlength="32"
-                       placeholder="例：2026 春季優勝者"
-                       value="<?php echo esc_attr( $meta['reward_title'] ); ?>">
-                <p class="desc">顯示於個人頁與留言區（≤32 字）</p>
-            </div>
-
-            <div class="smacg-event-field">
-                <label for="smacg_event_max_participants">名額上限</label>
-                <input type="number" min="0" step="1" id="smacg_event_max_participants" name="smacg_event_max_participants"
-                       value="<?php echo esc_attr( $meta['max_participants'] ?: 0 ); ?>">
-                <p class="desc">先達標先得；0 = 無限</p>
-            </div>
-
-            <div class="full">
-                <div class="smacg-event-preview-card" id="smacg_event_preview">
-                    <strong>📋 活動概要：</strong><br>
-                    於 <strong id="prv-period">—</strong> 期間，
-                    <strong id="prv-task">—</strong> 達成 <strong id="prv-target">—</strong> <span id="prv-unit">—</span>，
-                    即可獲得 <strong id="prv-exp">—</strong> EXP
-                    <span id="prv-badge"></span>
-                    <span id="prv-title"></span>
-                    <span id="prv-limit"></span>。
-                </div>
-            </div>
-
-        </div>
-
-        <script>
-        (function(){
-          const $ = id => document.getElementById(id);
-          const opts = <?php echo wp_json_encode( $opts ); ?>;
-          const badges = <?php echo wp_json_encode( $bads ); ?>;
-
-          function update(){
-            const t = $('smacg_event_task_type').value;
-            $('smacg_event_task_desc').textContent = opts[t]?.desc || '';
-            $('smacg_event_unit').textContent = opts[t]?.unit || '';
-
-            $('prv-period').textContent =
-              ($('smacg_event_start').value || '?') + ' ~ ' + ($('smacg_event_end').value || '?');
-            $('prv-task').textContent   = opts[t]?.label || '?';
-            $('prv-target').textContent = $('smacg_event_task_target').value || '?';
-            $('prv-unit').textContent   = opts[t]?.unit || '';
-            $('prv-exp').textContent    = $('smacg_event_reward_exp').value || '0';
-
-            const bid = $('smacg_event_reward_badge').value;
-            $('prv-badge').innerHTML = (bid && bid !== '0')
-              ? ' + 徽章「<strong>' + (badges[bid] || '?') + '</strong>」'
-              : '';
-            const title = $('smacg_event_reward_title').value;
-            $('prv-title').innerHTML = title ? ' + 稱號「<strong>' + title + '</strong>」' : '';
-            const lim = parseInt($('smacg_event_max_participants').value || '0', 10);
-            $('prv-limit').textContent = lim > 0 ? '（限前 ' + lim + ' 名）' : '';
-          }
-
-          ['smacg_event_start','smacg_event_end','smacg_event_task_type','smacg_event_task_target',
-           'smacg_event_reward_exp','smacg_event_reward_badge','smacg_event_reward_title',
-           'smacg_event_max_participants'].forEach(id => {
-             const el = $(id);
-             if (el) el.addEventListener('input', update);
-          });
-          update();
-        })();
-        </script>
+        <table class="form-table">
+            <tr>
+                <th><label>開始時間</label></th>
+                <td><input type="datetime-local" name="smacg_event[starts_at]" value="<?php echo esc_attr( self::to_datetime_local( $m['starts_at'] ) ); ?>" class="regular-text"></td>
+            </tr>
+            <tr>
+                <th><label>結束時間</label></th>
+                <td><input type="datetime-local" name="smacg_event[ends_at]"   value="<?php echo esc_attr( self::to_datetime_local( $m['ends_at'] ) ); ?>"   class="regular-text"></td>
+            </tr>
+            <tr>
+                <th><label>動作類型</label></th>
+                <td>
+                    <select name="smacg_event[action_type]">
+                        <option value="">— 請選擇 —</option>
+                        <?php foreach ( $actions as $k => $label ) : ?>
+                            <option value="<?php echo esc_attr( $k ); ?>" <?php selected( $m['action_type'], $k ); ?>>
+                                <?php echo esc_html( $label ); ?>
+                            </option>
+                        <?php endforeach; ?>
+                    </select>
+                </td>
+            </tr>
+            <tr>
+                <th><label>目標數值</label></th>
+                <td><input type="number" min="1" name="smacg_event[target]" value="<?php echo (int) $m['target']; ?>" class="small-text"> 次/點</td>
+            </tr>
+            <tr><th colspan="2"><h3 style="margin:10px 0">🎁 完成獎勵</h3></th></tr>
+            <tr>
+                <th><label>EXP 獎勵</label></th>
+                <td><input type="number" min="0" name="smacg_event[reward_exp]" value="<?php echo (int) $m['reward_exp']; ?>" class="small-text"></td>
+            </tr>
+            <tr>
+                <th><label>徽章 ID</label></th>
+                <td>
+                    <input type="number" min="0" name="smacg_event[reward_badge]" value="<?php echo (int) $m['reward_badge']; ?>" class="small-text">
+                    <p class="description">GamiPress 徽章的 post ID（留空＝不發徽章）</p>
+                </td>
+            </tr>
+            <tr>
+                <th><label>稱號</label></th>
+                <td><input type="text" name="smacg_event[reward_title]" value="<?php echo esc_attr( $m['reward_title'] ); ?>" class="regular-text"></td>
+            </tr>
+        </table>
         <?php
     }
 
-    public static function to_input( $val ) {
-        if ( empty( $val ) ) return '';
-        $ts = strtotime( $val );
-        return $ts ? date( 'Y-m-d\TH:i', $ts ) : '';
+    public static function render_stats_box( $post ) {
+        $completed = Event_Tracker::get_progress_count( $post->ID );
+        $top       = Event_Tracker::get_leaderboard( $post->ID, 5 );
+        $is_ended  = get_post_meta( $post->ID, '_smacg_event_ended_flag', true );
+        ?>
+        <p><strong>完成人數：</strong><?php echo (int) $completed; ?> 人</p>
+        <p><strong>狀態：</strong><?php echo $is_ended ? '<span style="color:#888">已結束</span>' : '<span style="color:#0a0">進行中</span>'; ?></p>
+        <?php if ( $top ) : ?>
+            <p><strong>Top 5 進度：</strong></p>
+            <ol style="padding-left:20px">
+                <?php foreach ( $top as $r ) :
+                    $u = get_userdata( (int) $r['user_id'] );
+                    ?>
+                    <li>
+                        <?php echo $u ? esc_html( $u->display_name ) : '(已刪除)'; ?> —
+                        <?php echo (int) $r['progress']; ?>
+                    </li>
+                <?php endforeach; ?>
+            </ol>
+        <?php endif; ?>
+        <?php if ( $is_ended ) : ?>
+            <?php
+            $url = wp_nonce_url( admin_url( 'admin-post.php?action=smacg_event_resettle&event_id=' . $post->ID ), 'smacg_event_resettle' );
+            ?>
+            <p><a href="<?php echo esc_url( $url ); ?>" class="button button-secondary" onclick="return confirm('確定要重新結算此活動？')">🔄 重新結算</a></p>
+        <?php endif; ?>
+        <?php
     }
 
-    public static function save_metabox( $post_id ) {
+    private static function to_datetime_local( $mysql_dt ) {
+        if ( ! $mysql_dt ) return '';
+        return str_replace( ' ', 'T', substr( $mysql_dt, 0, 16 ) );
+    }
+
+    /* ==========================================================
+     * Save meta
+     * ========================================================== */
+    public static function save_meta( $post_id, $post ) {
         if ( ! isset( $_POST['smacg_event_nonce'] ) ) return;
         if ( ! wp_verify_nonce( $_POST['smacg_event_nonce'], 'smacg_event_save' ) ) return;
         if ( defined( 'DOING_AUTOSAVE' ) && DOING_AUTOSAVE ) return;
         if ( ! current_user_can( 'edit_post', $post_id ) ) return;
+        if ( $post->post_type !== SMACG_EVENT_CPT ) return;
 
-        $fields = [
-            '_smacg_event_start'             => [ 'datetime', 'smacg_event_start' ],
-            '_smacg_event_end'               => [ 'datetime', 'smacg_event_end' ],
-            '_smacg_event_task_type'         => [ 'key',      'smacg_event_task_type' ],
-            '_smacg_event_task_target'       => [ 'int_min1', 'smacg_event_task_target' ],
-            '_smacg_event_reward_exp'        => [ 'int',      'smacg_event_reward_exp' ],
-            '_smacg_event_reward_badge'      => [ 'int',      'smacg_event_reward_badge' ],
-            '_smacg_event_reward_title'      => [ 'text32',   'smacg_event_reward_title' ],
-            '_smacg_event_max_participants'  => [ 'int',      'smacg_event_max_participants' ],
-        ];
+        $in = $_POST['smacg_event'] ?? [];
 
-        foreach ( $fields as $meta_key => $cfg ) {
-            list( $type, $post_key ) = $cfg;
-            $val = $_POST[ $post_key ] ?? '';
-            switch ( $type ) {
-                case 'datetime':
-                    $ts = strtotime( $val );
-                    $val = $ts ? date( 'Y-m-d H:i:s', $ts ) : '';
-                    break;
-                case 'key':
-                    $val = sanitize_key( $val );
-                    if ( ! array_key_exists( $val, CPT::task_options() ) ) $val = 'exp_gain';
-                    break;
-                case 'int_min1':
-                    $val = max( 1, (int) $val );
-                    break;
-                case 'int':
-                    $val = max( 0, (int) $val );
-                    break;
-                case 'text32':
-                    $val = mb_substr( sanitize_text_field( $val ), 0, 32 );
-                    break;
-            }
-            update_post_meta( $post_id, $meta_key, $val );
-        }
+        $starts = ! empty( $in['starts_at'] ) ? str_replace( 'T', ' ', sanitize_text_field( $in['starts_at'] ) ) . ':00' : '';
+        $ends   = ! empty( $in['ends_at'] )   ? str_replace( 'T', ' ', sanitize_text_field( $in['ends_at'] ) )   . ':00' : '';
+
+        update_post_meta( $post_id, '_smacg_event_starts_at',    $starts );
+        update_post_meta( $post_id, '_smacg_event_ends_at',      $ends );
+        update_post_meta( $post_id, '_smacg_event_action_type',  sanitize_key( $in['action_type'] ?? '' ) );
+        update_post_meta( $post_id, '_smacg_event_target',       max( 1, (int) ( $in['target'] ?? 1 ) ) );
+        update_post_meta( $post_id, '_smacg_event_reward_exp',   max( 0, (int) ( $in['reward_exp'] ?? 0 ) ) );
+        update_post_meta( $post_id, '_smacg_event_reward_badge', max( 0, (int) ( $in['reward_badge'] ?? 0 ) ) );
+        update_post_meta( $post_id, '_smacg_event_reward_title', sanitize_text_field( $in['reward_title'] ?? '' ) );
     }
 
-    /* ---------------------------------------------
-     * 列表頁
-     * --------------------------------------------- */
-    public static function add_columns( $cols ) {
+    /* ==========================================================
+     * 列表欄位
+     * ========================================================== */
+    public static function columns( $cols ) {
         $new = [];
         foreach ( $cols as $k => $v ) {
             $new[ $k ] = $v;
             if ( $k === 'title' ) {
-                $new['smacg_status'] = '狀態';
-                $new['smacg_period'] = '期間';
-                $new['smacg_task']   = '任務';
-                $new['smacg_reward'] = '獎勵';
+                $new['smacg_status']    = '狀態';
+                $new['smacg_period']    = '時間';
+                $new['smacg_completed'] = '完成人數';
             }
         }
         return $new;
     }
 
     public static function render_column( $col, $post_id ) {
-        $m = CPT::get_meta( $post_id );
         switch ( $col ) {
             case 'smacg_status':
-                $status_zh = [
-                    'upcoming' => ['即將開始','#3b82f6'],
-                    'active'   => ['進行中',  '#10b981'],
-                    'ended'    => ['已結束',  '#6b7280'],
-                    'invalid'  => ['未設定',  '#ef4444'],
-                ];
-                $s = $status_zh[ $m['status'] ] ?? [ $m['status'], '#666' ];
-                printf(
-                    '<span style="background:%s;color:#fff;padding:3px 10px;border-radius:999px;font-size:11px;font-weight:700;">%s</span>',
-                    esc_attr( $s[1] ), esc_html( $s[0] )
-                );
+                $ended = get_post_meta( $post_id, '_smacg_event_ended_flag', true );
+                if ( $ended ) {
+                    echo '<span style="color:#888">已結束</span>';
+                } elseif ( Event_CPT::is_active( $post_id ) ) {
+                    echo '<span style="color:#0a0;font-weight:bold">● 進行中</span>';
+                } else {
+                    echo '<span style="color:#999">未開始 / 草稿</span>';
+                }
                 break;
 
             case 'smacg_period':
-                echo $m['start'] ? esc_html( mysql2date( 'Y-m-d H:i', $m['start'] ) ) : '—';
-                echo '<br><span style="color:#888;">→ ';
-                echo $m['end'] ? esc_html( mysql2date( 'Y-m-d H:i', $m['end'] ) ) : '—';
-                echo '</span>';
+                $s = get_post_meta( $post_id, '_smacg_event_starts_at', true );
+                $e = get_post_meta( $post_id, '_smacg_event_ends_at',   true );
+                echo esc_html( substr( $s, 0, 16 ) ) . '<br>~ ' . esc_html( substr( $e, 0, 16 ) );
                 break;
 
-            case 'smacg_task':
-                echo esc_html( CPT::task_label( $m['task_type'] ) );
-                echo ' · <strong>' . number_format( $m['task_target'] ) . '</strong> ' . esc_html( CPT::task_unit( $m['task_type'] ) );
-                break;
-
-            case 'smacg_reward':
-                $parts = [];
-                if ( $m['reward_exp'] > 0 )   $parts[] = '⚡ ' . number_format( $m['reward_exp'] ) . ' EXP';
-                if ( $m['reward_badge'] > 0 ) $parts[] = '🏅 ' . esc_html( get_the_title( $m['reward_badge'] ) ?: '徽章' );
-                if ( $m['reward_title'] )     $parts[] = '👑 ' . esc_html( $m['reward_title'] );
-                echo $parts ? implode( '<br>', $parts ) : '—';
+            case 'smacg_completed':
+                echo (int) Event_Tracker::get_progress_count( $post_id ) . ' 人';
                 break;
         }
     }
 
-    /* ---------------------------------------------
-     * 狀態 filter
-     * --------------------------------------------- */
-    public static function add_status_filter() {
-        global $typenow;
-        if ( $typenow !== SMACG_EVENT_CPT ) return;
-
-        $cur = $_GET['smacg_event_status'] ?? '';
-        ?>
-        <select name="smacg_event_status">
-            <option value="">— 所有狀態 —</option>
-            <option value="upcoming" <?php selected( $cur, 'upcoming' ); ?>>即將開始</option>
-            <option value="active"   <?php selected( $cur, 'active' );   ?>>進行中</option>
-            <option value="ended"    <?php selected( $cur, 'ended' );    ?>>已結束</option>
-        </select>
-        <?php
-    }
-
-    public static function apply_status_filter( $q ) {
-        if ( ! is_admin() || ! $q->is_main_query() ) return;
-        if ( $q->get( 'post_type' ) !== SMACG_EVENT_CPT ) return;
-        $f = $_GET['smacg_event_status'] ?? '';
-        if ( ! in_array( $f, [ 'upcoming', 'active', 'ended' ], true ) ) return;
-
-        $now = current_time( 'mysql' );
-        switch ( $f ) {
-            case 'upcoming':
-                $q->set( 'meta_query', [ [
-                    'key' => '_smacg_event_start', 'value' => $now, 'compare' => '>', 'type' => 'DATETIME',
-                ] ] );
-                break;
-            case 'ended':
-                $q->set( 'meta_query', [ [
-                    'key' => '_smacg_event_end', 'value' => $now, 'compare' => '<', 'type' => 'DATETIME',
-                ] ] );
-                break;
-            case 'active':
-                $q->set( 'meta_query', [
-                    'relation' => 'AND',
-                    [ 'key' => '_smacg_event_start', 'value' => $now, 'compare' => '<=', 'type' => 'DATETIME' ],
-                    [ 'key' => '_smacg_event_end',   'value' => $now, 'compare' => '>=', 'type' => 'DATETIME' ],
-                ] );
-                break;
-        }
-    }
-
-    /* ---------------------------------------------
-     * 複製活動
-     * --------------------------------------------- */
-    public static function add_duplicate_action( $actions, $post ) {
+    /* ==========================================================
+     * 列操作：複製、重結
+     * ========================================================== */
+    public static function row_actions( $actions, $post ) {
         if ( $post->post_type !== SMACG_EVENT_CPT ) return $actions;
-        if ( ! current_user_can( 'edit_posts' ) ) return $actions;
-
-        $url = wp_nonce_url(
-            admin_url( 'admin-post.php?action=smacg_event_duplicate&post=' . $post->ID ),
-            'smacg_event_duplicate_' . $post->ID
-        );
-        $actions['smacg_duplicate'] = '<a href="' . esc_url( $url ) . '">📋 複製為新活動</a>';
+        $dup = wp_nonce_url( admin_url( 'admin-post.php?action=smacg_event_duplicate&event_id=' . $post->ID ), 'smacg_event_duplicate' );
+        $actions['smacg_duplicate'] = '<a href="' . esc_url( $dup ) . '">📋 複製</a>';
         return $actions;
     }
 
-    public static function handle_duplicate() {
-        $post_id = (int) ( $_GET['post'] ?? 0 );
-        if ( ! $post_id || ! current_user_can( 'edit_posts' ) ) wp_die( '權限不足' );
-        check_admin_referer( 'smacg_event_duplicate_' . $post_id );
+    public static function handle_resettle() {
+        if ( ! current_user_can( 'manage_options' ) ) wp_die( '無權限', 403 );
+        check_admin_referer( 'smacg_event_resettle' );
 
-        $src = get_post( $post_id );
+        $event_id = (int) ( $_GET['event_id'] ?? 0 );
+        if ( $event_id ) {
+            delete_post_meta( $event_id, '_smacg_event_ended_flag' );
+            Event_Settle::finalize_event( $event_id );
+        }
+        wp_safe_redirect( wp_get_referer() ?: admin_url( 'edit.php?post_type=' . SMACG_EVENT_CPT ) );
+        exit;
+    }
+
+    public static function handle_duplicate() {
+        if ( ! current_user_can( 'edit_posts' ) ) wp_die( '無權限', 403 );
+        check_admin_referer( 'smacg_event_duplicate' );
+
+        $event_id = (int) ( $_GET['event_id'] ?? 0 );
+        $src = get_post( $event_id );
         if ( ! $src || $src->post_type !== SMACG_EVENT_CPT ) wp_die( '找不到活動' );
 
         $new_id = wp_insert_post( [
             'post_type'    => SMACG_EVENT_CPT,
             'post_status'  => 'draft',
-            'post_title'   => $src->post_title . '（複本）',
+            'post_title'   => $src->post_title . '（複製）',
             'post_content' => $src->post_content,
             'post_excerpt' => $src->post_excerpt,
         ] );
 
-        if ( is_wp_error( $new_id ) || ! $new_id ) wp_die( '複製失敗' );
-
-        $meta_keys = [
-            '_smacg_event_task_type', '_smacg_event_task_target',
-            '_smacg_event_reward_exp', '_smacg_event_reward_badge',
-            '_smacg_event_reward_title', '_smacg_event_max_participants',
-        ];
-        foreach ( $meta_keys as $k ) {
-            $v = get_post_meta( $post_id, $k, true );
-            if ( $v !== '' ) update_post_meta( $new_id, $k, $v );
+        if ( $new_id && ! is_wp_error( $new_id ) ) {
+            foreach ( [ 'starts_at','ends_at','action_type','target','reward_exp','reward_badge','reward_title' ] as $k ) {
+                $v = get_post_meta( $event_id, '_smacg_event_' . $k, true );
+                if ( $v !== '' ) update_post_meta( $new_id, '_smacg_event_' . $k, $v );
+            }
+            wp_safe_redirect( admin_url( 'post.php?post=' . $new_id . '&action=edit' ) );
+            exit;
         }
-
-        wp_safe_redirect( admin_url( 'post.php?post=' . $new_id . '&action=edit' ) );
-        exit;
-    }
-
-    /* ---------------------------------------------
-     * Admin notice
-     * --------------------------------------------- */
-    public static function list_notice() {
-        $screen = get_current_screen();
-        if ( ! $screen || $screen->id !== 'edit-' . SMACG_EVENT_CPT ) return;
-
-        $active   = count( CPT::get_active_events( 99 ) );
-        $upcoming = count( CPT::get_upcoming_events( 99 ) );
-        ?>
-        <div class="notice notice-info">
-            <p>
-                🟢 進行中：<strong><?php echo $active; ?></strong> 個 ·
-                🔵 即將開始：<strong><?php echo $upcoming; ?></strong> 個 ·
-                <a href="<?php echo esc_url( admin_url( 'edit.php?post_type=' . SMACG_EVENT_CPT . '&smacg_event_status=active' ) ); ?>">查看進行中</a>
-            </p>
-        </div>
-        <?php
-    }
-
-    /**
-     * 顯示 resettle 後的訊息（與 Ranking 共用 smacg_msg 參數，這裡不重複輸出）
-     * Batch 2.2 的 Cron::show_rebuild_notice 已在 admin_notices 處理 smacg_msg，故此處不再印。
-     */
-    public static function show_msg_notice() {
-        // intentionally empty — handled by Ranking\Cron::show_rebuild_notice
+        wp_die( '複製失敗' );
     }
 }
-
-Admin::init();
