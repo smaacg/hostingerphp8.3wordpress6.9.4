@@ -1,28 +1,23 @@
 <?php
 /**
  * 主題模板 / 舊外掛仍使用的程序式函式名稱橋接。
- * 全部用 function_exists 包住，避免 plugin 在主題尚未停用對應檔時 fatal。
+ *
+ * v1.2.0：新增 Rank Season 函式
  *
  * @package SMACG_Gamification
- * @version 1.1.0 (2026-05-15) - 新增 smacg_get_user_level_info() 完整版,補齊 SMACG_MAX_LEVEL 常數
  */
 defined( 'ABSPATH' ) || exit;
 
 use SMACG\Gamification\Gamipress_Bridge;
 use SMACG\Gamification\Level_System;
 use SMACG\Gamification\Ranking_System;
+use SMACG\Gamification\Rank_Season;
+use SMACG\Gamification\Rank_Tier;
 use SMACG\Gamification\Event_Tracker;
 
-/* ==========================================================
- * 常數
- * ========================================================== */
-if ( ! defined( 'SMACG_MAX_LEVEL' ) ) {
-    define( 'SMACG_MAX_LEVEL', 200 );
-}
+if ( ! defined( 'SMACG_MAX_LEVEL' ) ) define( 'SMACG_MAX_LEVEL', 200 );
 
-/* ==========================================================
- * GamiPress
- * ========================================================== */
+/* ========================================================== GamiPress ========================================================== */
 if ( ! function_exists( 'smacg_gamipress_active' ) ) {
     function smacg_gamipress_active() { return Gamipress_Bridge::active(); }
 }
@@ -52,9 +47,7 @@ if ( ! function_exists( 'smacg_award_badge' ) ) {
     function smacg_award_badge( $uid, $badge_post_id ) { return Gamipress_Bridge::award_badge( $uid, $badge_post_id ); }
 }
 
-/* ==========================================================
- * Level
- * ========================================================== */
+/* ========================================================== Level ========================================================== */
 if ( ! function_exists( 'smacg_get_user_level' ) ) {
     function smacg_get_user_level( $uid ) { return Level_System::get_user_level( $uid ); }
 }
@@ -71,72 +64,51 @@ if ( ! function_exists( 'smacg_grant_exp' ) ) {
     function smacg_grant_exp( $uid, $amount, $reason = '' ) { return Level_System::grant_exp( $uid, $amount, $reason ); }
 }
 
-/**
- * 取得使用者等級完整資訊（page-member.php / member-render.php 使用）
- * 回傳欄位：exp, level, title, icon, percent, in_level_exp, level_total_exp,
- *           to_next, is_max, next_floor, cur_floor
- */
 if ( ! function_exists( 'smacg_get_user_level_info' ) ) {
     function smacg_get_user_level_info( $uid ) {
         $uid = (int) $uid;
         $exp = function_exists( 'smacg_get_user_exp' ) ? (int) smacg_get_user_exp( $uid ) : 0;
 
-        // 取等級
         $level = function_exists( 'smacg_calc_level_from_exp' )
-            ? (int) smacg_calc_level_from_exp( $exp )
-            : 1;
-        if ( $level < 1 ) { $level = 1; }
-        if ( $level > SMACG_MAX_LEVEL ) { $level = SMACG_MAX_LEVEL; }
+            ? (int) smacg_calc_level_from_exp( $exp ) : 1;
+        if ( $level < 1 ) $level = 1;
+        if ( $level > SMACG_MAX_LEVEL ) $level = SMACG_MAX_LEVEL;
 
         $is_max = ( $level >= SMACG_MAX_LEVEL );
+        $table  = function_exists( 'smacg_get_level_table' ) ? smacg_get_level_table() : [];
+        $cur    = isset( $table[ $level ] ) ? (int) $table[ $level ] : 0;
+        $next   = $is_max ? $cur : ( isset( $table[ $level + 1 ] ) ? (int) $table[ $level + 1 ] : $cur );
 
-        // 取本級 / 下一級門檻
-        $table = function_exists( 'smacg_get_level_table' ) ? smacg_get_level_table() : array();
-        $cur_floor  = isset( $table[ $level ] )     ? (int) $table[ $level ]     : 0;
-        $next_floor = $is_max
-            ? $cur_floor
-            : ( isset( $table[ $level + 1 ] ) ? (int) $table[ $level + 1 ] : $cur_floor );
+        $total   = max( 0, $next - $cur );
+        $in_lv   = max( 0, $exp - $cur );
+        $to_next = $is_max ? 0 : max( 0, $next - $exp );
+        $percent = ( $is_max || $total <= 0 ) ? 100 : min( 100, (int) floor( $in_lv * 100 / $total ) );
 
-        $level_total_exp = max( 0, $next_floor - $cur_floor );
-        $in_level_exp    = max( 0, $exp - $cur_floor );
-        $to_next         = $is_max ? 0 : max( 0, $next_floor - $exp );
-        $percent         = ( $is_max || $level_total_exp <= 0 )
-            ? 100
-            : min( 100, (int) floor( $in_level_exp * 100 / $level_total_exp ) );
-
-        // 取頭銜 / 圖示
-        $job   = function_exists( 'smacg_get_job_by_level' ) ? smacg_get_job_by_level( $level ) : array();
-        $title = isset( $job['title'] ) ? $job['title'] : '見習';
-        $icon  = isset( $job['icon'] )  ? $job['icon']  : '🌱';
-
-        return array(
+        $job   = function_exists( 'smacg_get_job_by_level' ) ? smacg_get_job_by_level( $level ) : [];
+        return [
             'exp'             => $exp,
             'level'           => $level,
-            'title'           => $title,
-            'icon'            => $icon,
+            'title'           => $job['title'] ?? '見習',
+            'icon'            => $job['icon']  ?? '🌱',
             'percent'         => $percent,
-            'in_level_exp'    => $in_level_exp,
-            'level_total_exp' => $level_total_exp,
+            'in_level_exp'    => $in_lv,
+            'level_total_exp' => $total,
             'to_next'         => $to_next,
             'is_max'          => $is_max,
-            'next_floor'      => $next_floor,
-            'cur_floor'       => $cur_floor,
-        );
+            'next_floor'      => $next,
+            'cur_floor'       => $cur,
+        ];
     }
 }
 
-/* ==========================================================
- * EXP event trigger
- * ========================================================== */
+/* ========================================================== EXP event ========================================================== */
 if ( ! function_exists( 'smacg_trigger_exp_event' ) ) {
     function smacg_trigger_exp_event( $uid, $action_key, $extra_args = [] ) {
         return \SMACG\Gamification\Exp_Events::award_with_cap( $uid, $action_key, $extra_args );
     }
 }
 
-/* ==========================================================
- * Ranking
- * ========================================================== */
+/* ========================================================== Ranking ========================================================== */
 if ( ! function_exists( 'smacg_ranking_get' ) ) {
     function smacg_ranking_get( $type, $page = 1, $per_page = 20 ) {
         return Ranking_System::get( $type, $page, $per_page );
@@ -144,6 +116,11 @@ if ( ! function_exists( 'smacg_ranking_get' ) ) {
 }
 if ( ! function_exists( 'smacg_ranking_user_position' ) ) {
     function smacg_ranking_user_position( $type, $uid ) {
+        // 賽季排位走獨立資料源
+        if ( $type === 'rank_season' ) {
+            $info = Rank_Season::get_user_info( (int) $uid );
+            return $info['rank'] > 0 ? $info['rank'] : null;
+        }
         return Ranking_System::user_position( $type, $uid );
     }
 }
@@ -158,9 +135,41 @@ if ( ! function_exists( 'smacg_user_appears_in_ranking' ) ) {
     }
 }
 
-/* ==========================================================
- * Season Event
- * ========================================================== */
+/* ========================================================== Rank Season（TFT 段位） ========================================================== */
+if ( ! function_exists( 'smacg_get_user_rank_season_info' ) ) {
+    /**
+     * 取得使用者的當季段位資訊
+     * 回傳：season_code, season_label, score, rank, tier{key,division,label,color,icon},
+     *       progress{is_max, cur_min, next_min, to_next, percent, next_label}
+     */
+    function smacg_get_user_rank_season_info( $uid, $season_code = null ) {
+        return Rank_Season::get_user_info( (int) $uid, $season_code );
+    }
+}
+if ( ! function_exists( 'smacg_get_rank_season_leaderboard' ) ) {
+    function smacg_get_rank_season_leaderboard( $limit = 100, $offset = 0, $season_code = null ) {
+        return Rank_Season::get_leaderboard( $limit, $offset, $season_code );
+    }
+}
+if ( ! function_exists( 'smacg_get_current_season_code' ) ) {
+    function smacg_get_current_season_code() {
+        return Rank_Tier::current_season_code();
+    }
+}
+if ( ! function_exists( 'smacg_get_season_label' ) ) {
+    function smacg_get_season_label( $code = null ) {
+        return Rank_Tier::season_label( $code ?: Rank_Tier::current_season_code() );
+    }
+}
+if ( ! function_exists( 'smacg_get_user_career_peak_tier' ) ) {
+    /** 生涯最高段位（公開頁顯示用） */
+    function smacg_get_user_career_peak_tier( $uid ) {
+        $peak = get_user_meta( (int) $uid, 'smacg_rank_career_peak', true );
+        return is_array( $peak ) ? $peak : null;
+    }
+}
+
+/* ========================================================== Season Event ========================================================== */
 if ( ! function_exists( 'smacg_get_event_meta' ) ) {
     function smacg_get_event_meta( $event_id ) {
         return \SMACG\Gamification\Event_CPT::get_meta( $event_id );
