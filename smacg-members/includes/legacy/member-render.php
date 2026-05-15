@@ -1,92 +1,71 @@
 <?php
 /**
  * Member Center - Render Layer
- *
- * 各 tab 的 HTML 輸出。所有清單一律「先渲染前 N 筆」，其餘由 AJAX 載入。
- * 桌機 20 / 行動 12（前端 JS 偵測，PHP 預設輸出 20）
- *
- * @version 2.4.0 (2026-05-14)
- *
- * v2.4.0 (2026-05-14) — Batch 2A-3：徽章 + 職業頁
- *   - 新增 smacg_render_badges( $uid )：列出所有 GamiPress 徽章與解鎖狀態
- *   - 新增 smacg_render_career( $uid, $lvl_info, $job_title )：職業選擇 / 進化路線
- *   - 不動 smacg_render_points()（Batch 2A-0 已遷移到 GamiPress）
- *
- * v2.3.0 (2026-05-13) — Batch 2A-0：
- *   - smacg_render_points() 改用 GamiPress API
- *   - 改顯示 Lv.X / 200、EXP 累積值、進度條到下一級
- *   - 等級稱號改 6 階：新進會員 / 新客 / 常客 / 熟客 / VIP / 黑卡
- *
- * v2.2.0 (2026-05-13) — Batch 1C-4：
- *   - 新增 smacg_render_notification_prefs_card()（通知偏好卡片）
- *   - smacg_render_settings() 卡片 2 之後插入通知偏好卡
- *
- * v2.1.0 (2026-05-13) — Batch C #9 + #14：時間軸 + 年度回顧入口
- * v2.0.6 (2026-05-13) — Batch B：完成率卡 + 留言分頁
- * v2.0.5 (2026-05-13)：移除「暱稱」、新增「顯示繼續觀看」toggle
- * v2.0.1：設定 tab 三張卡片連結重寫
+ * 各 tab 的 HTML 輸出。清單先渲染前 N 筆，其餘 AJAX 載入（桌機 20 / 行動 12）。
  */
 
-if (!defined('ABSPATH')) exit;
+if ( ! defined( 'ABSPATH' ) ) exit;
 
-if (!defined('SMACG_PAGE_SIZE')) {
-    define('SMACG_PAGE_SIZE', 20);
-}
+if ( ! defined( 'SMACG_PAGE_SIZE' ) )         define( 'SMACG_PAGE_SIZE', 20 );
+if ( ! defined( 'SMACG_COMMENT_PAGE_SIZE' ) ) define( 'SMACG_COMMENT_PAGE_SIZE', 20 );
 
 /* ========== 共用：單張 anime 卡片 ========== */
-function smacg_render_anime_card($pid, $extra = []) {
-    if (!$pid || get_post_status($pid) !== 'publish') return;
-    $title     = get_the_title($pid);
-    $permalink = get_permalink($pid);
-    $thumb     = smacg_get_card_thumb_url($pid);
-    $score     = get_post_meta($pid, 'anime_score_anilist', true);
-    $score     = $score ? round($score / 10, 1) : null;
-    $year      = (int) get_post_meta($pid, 'anime_season_year', true);
-    $eps       = (int) get_post_meta($pid, 'anime_episodes', true);
+function smacg_render_anime_card( $pid, $extra = [] ) {
+    if ( ! $pid || get_post_status( $pid ) !== 'publish' ) return;
 
-    $status    = $extra['status']    ?? '';
-    $progress  = $extra['progress']  ?? 0;
-    $favorited = !empty($extra['favorited']);
-    $user_score= $extra['user_score'] ?? null;
+    $title     = get_the_title( $pid );
+    $permalink = get_permalink( $pid );
+    $thumb     = smacg_get_card_thumb_url( $pid );
+    $score     = get_post_meta( $pid, 'anime_score_anilist', true );
+    $score     = $score ? round( $score / 10, 1 ) : null;
+    $year      = (int) get_post_meta( $pid, 'anime_season_year', true );
+    $eps       = (int) get_post_meta( $pid, 'anime_episodes', true );
 
-    $status_label = ['watching'=>'追番中','completed'=>'已看完','want'=>'想看','dropped'=>'棄番','favorited'=>'收藏'];
+    $status     = $extra['status']     ?? '';
+    $progress   = (int) ( $extra['progress'] ?? 0 );
+    $favorited  = ! empty( $extra['favorited'] );
+    $user_score = $extra['user_score'] ?? null;
+
+    $status_label = [
+        'watching'  => '追番中', 'completed' => '已看完', 'want' => '想看',
+        'dropped'   => '棄番',   'favorited' => '收藏',
+    ];
     ?>
     <article class="mc-anime-card"
-         data-status="<?php echo esc_attr($status); ?>"
-         data-favorited="<?php echo !empty($favorited) ? '1' : '0'; ?>"
-         data-title="<?php echo esc_attr(mb_strtolower($title)); ?>">
+         data-status="<?php echo esc_attr( $status ); ?>"
+         data-favorited="<?php echo $favorited ? '1' : '0'; ?>"
+         data-title="<?php echo esc_attr( mb_strtolower( $title ) ); ?>">
 
-        <a href="<?php echo esc_url($permalink); ?>" class="mc-card-thumb">
-            <?php if ($thumb): ?>
-                <?php
-                if ( function_exists( 'smacg_picture_tag' ) && has_post_thumbnail( $pid ) ) {
+        <a href="<?php echo esc_url( $permalink ); ?>" class="mc-card-thumb">
+            <?php if ( $thumb ): ?>
+                <?php if ( function_exists( 'smacg_picture_tag' ) && has_post_thumbnail( $pid ) ) {
                     echo smacg_picture_tag( $pid, 'medium', $title );
                 } else { ?>
-                    <img src="<?php echo esc_url($thumb); ?>" alt="<?php echo esc_attr($title); ?>" loading="lazy">
+                    <img src="<?php echo esc_url( $thumb ); ?>" alt="<?php echo esc_attr( $title ); ?>" loading="lazy">
                 <?php } ?>
             <?php else: ?>
                 <div class="mc-card-thumb-ph" aria-hidden="true">🎬</div>
             <?php endif; ?>
-            <?php if ($favorited): ?><span class="mc-card-heart" title="已收藏">♥</span><?php endif; ?>
-            <?php if ($status && isset($status_label[$status])): ?>
-                <span class="mc-card-status mc-card-status--<?php echo $status; ?>"><?php echo $status_label[$status]; ?></span>
+            <?php if ( $favorited ): ?><span class="mc-card-heart" title="已收藏">♥</span><?php endif; ?>
+            <?php if ( $status && isset( $status_label[ $status ] ) ): ?>
+                <span class="mc-card-status mc-card-status--<?php echo esc_attr( $status ); ?>"><?php echo esc_html( $status_label[ $status ] ); ?></span>
             <?php endif; ?>
         </a>
         <div class="mc-card-body">
-            <h4 class="mc-card-title"><a href="<?php echo esc_url($permalink); ?>"><?php echo esc_html($title); ?></a></h4>
+            <h4 class="mc-card-title"><a href="<?php echo esc_url( $permalink ); ?>"><?php echo esc_html( $title ); ?></a></h4>
             <div class="mc-card-meta">
-                <?php if ($year): ?><span><?php echo $year; ?></span><?php endif; ?>
-                <?php if ($eps): ?><span><?php echo $eps; ?> 集</span><?php endif; ?>
-                <?php if ($score): ?><span class="mc-card-score">⭐ <?php echo $score; ?></span><?php endif; ?>
+                <?php if ( $year ):  ?><span><?php echo $year; ?></span><?php endif; ?>
+                <?php if ( $eps ):   ?><span><?php echo $eps; ?> 集</span><?php endif; ?>
+                <?php if ( $score ): ?><span class="mc-card-score">⭐ <?php echo $score; ?></span><?php endif; ?>
             </div>
-            <?php if ($status === 'watching' && $eps): ?>
+            <?php if ( $status === 'watching' && $eps ): ?>
                 <div class="mc-card-progress">
-                    <div class="mc-card-progress-fill" style="width:<?php echo min(100, round($progress/$eps*100)); ?>%"></div>
+                    <div class="mc-card-progress-fill" style="width:<?php echo min( 100, round( $progress / $eps * 100 ) ); ?>%"></div>
                     <span><?php echo $progress; ?> / <?php echo $eps; ?></span>
                 </div>
             <?php endif; ?>
-            <?php if ($user_score !== null): ?>
-                <div class="mc-card-userscore">我的評分：<b><?php echo number_format($user_score, 1); ?></b></div>
+            <?php if ( $user_score !== null ): ?>
+                <div class="mc-card-userscore">我的評分：<b><?php echo number_format( (float) $user_score, 1 ); ?></b></div>
             <?php endif; ?>
         </div>
     </article>
@@ -94,72 +73,68 @@ function smacg_render_anime_card($pid, $extra = []) {
 }
 
 /* ========== 縮圖 fallback ========== */
-function smacg_get_card_thumb_url($pid) {
-    if (has_post_thumbnail($pid)) return get_the_post_thumbnail_url($pid, 'medium');
-    $meta = get_post_meta($pid, 'anime_cover_image', true);
-    if ($meta) return esc_url($meta);
-    $content = get_post_field('post_content', $pid);
-    if (preg_match('/<img[^>]+src=["\']([^"\']+)["\']/', $content, $m)) return $m[1];
+function smacg_get_card_thumb_url( $pid ) {
+    if ( has_post_thumbnail( $pid ) ) return get_the_post_thumbnail_url( $pid, 'medium' );
+    $meta = get_post_meta( $pid, 'anime_cover_image', true );
+    if ( $meta ) return esc_url( $meta );
+    $content = get_post_field( 'post_content', $pid );
+    if ( preg_match( '/<img[^>]+src=["\']([^"\']+)["\']/', $content, $m ) ) return $m[1];
     return '';
 }
 
-/* =====================================================
- *  Tab 1：總覽 Dashboard
- * ===================================================== */
-function smacg_render_dashboard($watchlist, $stats, $recent_cmt, $points_log, $plan_label, $uid = 0) {
-    $watching = array_filter($watchlist, fn($w) => $w['status'] === 'watching');
-    $watching = array_slice($watching, 0, 6);
+/* ===== Tab 1：總覽 Dashboard ===== */
+function smacg_render_dashboard( $watchlist, $stats, $recent_cmt, $points_log, $plan_label, $uid = 0 ) {
+    $watching = array_slice( array_filter( $watchlist, fn( $w ) => $w['status'] === 'watching' ), 0, 6 );
 
-    $activity = [];
-    if ( $uid > 0 && function_exists( 'smacg_get_recent_activity' ) ) {
-        $activity = smacg_get_recent_activity( $uid, 15 );
-    }
+    $activity = ( $uid > 0 && function_exists( 'smacg_get_recent_activity' ) )
+        ? smacg_get_recent_activity( $uid, 15 )
+        : [];
     $current_year = (int) date( 'Y' );
     ?>
     <div class="mc-dash-grid">
         <div class="mc-widget mc-widget--watching">
             <h3>🎬 追番中 <small>（最近 6 部）</small></h3>
-            <?php if ($watching): ?>
+            <?php if ( $watching ): ?>
                 <div class="mc-card-grid mc-card-grid--compact">
-                    <?php foreach ($watching as $w) smacg_render_anime_card($w['post_id'], $w); ?>
+                    <?php foreach ( $watching as $w ) smacg_render_anime_card( $w['post_id'], $w ); ?>
                 </div>
             <?php else: ?>
-                <p class="mc-empty">尚未追番，<a href="<?php echo home_url('/anime/'); ?>">去找喜歡的作品</a> →</p>
+                <p class="mc-empty">尚未追番，<a href="<?php echo esc_url( home_url( '/anime/' ) ); ?>">去找喜歡的作品</a> →</p>
             <?php endif; ?>
         </div>
 
         <div class="mc-widget mc-widget--quick">
             <h3>📊 快速概覽</h3>
             <ul class="mc-quick-list">
-                <li><span class="mc-dot mc-dot--watching"></span>追番中 <b><?php echo $stats['counts']['watching']; ?></b></li>
-                <li><span class="mc-dot mc-dot--completed"></span>已看完 <b><?php echo $stats['counts']['completed']; ?></b></li>
-                <li><span class="mc-dot mc-dot--want"></span>想看 <b><?php echo $stats['counts']['want']; ?></b></li>
-                <li><span class="mc-dot mc-dot--favorited"></span>收藏 <b><?php echo $stats['counts']['favorited']; ?></b></li>
-                <li><span class="mc-dot mc-dot--dropped"></span>棄番 <b><?php echo $stats['counts']['dropped']; ?></b></li>
+                <li><span class="mc-dot mc-dot--watching"></span>追番中 <b><?php echo (int) $stats['counts']['watching']; ?></b></li>
+                <li><span class="mc-dot mc-dot--completed"></span>已看完 <b><?php echo (int) $stats['counts']['completed']; ?></b></li>
+                <li><span class="mc-dot mc-dot--want"></span>想看 <b><?php echo (int) $stats['counts']['want']; ?></b></li>
+                <li><span class="mc-dot mc-dot--favorited"></span>收藏 <b><?php echo (int) $stats['counts']['favorited']; ?></b></li>
+                <li><span class="mc-dot mc-dot--dropped"></span>棄番 <b><?php echo (int) $stats['counts']['dropped']; ?></b></li>
             </ul>
             <div class="mc-watchtime">
                 <span>累計觀看</span>
-                <b><?php echo $stats['watch_time']['days']; ?> 天</b>
-                <small>（<?php echo number_format($stats['watch_time']['hours']); ?> 小時）</small>
+                <b><?php echo (int) $stats['watch_time']['days']; ?> 天</b>
+                <small>（<?php echo number_format( (int) $stats['watch_time']['hours'] ); ?> 小時）</small>
             </div>
         </div>
 
         <div class="mc-widget mc-widget--plan">
             <h3>👤 我的方案</h3>
-            <div class="mc-plan-card"><?php echo esc_html($plan_label); ?></div>
-            <a href="<?php echo home_url('/sponsor/'); ?>" class="mc-btn-upgrade">升級方案 →</a>
+            <div class="mc-plan-card"><?php echo esc_html( $plan_label ); ?></div>
+            <a href="<?php echo esc_url( home_url( '/sponsor/' ) ); ?>" class="mc-btn-upgrade">升級方案 →</a>
         </div>
 
         <div class="mc-widget mc-widget--comments">
             <h3>💬 最近留言</h3>
-            <?php if ($recent_cmt): ?>
+            <?php if ( $recent_cmt ): ?>
                 <ul class="mc-cmt-list">
-                    <?php foreach ($recent_cmt as $c): ?>
+                    <?php foreach ( $recent_cmt as $c ): ?>
                         <li>
-                            <a href="<?php echo esc_url(get_comment_link($c)); ?>">
-                                <b><?php echo esc_html(get_the_title($c->comment_post_ID)); ?></b>
-                                <p><?php echo esc_html(wp_trim_words($c->comment_content, 20)); ?></p>
-                                <small><?php echo human_time_diff(strtotime($c->comment_date), current_time('timestamp')); ?> 前</small>
+                            <a href="<?php echo esc_url( get_comment_link( $c ) ); ?>">
+                                <b><?php echo esc_html( get_the_title( $c->comment_post_ID ) ); ?></b>
+                                <p><?php echo esc_html( wp_trim_words( $c->comment_content, 20 ) ); ?></p>
+                                <small><?php echo human_time_diff( strtotime( $c->comment_date ), current_time( 'timestamp' ) ); ?> 前</small>
                             </a>
                         </li>
                     <?php endforeach; ?>
@@ -190,9 +165,7 @@ function smacg_render_dashboard($watchlist, $stats, $recent_cmt, $points_log, $p
     <?php
 }
 
-/* =====================================================
- *  最近活動時間軸渲染
- * ===================================================== */
+/* ===== 最近活動時間軸 ===== */
 function smacg_render_activity_timeline( $events ) {
     if ( empty( $events ) ) {
         echo '<p class="mc-empty">最近沒有活動，開始追番吧！</p>';
@@ -201,17 +174,17 @@ function smacg_render_activity_timeline( $events ) {
     ?>
     <ul class="mc-timeline">
         <?php foreach ( $events as $e ):
-            $color = $e['color'] ?? 'accent';
-            $link  = $e['link']  ?? '';
-            $post_title = $e['post_id'] ? get_the_title( $e['post_id'] ) : '';
-            ?>
+            $color      = $e['color'] ?? 'accent';
+            $link       = $e['link']  ?? '';
+            $post_title = ! empty( $e['post_id'] ) ? get_the_title( $e['post_id'] ) : '';
+        ?>
             <li class="mc-timeline-item mc-timeline-item--<?php echo esc_attr( $color ); ?>">
                 <div class="mc-timeline-dot" aria-hidden="true">
                     <span class="mc-timeline-icon"><?php echo esc_html( $e['icon'] ?? '•' ); ?></span>
                 </div>
                 <div class="mc-timeline-body">
                     <div class="mc-timeline-main">
-                        <span class="mc-timeline-action"><?php echo esc_html( $e['title'] ); ?></span>
+                        <span class="mc-timeline-action"><?php echo esc_html( $e['title'] ?? '' ); ?></span>
                         <?php if ( $post_title ): ?>
                             <?php if ( $link ): ?>
                                 <a class="mc-timeline-target" href="<?php echo esc_url( $link ); ?>"><?php echo esc_html( $post_title ); ?></a>
@@ -231,21 +204,19 @@ function smacg_render_activity_timeline( $events ) {
     <?php
 }
 
-/* =====================================================
- *  Tab 2：我的清單
- * ===================================================== */
-function smacg_render_watchlist($watchlist, $counts) {
-    $first = array_slice($watchlist, 0, SMACG_PAGE_SIZE);
-    $total = count($watchlist);
+/* ===== Tab 2：我的清單 ===== */
+function smacg_render_watchlist( $watchlist, $counts ) {
+    $first = array_slice( $watchlist, 0, SMACG_PAGE_SIZE );
+    $total = count( $watchlist );
     ?>
     <div class="mc-list-toolbar">
         <div class="mc-filter-bar" role="tablist">
-            <button class="mc-filter-btn active" data-filter="all">全部 (<?php echo $counts['all']; ?>)</button>
-            <button class="mc-filter-btn" data-filter="watching">追番中 (<?php echo $counts['watching']; ?>)</button>
-            <button class="mc-filter-btn" data-filter="completed">已看完 (<?php echo $counts['completed']; ?>)</button>
-            <button class="mc-filter-btn" data-filter="want">想看 (<?php echo $counts['want']; ?>)</button>
-            <button class="mc-filter-btn" data-filter="favorited">收藏 (<?php echo $counts['favorited']; ?>)</button>
-            <button class="mc-filter-btn" data-filter="dropped">棄番 (<?php echo $counts['dropped']; ?>)</button>
+            <button class="mc-filter-btn active" data-filter="all">全部 (<?php echo (int) $counts['all']; ?>)</button>
+            <button class="mc-filter-btn" data-filter="watching">追番中 (<?php echo (int) $counts['watching']; ?>)</button>
+            <button class="mc-filter-btn" data-filter="completed">已看完 (<?php echo (int) $counts['completed']; ?>)</button>
+            <button class="mc-filter-btn" data-filter="want">想看 (<?php echo (int) $counts['want']; ?>)</button>
+            <button class="mc-filter-btn" data-filter="favorited">收藏 (<?php echo (int) $counts['favorited']; ?>)</button>
+            <button class="mc-filter-btn" data-filter="dropped">棄番 (<?php echo (int) $counts['dropped']; ?>)</button>
         </div>
         <div class="mc-list-tools">
             <input type="search" class="mc-search" placeholder="🔍 搜尋標題…" data-target="watchlist">
@@ -259,80 +230,78 @@ function smacg_render_watchlist($watchlist, $counts) {
     </div>
 
     <div class="mc-card-grid" id="mc-watchlist-grid">
-        <?php foreach ($first as $w) smacg_render_anime_card($w['post_id'], $w); ?>
+        <?php foreach ( $first as $w ) smacg_render_anime_card( $w['post_id'], $w ); ?>
     </div>
 
-    <?php if ($total > SMACG_PAGE_SIZE): ?>
+    <?php if ( $total > SMACG_PAGE_SIZE ): ?>
         <div class="mc-loadmore-wrap">
-            <button class="mc-loadmore" data-type="watchlist" data-loaded="<?php echo count($first); ?>" data-total="<?php echo $total; ?>">
-                載入更多（剩 <span><?php echo $total - count($first); ?></span>）
+            <button class="mc-loadmore" data-type="watchlist" data-loaded="<?php echo count( $first ); ?>" data-total="<?php echo $total; ?>">
+                載入更多（剩 <span><?php echo $total - count( $first ); ?></span>）
             </button>
         </div>
-        <script type="application/json" id="mc-watchlist-data"><?php echo wp_json_encode($watchlist); ?></script>
+        <script type="application/json" id="mc-watchlist-data"><?php echo wp_json_encode( $watchlist ); ?></script>
     <?php endif; ?>
     <?php
 }
 
-/* =====================================================
- *  Tab 3：統計
- * ===================================================== */
-function smacg_render_stats($s) {
+/* ===== Tab 3：統計 ===== */
+function smacg_render_stats( $s ) {
     $r = $s['rating'];
-    $completion_rate = isset($s['completion_rate']) ? (float) $s['completion_rate'] : null;
+    $completion_rate = isset( $s['completion_rate'] ) ? (float) $s['completion_rate'] : null;
     ?>
     <div class="mc-stats-grid">
 
         <div class="mc-stats-banner">
             <div>
                 <span class="mc-banner-label">你已經沉浸在動畫世界</span>
-                <b class="mc-banner-num"><?php echo $s['watch_time']['days']; ?></b>
+                <b class="mc-banner-num"><?php echo (int) $s['watch_time']['days']; ?></b>
                 <span class="mc-banner-unit">天</span>
             </div>
             <div class="mc-banner-sub">
-                共 <?php echo number_format($s['watch_time']['hours']); ?> 小時 ·
-                追完 <?php echo $s['counts']['completed']; ?> 部作品
+                共 <?php echo number_format( (int) $s['watch_time']['hours'] ); ?> 小時 ·
+                追完 <?php echo (int) $s['counts']['completed']; ?> 部作品
             </div>
         </div>
 
-        <?php if ($completion_rate !== null):
-            $denom = $s['counts']['completed'] + $s['counts']['dropped'] + $s['counts']['watching'];
-            if      ($completion_rate >= 80) { $emoji = '🏆'; $remark = '超強毅力，幾乎部部追完！'; }
-            elseif  ($completion_rate >= 60) { $emoji = '✨'; $remark = '完成率不錯，繼續保持！'; }
-            elseif  ($completion_rate >= 40) { $emoji = '👀'; $remark = '加油，可以多看完幾部！'; }
-            elseif  ($completion_rate >= 20) { $emoji = '🤔'; $remark = '挑戰一下，把追番中的看完吧！'; }
-            else                             { $emoji = '🌱'; $remark = '剛開始，慢慢累積！'; }
+        <?php if ( $completion_rate !== null ):
+            $denom = (int) $s['counts']['completed'] + (int) $s['counts']['dropped'] + (int) $s['counts']['watching'];
+            [ $emoji, $remark ] = match ( true ) {
+                $completion_rate >= 80 => [ '🏆', '超強毅力，幾乎部部追完！' ],
+                $completion_rate >= 60 => [ '✨', '完成率不錯，繼續保持！' ],
+                $completion_rate >= 40 => [ '👀', '加油，可以多看完幾部！' ],
+                $completion_rate >= 20 => [ '🤔', '挑戰一下，把追番中的看完吧！' ],
+                default                => [ '🌱', '剛開始，慢慢累積！' ],
+            };
         ?>
             <div class="mc-stats-card mc-stats-card--completion">
                 <h3><?php echo $emoji; ?> 完成率</h3>
                 <div class="mc-completion-wrap">
-                    <div class="mc-completion-big">
-                        <b><?php echo $completion_rate; ?></b><span>%</span>
-                    </div>
+                    <div class="mc-completion-big"><b><?php echo $completion_rate; ?></b><span>%</span></div>
                     <div class="mc-completion-bar">
-                        <div class="mc-completion-fill" style="width:<?php echo min(100, $completion_rate); ?>%"></div>
+                        <div class="mc-completion-fill" style="width:<?php echo min( 100, $completion_rate ); ?>%"></div>
                     </div>
                     <div class="mc-completion-meta">
-                        已看完 <b><?php echo $s['counts']['completed']; ?></b> /
+                        已看完 <b><?php echo (int) $s['counts']['completed']; ?></b> /
                         計入 <b><?php echo $denom; ?></b> 部
                         <small>（含追番中、已看完、棄番）</small>
                     </div>
-                    <p class="mc-completion-remark"><?php echo esc_html($remark); ?></p>
+                    <p class="mc-completion-remark"><?php echo esc_html( $remark ); ?></p>
                 </div>
             </div>
         <?php endif; ?>
 
         <div class="mc-stats-card">
             <h3>⭐ 評分分布</h3>
-            <?php if ($r['count']): ?>
+            <?php if ( $r['count'] ): ?>
                 <div class="mc-stats-summary">
                     <div><b><?php echo $r['avg']; ?></b><span>平均分</span></div>
                     <div><b><?php echo $r['count']; ?></b><span>評分數</span></div>
                 </div>
                 <?php
-                $max = max($r['distribution']) ?: 1;
-                for ($i = 10; $i >= 1; $i--):
-                    $c = $r['distribution'][$i];
-                    $w = $c ? round($c / $max * 100) : 0;
+                $max = max( $r['distribution'] ) ?: 1;
+                for ( $i = 10; $i >= 1; $i-- ):
+                    $c = (int) ( $r['distribution'][ $i ] ?? 0 );
+                    $w = $c ? round( $c / $max * 100 ) : 0;
                 ?>
                     <div class="mc-bar-row">
                         <span class="mc-bar-label"><?php echo $i; ?> 分</span>
@@ -345,27 +314,27 @@ function smacg_render_stats($s) {
             <?php endif; ?>
         </div>
 
-        <?php if ($s['genres']):
-            $colors = ['#ff6bae','#6bb6ff','#a78bfa','#fbbf24','#34d399','#f87171','#60a5fa','#c084fc'];
+        <?php if ( ! empty( $s['genres'] ) ):
+            $colors = [ '#ff6bae','#6bb6ff','#a78bfa','#fbbf24','#34d399','#f87171','#60a5fa','#c084fc' ];
             $stops = []; $acc = 0;
-            foreach ($s['genres'] as $i => $g) {
+            foreach ( $s['genres'] as $i => $g ) {
                 $start = $acc;
-                $acc  += $g['percent'];
-                $stops[] = $colors[$i % 8] . " {$start}% {$acc}%";
+                $acc  += (int) $g['percent'];
+                $stops[] = $colors[ $i % 8 ] . " {$start}% {$acc}%";
             }
-            $pie = 'conic-gradient(' . implode(',', $stops) . ')';
+            $pie = 'conic-gradient(' . implode( ',', $stops ) . ')';
         ?>
             <div class="mc-stats-card">
                 <h3>🎭 類型偏好 <small>Top 8</small></h3>
                 <div class="mc-pie-wrap">
-                    <div class="mc-pie" style="background:<?php echo esc_attr($pie); ?>"></div>
+                    <div class="mc-pie" style="background:<?php echo esc_attr( $pie ); ?>"></div>
                     <ul class="mc-pie-legend">
-                        <?php foreach ($s['genres'] as $i => $g): ?>
+                        <?php foreach ( $s['genres'] as $i => $g ): ?>
                             <li>
-                                <span class="mc-pie-dot" style="background:<?php echo $colors[$i % 8]; ?>"></span>
-                                <?php echo esc_html($g['name']); ?>
-                                <b><?php echo $g['percent']; ?>%</b>
-                                <small>（<?php echo $g['count']; ?>）</small>
+                                <span class="mc-pie-dot" style="background:<?php echo $colors[ $i % 8 ]; ?>"></span>
+                                <?php echo esc_html( $g['name'] ); ?>
+                                <b><?php echo (int) $g['percent']; ?>%</b>
+                                <small>（<?php echo (int) $g['count']; ?>）</small>
                             </li>
                         <?php endforeach; ?>
                     </ul>
@@ -373,48 +342,48 @@ function smacg_render_stats($s) {
             </div>
         <?php endif; ?>
 
-        <?php if ($s['studios']): ?>
+        <?php if ( ! empty( $s['studios'] ) ): ?>
             <div class="mc-stats-card">
                 <h3>🏢 製作公司 <small>Top 5</small></h3>
                 <ol class="mc-rank-list">
-                    <?php foreach ($s['studios'] as $i => $st): ?>
+                    <?php foreach ( $s['studios'] as $i => $st ): ?>
                         <li>
                             <span class="mc-rank-num">#<?php echo $i + 1; ?></span>
-                            <span class="mc-rank-name"><?php echo esc_html($st['name']); ?></span>
-                            <span class="mc-rank-count"><?php echo $st['count']; ?> 部</span>
+                            <span class="mc-rank-name"><?php echo esc_html( $st['name'] ); ?></span>
+                            <span class="mc-rank-count"><?php echo (int) $st['count']; ?> 部</span>
                         </li>
                     <?php endforeach; ?>
                 </ol>
             </div>
         <?php endif; ?>
 
-        <?php if ($s['years']):
-            $ymax = max(array_column($s['years'], 'count')) ?: 1; ?>
+        <?php if ( ! empty( $s['years'] ) ):
+            $ymax = max( array_column( $s['years'], 'count' ) ) ?: 1; ?>
             <div class="mc-stats-card">
                 <h3>📅 年代分布</h3>
-                <?php foreach ($s['years'] as $y): $w = round($y['count']/$ymax*100); ?>
+                <?php foreach ( $s['years'] as $y ): $w = round( $y['count'] / $ymax * 100 ); ?>
                     <div class="mc-bar-row">
-                        <span class="mc-bar-label"><?php echo esc_html($y['year']); ?></span>
+                        <span class="mc-bar-label"><?php echo esc_html( $y['year'] ); ?></span>
                         <div class="mc-bar"><div class="mc-bar-fill mc-bar-fill--alt" style="width:<?php echo $w; ?>%"></div></div>
-                        <span class="mc-bar-count"><?php echo $y['count']; ?></span>
+                        <span class="mc-bar-count"><?php echo (int) $y['count']; ?></span>
                     </div>
                 <?php endforeach; ?>
             </div>
         <?php endif; ?>
 
-        <?php if ($r['top3']): ?>
+        <?php if ( ! empty( $r['top3'] ) ): ?>
             <div class="mc-stats-card">
                 <h3>🏆 我給高分的作品</h3>
                 <div class="mc-card-grid mc-card-grid--compact">
-                    <?php foreach ($r['top3'] as $row) smacg_render_anime_card($row['post_id'], ['user_score' => $row['score']]); ?>
+                    <?php foreach ( $r['top3'] as $row ) smacg_render_anime_card( $row['post_id'], [ 'user_score' => $row['score'] ] ); ?>
                 </div>
             </div>
         <?php endif; ?>
-        <?php if ($r['bottom3'] && count($r['bottom3']) >= 3): ?>
+        <?php if ( ! empty( $r['bottom3'] ) && count( $r['bottom3'] ) >= 3 ): ?>
             <div class="mc-stats-card">
                 <h3>👀 我給低分的作品</h3>
                 <div class="mc-card-grid mc-card-grid--compact">
-                    <?php foreach ($r['bottom3'] as $row) smacg_render_anime_card($row['post_id'], ['user_score' => $row['score']]); ?>
+                    <?php foreach ( $r['bottom3'] as $row ) smacg_render_anime_card( $row['post_id'], [ 'user_score' => $row['score'] ] ); ?>
                 </div>
             </div>
         <?php endif; ?>
@@ -423,67 +392,52 @@ function smacg_render_stats($s) {
     <?php
 }
 
-/* =====================================================
- *  Tab 4：評分
- * ===================================================== */
-function smacg_render_ratings($ratings, $rating_stats) {
-    $total = count($ratings);
-    $first = array_slice($ratings, 0, SMACG_PAGE_SIZE);
+/* ===== Tab 4：評分 ===== */
+function smacg_render_ratings( $ratings, $rating_stats ) {
+    $total = count( $ratings );
+    $first = array_slice( $ratings, 0, SMACG_PAGE_SIZE );
+
+    if ( ! $total ) {
+        echo '<p class="mc-empty">還沒給任何作品評分</p>';
+        return;
+    }
     ?>
-    <?php if ($total): ?>
-        <div class="mc-rating-summary">
-            <div><b><?php echo $rating_stats['avg']; ?></b><span>平均分</span></div>
-            <div><b><?php echo $total; ?></b><span>已評分</span></div>
-        </div>
+    <div class="mc-rating-summary">
+        <div><b><?php echo $rating_stats['avg']; ?></b><span>平均分</span></div>
+        <div><b><?php echo $total; ?></b><span>已評分</span></div>
+    </div>
 
-        <div class="mc-list-tools">
-            <input type="search" class="mc-search" placeholder="🔍 搜尋標題…" data-target="ratings">
-            <select class="mc-sort" data-target="ratings">
-                <option value="updated">最近評分</option>
-                <option value="score-desc">分數高 → 低</option>
-                <option value="score-asc">分數低 → 高</option>
-            </select>
-        </div>
+    <div class="mc-list-tools">
+        <input type="search" class="mc-search" placeholder="🔍 搜尋標題…" data-target="ratings">
+        <select class="mc-sort" data-target="ratings">
+            <option value="updated">最近評分</option>
+            <option value="score-desc">分數高 → 低</option>
+            <option value="score-asc">分數低 → 高</option>
+        </select>
+    </div>
 
-        <div class="mc-card-grid" id="mc-ratings-grid">
-            <?php foreach ($first as $r) smacg_render_anime_card((int)$r['anime_id'], ['user_score'=>(float)$r['overall_score']]); ?>
-        </div>
+    <div class="mc-card-grid" id="mc-ratings-grid">
+        <?php foreach ( $first as $r ) smacg_render_anime_card( (int) $r['anime_id'], [ 'user_score' => (float) $r['overall_score'] ] ); ?>
+    </div>
 
-        <?php if ($total > SMACG_PAGE_SIZE): ?>
-            <div class="mc-loadmore-wrap">
-                <button class="mc-loadmore" data-type="ratings" data-loaded="<?php echo count($first); ?>" data-total="<?php echo $total; ?>">
-                    載入更多（剩 <span><?php echo $total - count($first); ?></span>）
-                </button>
-            </div>
-            <script type="application/json" id="mc-ratings-data"><?php echo wp_json_encode($ratings); ?></script>
-        <?php endif; ?>
-    <?php else: ?>
-        <p class="mc-empty">還沒給任何作品評分</p>
+    <?php if ( $total > SMACG_PAGE_SIZE ): ?>
+        <div class="mc-loadmore-wrap">
+            <button class="mc-loadmore" data-type="ratings" data-loaded="<?php echo count( $first ); ?>" data-total="<?php echo $total; ?>">
+                載入更多（剩 <span><?php echo $total - count( $first ); ?></span>）
+            </button>
+        </div>
+        <script type="application/json" id="mc-ratings-data"><?php echo wp_json_encode( $ratings ); ?></script>
     <?php endif; ?>
     <?php
 }
 
-/* =====================================================
- *  Tab 5：留言（v2.0.6：改用分頁）
- * ===================================================== */
-if ( ! defined( 'SMACG_COMMENT_PAGE_SIZE' ) ) {
-    define( 'SMACG_COMMENT_PAGE_SIZE', 20 );
-}
-
+/* ===== Tab 5：留言 ===== */
 function smacg_render_comments( $uid ) {
     $uid = (int) $uid;
     if ( $uid <= 0 ) { echo '<p class="mc-empty">尚無留言</p>'; return; }
 
-    $total = (int) get_comments( [
-        'user_id' => $uid,
-        'status'  => 'approve',
-        'count'   => true,
-    ] );
-
-    if ( $total === 0 ) {
-        echo '<p class="mc-empty">尚無留言</p>';
-        return;
-    }
+    $total = (int) get_comments( [ 'user_id' => $uid, 'status' => 'approve', 'count' => true ] );
+    if ( ! $total ) { echo '<p class="mc-empty">尚無留言</p>'; return; }
 
     $cmts = get_comments( [
         'user_id' => $uid,
@@ -498,9 +452,7 @@ function smacg_render_comments( $uid ) {
     $nonce  = wp_create_nonce( 'smacg_load_more_comments' );
     ?>
     <div class="mc-comments-wrap">
-        <div class="mc-comments-meta">
-            共 <b><?php echo $total; ?></b> 則留言
-        </div>
+        <div class="mc-comments-meta">共 <b><?php echo $total; ?></b> 則留言</div>
 
         <ul class="mc-cmt-fulllist" id="mc-cmt-list">
             <?php foreach ( $cmts as $c ): ?>
@@ -516,8 +468,7 @@ function smacg_render_comments( $uid ) {
 
         <?php if ( $total > $loaded ): ?>
             <div class="mc-loadmore-wrap">
-                <button type="button"
-                        class="mc-loadmore mc-loadmore-comments"
+                <button type="button" class="mc-loadmore mc-loadmore-comments"
                         data-loaded="<?php echo $loaded; ?>"
                         data-total="<?php echo $total; ?>"
                         data-nonce="<?php echo esc_attr( $nonce ); ?>">
@@ -529,35 +480,36 @@ function smacg_render_comments( $uid ) {
     <?php
 }
 
-/* =====================================================
- *  Tab 6：點數 / EXP（v2.3.0 - 改用 GamiPress API）
- *  Batch 2A-0：全面遷移到 GamiPress，丟棄舊參數
- * ===================================================== */
+/* ===== Tab 6：點數 / EXP（含缺鍵防護）===== */
 function smacg_render_points( $points = null, $lvl = null, $log = null ) {
-    // 取得當前用戶（從 query 或當前登入用戶）
-    $uid = get_query_var( 'smacg_view_user' );
-    if ( ! $uid ) $uid = get_current_user_id();
-    $uid = (int) $uid;
+    $uid = (int) ( get_query_var( 'smacg_view_user' ) ?: get_current_user_id() );
+    if ( $uid <= 0 ) { echo '<p class="mc-empty">請先登入</p>'; return; }
 
-    if ( $uid <= 0 ) {
-        echo '<p class="mc-empty">請先登入</p>';
-        return;
-    }
+    $info = function_exists( 'smacg_get_user_level_info' ) ? smacg_get_user_level_info( $uid ) : [];
+    $log  = function_exists( 'smacg_get_exp_log' )         ? smacg_get_exp_log( $uid, 50 )    : [];
 
-    // 從 GamiPress 取得即時資料
-    $info = smacg_get_user_level_info( $uid );
-    $log  = smacg_get_exp_log( $uid, 50 );
+    // 缺鍵防護：補上預設值
+    $info = array_merge( [
+        'exp'             => 0,
+        'level'           => 1,
+        'title'           => '見習',
+        'icon'            => '🌱',
+        'percent'         => 0,
+        'in_level_exp'    => 0,
+        'level_total_exp' => 0,
+        'to_next'         => 0,
+        'is_max'          => false,
+        'next_floor'      => 0,
+    ], is_array( $info ) ? $info : [] );
 
-    $is_max = ! empty( $info['is_max'] );
+    $max_level = defined( 'SMACG_MAX_LEVEL' ) ? SMACG_MAX_LEVEL : 200;
+    $is_max    = ! empty( $info['is_max'] );
     ?>
     <div class="smacg-level-summary <?php echo $is_max ? 'is-max' : ''; ?>">
         <div class="smacg-level-header">
-            <div class="smacg-level-icon"><?php echo $info['icon']; ?></div>
+            <div class="smacg-level-icon"><?php echo esc_html( $info['icon'] ); ?></div>
             <div class="smacg-level-meta">
-                <div class="lvl-number">
-                    Lv.<?php echo (int) $info['level']; ?>
-                    <small>/ <?php echo SMACG_MAX_LEVEL; ?></small>
-                </div>
+                <div class="lvl-number">Lv.<?php echo (int) $info['level']; ?> <small>/ <?php echo (int) $max_level; ?></small></div>
                 <div class="lvl-title"><?php echo esc_html( $info['title'] ); ?></div>
             </div>
             <div class="smacg-level-exp">
@@ -584,24 +536,16 @@ function smacg_render_points( $points = null, $lvl = null, $log = null ) {
     <h3 class="mc-section-title">📜 最近 50 筆 EXP 紀錄</h3>
     <?php if ( $log ): ?>
         <table class="mc-points-table">
-            <thead>
-                <tr>
-                    <th>時間</th>
-                    <th>變動</th>
-                    <th>原因</th>
-                </tr>
-            </thead>
+            <thead><tr><th>時間</th><th>變動</th><th>原因</th></tr></thead>
             <tbody>
                 <?php foreach ( $log as $row ):
-                    $v   = (int) $row['change_value'];
+                    $v   = (int) ( $row['change_value'] ?? 0 );
                     $cls = $v >= 0 ? 'pos' : 'neg';
                 ?>
                     <tr>
-                        <td data-label="時間"><?php echo esc_html( $row['created_at'] ); ?></td>
-                        <td data-label="變動" class="mc-pt-<?php echo $cls; ?>">
-                            <?php echo ( $v >= 0 ? '+' : '' ) . number_format( $v ); ?>
-                        </td>
-                        <td data-label="原因"><?php echo esc_html( $row['reason'] ); ?></td>
+                        <td data-label="時間"><?php echo esc_html( $row['created_at'] ?? '' ); ?></td>
+                        <td data-label="變動" class="mc-pt-<?php echo $cls; ?>"><?php echo ( $v >= 0 ? '+' : '' ) . number_format( $v ); ?></td>
+                        <td data-label="原因"><?php echo esc_html( $row['reason'] ?? '' ); ?></td>
                     </tr>
                 <?php endforeach; ?>
             </tbody>
@@ -612,41 +556,27 @@ function smacg_render_points( $points = null, $lvl = null, $log = null ) {
     <?php
 }
 
-/* =====================================================
- *  Tab：🏆 徽章（v2.4.0 - Batch 2A-3）
- *
- *  從 GamiPress 抓「badge」achievement-type，顯示已解鎖 vs. 未解鎖
- *  簽章：smacg_render_badges( $uid )
- * ===================================================== */
+/* ===== Tab：🏆 徽章 ===== */
 function smacg_render_badges( $uid ) {
     $uid = (int) $uid;
-    if ( $uid <= 0 ) {
-        echo '<p class="mc-empty">請先登入</p>';
-        return;
-    }
+    if ( $uid <= 0 ) { echo '<p class="mc-empty">請先登入</p>'; return; }
 
     if ( ! function_exists( 'smacg_gamipress_active' ) || ! smacg_gamipress_active() ) {
-        echo '<div class="mc-empty">';
-        echo '<p>GamiPress 尚未啟用，徽章功能無法顯示。</p>';
-        echo '<p><small>請聯絡管理員設定。</small></p>';
-        echo '</div>';
+        echo '<div class="mc-empty"><p>GamiPress 尚未啟用，徽章功能無法顯示。</p><p><small>請聯絡管理員設定。</small></p></div>';
         return;
     }
 
     $badge_slug = defined( 'SMACG_BADGE_SLUG' ) ? SMACG_BADGE_SLUG : 'badge';
-
-    // 取得所有徽章
-    $all_badges = get_posts( array(
+    $all_badges = get_posts( [
         'post_type'      => $badge_slug,
         'post_status'    => 'publish',
         'posts_per_page' => 200,
         'orderby'        => 'menu_order title',
         'order'          => 'ASC',
-    ) );
+    ] );
 
     if ( empty( $all_badges ) ) {
-        echo '<div class="mc-empty">';
-        echo '<p>目前還沒有任何徽章。</p>';
+        echo '<div class="mc-empty"><p>目前還沒有任何徽章。</p>';
         if ( current_user_can( 'manage_options' ) ) {
             echo '<p><small>管理員可至 <a href="' . esc_url( admin_url( 'edit.php?post_type=' . $badge_slug ) ) . '">GamiPress 後台</a> 建立徽章。</small></p>';
         }
@@ -654,22 +584,15 @@ function smacg_render_badges( $uid ) {
         return;
     }
 
-    $earned_ids = function_exists( 'smacg_get_user_badge_ids' )
-        ? smacg_get_user_badge_ids( $uid )
-        : array();
+    $earned_ids = function_exists( 'smacg_get_user_badge_ids' ) ? smacg_get_user_badge_ids( $uid ) : [];
     $earned_map = array_flip( $earned_ids );
-
-    $total    = count( $all_badges );
-    $unlocked = count( $earned_ids );
-    $percent  = $total > 0 ? round( $unlocked / $total * 100 ) : 0;
+    $total      = count( $all_badges );
+    $unlocked   = count( $earned_ids );
+    $percent    = $total > 0 ? round( $unlocked / $total * 100 ) : 0;
     ?>
     <div class="mc-badges-wrap">
-
         <div class="mc-badges-summary">
-            <div class="mc-badges-summary-num">
-                <b><?php echo $unlocked; ?></b>
-                <span>/ <?php echo $total; ?></span>
-            </div>
+            <div class="mc-badges-summary-num"><b><?php echo $unlocked; ?></b><span>/ <?php echo $total; ?></span></div>
             <div class="mc-badges-summary-bar">
                 <div class="mc-badges-summary-bar-fill" style="width:<?php echo $percent; ?>%"></div>
             </div>
@@ -677,65 +600,51 @@ function smacg_render_badges( $uid ) {
         </div>
 
         <div class="mc-badges-grid">
-            <?php foreach ( $all_badges as $badge ) :
+            <?php foreach ( $all_badges as $badge ):
                 $is_unlocked = isset( $earned_map[ $badge->ID ] );
                 $thumb       = get_the_post_thumbnail_url( $badge->ID, 'thumbnail' );
-                $excerpt     = wp_strip_all_tags( $badge->post_excerpt ?: $badge->post_content );
-                $excerpt     = mb_strimwidth( $excerpt, 0, 60, '…' );
+                $excerpt     = mb_strimwidth( wp_strip_all_tags( $badge->post_excerpt ?: $badge->post_content ), 0, 60, '…' );
             ?>
                 <div class="mc-badge-card <?php echo $is_unlocked ? 'is-unlocked' : 'is-locked'; ?>">
                     <div class="mc-badge-icon">
-                        <?php if ( $thumb ) : ?>
+                        <?php if ( $thumb ): ?>
                             <img src="<?php echo esc_url( $thumb ); ?>" alt="<?php echo esc_attr( $badge->post_title ); ?>" loading="lazy">
-                        <?php else : ?>
+                        <?php else: ?>
                             <i class="fa-solid fa-trophy"></i>
                         <?php endif; ?>
-                        <?php if ( ! $is_unlocked ) : ?>
+                        <?php if ( ! $is_unlocked ): ?>
                             <span class="mc-badge-lock"><i class="fa-solid fa-lock"></i></span>
                         <?php endif; ?>
                     </div>
                     <div class="mc-badge-info">
                         <h4 class="mc-badge-title"><?php echo esc_html( $badge->post_title ); ?></h4>
-                        <?php if ( $excerpt ) : ?>
-                            <p class="mc-badge-desc"><?php echo esc_html( $excerpt ); ?></p>
-                        <?php endif; ?>
+                        <?php if ( $excerpt ): ?><p class="mc-badge-desc"><?php echo esc_html( $excerpt ); ?></p><?php endif; ?>
                     </div>
                 </div>
             <?php endforeach; ?>
         </div>
-
     </div>
     <?php
 }
 
-/* =====================================================
- *  Tab：🎯 職業（v2.4.0 - Batch 2A-3）
- *
- *  Lv.10+ 顯示職業選擇；尚未到 Lv.10 顯示倒數
- *  已選擇職業：顯示當前稱號與未來進化路線
- *  簽章：smacg_render_career( $uid, $lvl_info, $job_title )
- * ===================================================== */
+/* ===== Tab：🎯 職業 ===== */
 function smacg_render_career( $uid, $lvl_info = null, $job_title = null ) {
-    $uid     = (int) $uid;
-    if ( $uid <= 0 ) {
-        echo '<p class="mc-empty">請先登入</p>';
-        return;
-    }
+    $uid = (int) $uid;
+    if ( $uid <= 0 ) { echo '<p class="mc-empty">請先登入</p>'; return; }
 
-    // 若參數沒傳進來，自己抓
     if ( ! is_array( $lvl_info ) && function_exists( 'smacg_get_user_level_info' ) ) {
         $lvl_info = smacg_get_user_level_info( $uid );
     }
     if ( ! is_array( $job_title ) && function_exists( 'smacg_get_user_job_title' ) ) {
         $job_title = smacg_get_user_job_title( $uid );
     }
-    $lvl_info  = is_array( $lvl_info )  ? $lvl_info  : array( 'level' => 1, 'exp' => 0 );
-    $job_title = is_array( $job_title ) ? $job_title : array();
+    $lvl_info  = is_array( $lvl_info )  ? $lvl_info  : [ 'level' => 1, 'exp' => 0 ];
+    $job_title = is_array( $job_title ) ? $job_title : [];
 
     $level = (int) ( $lvl_info['level'] ?? 1 );
     $exp   = (int) ( $lvl_info['exp']   ?? 0 );
 
-    // === 尚未一轉（Lv.10）===
+    // 尚未一轉（Lv.10）
     if ( $level < 10 ) {
         $exp_needed = max( 0, 500 - $exp );
         ?>
@@ -743,9 +652,7 @@ function smacg_render_career( $uid, $lvl_info = null, $job_title = null ) {
             <div class="mc-career-locked-icon">🔒</div>
             <h3>職業系統 Lv.10 解鎖</h3>
             <p>目前 Lv.<?php echo $level; ?>，距離一轉還需 <b><?php echo number_format( $exp_needed ); ?> EXP</b></p>
-            <p class="mc-career-locked-hint">
-                繼續觀看動畫、寫評論、追蹤朋友來累積 EXP！
-            </p>
+            <p class="mc-career-locked-hint">繼續觀看動畫、寫評論、追蹤朋友來累積 EXP！</p>
         </div>
         <?php
         return;
@@ -756,12 +663,12 @@ function smacg_render_career( $uid, $lvl_info = null, $job_title = null ) {
         return;
     }
 
-    $jobs           = smacg_get_jobs();
-    $current_job    = function_exists( 'smacg_get_user_job' ) ? smacg_get_user_job( $uid ) : '';
-    $career_stage   = function_exists( 'smacg_get_career_stage' ) ? smacg_get_career_stage( $level ) : 0;
-    $milestones     = function_exists( 'smacg_get_career_milestones' ) ? smacg_get_career_milestones() : array();
+    $jobs         = smacg_get_jobs();
+    $current_job  = function_exists( 'smacg_get_user_job' )         ? smacg_get_user_job( $uid )       : '';
+    $career_stage = function_exists( 'smacg_get_career_stage' )     ? smacg_get_career_stage( $level ) : 0;
+    $milestones   = function_exists( 'smacg_get_career_milestones' )? smacg_get_career_milestones()   : [];
 
-    // === 尚未選擇職業 ===
+    // 尚未選擇職業
     if ( ! $current_job ) {
         ?>
         <div class="mc-career-choose">
@@ -770,26 +677,20 @@ function smacg_render_career( $uid, $lvl_info = null, $job_title = null ) {
                 恭喜達成 Lv.10！請從下列 8 種職業中選擇一個作為你的天命之路。
                 <br><small>※ 選擇後 3 個月內無法變更。每次升級會自動進化稱號。</small>
             </p>
-
             <div class="mc-career-grid">
-                <?php foreach ( $jobs as $key => $job ) : ?>
+                <?php foreach ( $jobs as $key => $job ): ?>
                     <button class="mc-career-card" data-job-key="<?php echo esc_attr( $key ); ?>" type="button">
                         <div class="mc-career-card-icon"><?php echo esc_html( $job['icon'] ); ?></div>
                         <h4 class="mc-career-card-name"><?php echo esc_html( $job['label'] ); ?></h4>
                         <ul class="mc-career-card-path">
-                            <?php foreach ( $job['titles'] as $stage => $t ) :
-                                $milestone_lv = isset( $milestones[ $stage ]['level'] ) ? (int) $milestones[ $stage ]['level'] : 0;
-                            ?>
-                                <li>
-                                    <small>Lv.<?php echo $milestone_lv; ?></small>
-                                    <?php echo esc_html( $t['name'] ); ?>
-                                </li>
+                            <?php foreach ( $job['titles'] as $stage => $t ):
+                                $milestone_lv = (int) ( $milestones[ $stage ]['level'] ?? 0 ); ?>
+                                <li><small>Lv.<?php echo $milestone_lv; ?></small> <?php echo esc_html( $t['name'] ); ?></li>
                             <?php endforeach; ?>
                         </ul>
                     </button>
                 <?php endforeach; ?>
             </div>
-
             <p class="mc-career-note">
                 <i class="fa-solid fa-circle-info"></i>
                 ※ 職業選擇 AJAX 介面將於下個 batch（2A-4）實作；目前為 UI 預覽。
@@ -799,7 +700,7 @@ function smacg_render_career( $uid, $lvl_info = null, $job_title = null ) {
         return;
     }
 
-    // === 已選擇職業 — 顯示進化路線 ===
+    // 已選擇職業 — 進化路線
     if ( ! isset( $jobs[ $current_job ] ) ) {
         echo '<p class="mc-empty">職業資料異常，請聯絡管理員</p>';
         return;
@@ -809,41 +710,34 @@ function smacg_render_career( $uid, $lvl_info = null, $job_title = null ) {
     $chosen_at = get_user_meta( $uid, 'smacg_job_chosen_at', true );
     ?>
     <div class="mc-career-view">
-
         <div class="mc-career-current">
             <div class="mc-career-current-icon"><?php echo esc_html( $job['icon'] ); ?></div>
             <div class="mc-career-current-body">
                 <h2><?php echo esc_html( $job['label'] ); ?></h2>
-                <?php if ( ! empty( $job_title ) ) : ?>
+                <?php if ( ! empty( $job_title ) ): ?>
                     <p class="mc-career-current-title">
-                        當前稱號：<b><?php echo esc_html( $job_title['title_name'] ); ?></b>
-                        <small>（動漫梗：<?php echo esc_html( $job_title['title_ref'] ); ?>）</small>
+                        當前稱號：<b><?php echo esc_html( $job_title['title_name'] ?? '' ); ?></b>
+                        <small>（動漫梗：<?php echo esc_html( $job_title['title_ref'] ?? '' ); ?>）</small>
                     </p>
                 <?php endif; ?>
-                <?php if ( $chosen_at ) : ?>
-                    <p class="mc-career-current-meta">
-                        <small>選擇於 <?php echo esc_html( mysql2date( 'Y-m-d', $chosen_at ) ); ?></small>
-                    </p>
+                <?php if ( $chosen_at ): ?>
+                    <p class="mc-career-current-meta"><small>選擇於 <?php echo esc_html( mysql2date( 'Y-m-d', $chosen_at ) ); ?></small></p>
                 <?php endif; ?>
             </div>
         </div>
 
         <h3 class="mc-career-path-title">🎬 進化路線</h3>
         <ol class="mc-career-path">
-            <?php foreach ( $job['titles'] as $stage => $t ) :
-                $milestone = $milestones[ $stage ] ?? array( 'level' => 0, 'icon' => '•' );
+            <?php foreach ( $job['titles'] as $stage => $t ):
+                $milestone    = $milestones[ $stage ] ?? [ 'level' => 0, 'icon' => '•' ];
                 $milestone_lv = (int) $milestone['level'];
-                $reached   = $career_stage >= $stage;
-                $current   = $career_stage === $stage;
-                $cls       = $reached ? ( $current ? 'is-current' : 'is-done' ) : 'is-locked';
+                $reached      = $career_stage >= $stage;
+                $current      = $career_stage === $stage;
+                $cls          = $reached ? ( $current ? 'is-current' : 'is-done' ) : 'is-locked';
             ?>
                 <li class="mc-career-path-item <?php echo $cls; ?>">
                     <div class="mc-career-path-marker">
-                        <?php if ( $reached ) : ?>
-                            <i class="fa-solid fa-check"></i>
-                        <?php else : ?>
-                            <i class="fa-solid fa-lock"></i>
-                        <?php endif; ?>
+                        <i class="fa-solid fa-<?php echo $reached ? 'check' : 'lock'; ?>"></i>
                     </div>
                     <div class="mc-career-path-body">
                         <div class="mc-career-path-stage">
@@ -856,14 +750,11 @@ function smacg_render_career( $uid, $lvl_info = null, $job_title = null ) {
                 </li>
             <?php endforeach; ?>
         </ol>
-
     </div>
     <?php
 }
 
-/* =====================================================
- *  Tab 7：設定（v2.2.0：卡片 2 後插入「通知偏好」卡）
- * ===================================================== */
+/* ===== Tab 7：設定 ===== */
 function smacg_render_settings( $user, $privacy = null, $is_owner = true ) {
     if ( $privacy === null && function_exists( 'smacg_get_user_privacy' ) ) {
         $privacy = smacg_get_user_privacy( $user->ID );
@@ -875,10 +766,16 @@ function smacg_render_settings( $user, $privacy = null, $is_owner = true ) {
         'show_continue_watching' => 1,
     ] );
     $nonce = wp_create_nonce( 'smacg_privacy' );
+
+    $toggles = [
+        'show_email'             => [ '公開 Email',       '關閉時其他人看到的 email 會遮罩為 a***@example.com' ],
+        'public_profile'         => [ '公開個人頁',       '關閉後只有你本人能瀏覽此頁面' ],
+        'public_watchlist'       => [ '公開追番列表',     '關閉後其他用戶看不到你的觀看記錄' ],
+        'show_continue_watching' => [ '顯示「繼續觀看」', '關閉後會員頁不再顯示頂部的橫向追番列' ],
+    ];
     ?>
     <div class="mc-settings-grid">
 
-        <!-- 卡片 1：基本資料 -->
         <div class="mc-set-card">
             <h3 class="mc-set-title"><i class="fa-solid fa-id-card"></i> 基本資料</h3>
             <form id="mc-profile-form" class="mc-set-form">
@@ -898,75 +795,37 @@ function smacg_render_settings( $user, $privacy = null, $is_owner = true ) {
             </form>
         </div>
 
-        <!-- 卡片 2：隱私 & 顯示設定 -->
         <div class="mc-set-card">
             <h3 class="mc-set-title"><i class="fa-solid fa-user-shield"></i> 隱私 & 顯示</h3>
             <div class="mc-privacy-form" data-nonce="<?php echo esc_attr( $nonce ); ?>">
-
-                <div class="mc-toggle-row">
-                    <div class="mc-toggle-info">
-                        <div class="mc-toggle-name">公開 Email</div>
-                        <div class="mc-toggle-desc">關閉時其他人看到的 email 會遮罩為 a***@example.com</div>
+                <?php foreach ( $toggles as $key => [ $name, $desc ] ): ?>
+                    <div class="mc-toggle-row">
+                        <div class="mc-toggle-info">
+                            <div class="mc-toggle-name"><?php echo esc_html( $name ); ?></div>
+                            <div class="mc-toggle-desc"><?php echo esc_html( $desc ); ?></div>
+                        </div>
+                        <label class="mc-toggle">
+                            <input type="checkbox" data-key="<?php echo esc_attr( $key ); ?>" <?php checked( $privacy[ $key ], 1 ); ?>>
+                            <span class="mc-toggle-slider"></span>
+                        </label>
                     </div>
-                    <label class="mc-toggle">
-                        <input type="checkbox" data-key="show_email" <?php checked( $privacy['show_email'], 1 ); ?>>
-                        <span class="mc-toggle-slider"></span>
-                    </label>
-                </div>
-
-                <div class="mc-toggle-row">
-                    <div class="mc-toggle-info">
-                        <div class="mc-toggle-name">公開個人頁</div>
-                        <div class="mc-toggle-desc">關閉後只有你本人能瀏覽此頁面</div>
-                    </div>
-                    <label class="mc-toggle">
-                        <input type="checkbox" data-key="public_profile" <?php checked( $privacy['public_profile'], 1 ); ?>>
-                        <span class="mc-toggle-slider"></span>
-                    </label>
-                </div>
-
-                <div class="mc-toggle-row">
-                    <div class="mc-toggle-info">
-                        <div class="mc-toggle-name">公開追番列表</div>
-                        <div class="mc-toggle-desc">關閉後其他用戶看不到你的觀看記錄</div>
-                    </div>
-                    <label class="mc-toggle">
-                        <input type="checkbox" data-key="public_watchlist" <?php checked( $privacy['public_watchlist'], 1 ); ?>>
-                        <span class="mc-toggle-slider"></span>
-                    </label>
-                </div>
-
-                <div class="mc-toggle-row">
-                    <div class="mc-toggle-info">
-                        <div class="mc-toggle-name">顯示「繼續觀看」</div>
-                        <div class="mc-toggle-desc">關閉後會員頁不再顯示頂部的橫向追番列</div>
-                    </div>
-                    <label class="mc-toggle">
-                        <input type="checkbox" data-key="show_continue_watching" <?php checked( $privacy['show_continue_watching'], 1 ); ?>>
-                        <span class="mc-toggle-slider"></span>
-                    </label>
-                </div>
-
+                <?php endforeach; ?>
                 <div id="mc-privacy-msg" class="mc-set-msg" style="display:none"></div>
             </div>
         </div>
 
-        <?php /* v2.2.0：通知偏好卡片 */ ?>
         <?php smacg_render_notification_prefs_card( $user->ID ); ?>
 
-        <!-- 卡片 3：帳號安全 -->
         <div class="mc-set-card">
             <h3 class="mc-set-title"><i class="fa-solid fa-key"></i> 帳號安全</h3>
             <p class="mc-set-hint">若需變更密碼，請點下方按鈕，系統會寄送重設信件至你的 email。</p>
             <div class="mc-set-actions">
-                <a class="mc-btn-secondary mc-settings-reset-pwd"
-                   href="<?php echo esc_url( home_url( '/password-reset/' ) ); ?>">
+                <a class="mc-btn-secondary mc-settings-reset-pwd" href="<?php echo esc_url( home_url( '/password-reset/' ) ); ?>">
                     <i class="fa-solid fa-rotate"></i> 重設密碼
                 </a>
             </div>
         </div>
 
-        <!-- 卡片 4：登出 -->
         <div class="mc-set-card mc-set-card--danger">
             <h3 class="mc-set-title"><i class="fa-solid fa-right-from-bracket"></i> 結束工作階段</h3>
             <p class="mc-set-hint">登出後將回到網站首頁。</p>
@@ -981,51 +840,37 @@ function smacg_render_settings( $user, $privacy = null, $is_owner = true ) {
     <?php
 }
 
-/* =====================================================
- *  v2.2.0 — Batch 1C-4：通知偏好卡片
- *
- *  讀 user_meta `smacg_notification_prefs`（陣列），前端透過 AJAX
- *  `smacg_notif_save_prefs` 儲存。包含 5 種類型 × 站內/Email，以及
- *  Email 摘要頻率（off/daily/weekly）。
- * ===================================================== */
+/* ===== 通知偏好卡片 ===== */
 function smacg_render_notification_prefs_card( $uid ) {
     $uid = (int) $uid;
     if ( $uid <= 0 ) return;
 
-    // 讀取偏好（若 helper 存在則用，否則直接讀 user_meta）
-    if ( function_exists( 'smacg_get_notification_prefs' ) ) {
-        $prefs = smacg_get_notification_prefs( $uid );
-    } else {
-        $prefs = get_user_meta( $uid, 'smacg_notification_prefs', true );
-        if ( ! is_array( $prefs ) ) $prefs = [];
-    }
+    $prefs = function_exists( 'smacg_get_notification_prefs' )
+        ? smacg_get_notification_prefs( $uid )
+        : ( get_user_meta( $uid, 'smacg_notification_prefs', true ) ?: [] );
+    if ( ! is_array( $prefs ) ) $prefs = [];
 
-    // 預設值
-    $defaults = [
+    $prefs = wp_parse_args( $prefs, [
         'follow_site'        => 1, 'follow_email'        => 1,
         'comment_reply_site' => 1, 'comment_reply_email' => 1,
         'rating_site'        => 1, 'rating_email'        => 0,
         'level_up_site'      => 1, 'level_up_email'      => 0,
         'badge_site'         => 1, 'badge_email'         => 0,
         'system_site'        => 1, 'system_email'        => 1,
-        'email_digest'       => 'daily', // off|daily|weekly
-    ];
-    $prefs = wp_parse_args( $prefs, $defaults );
+        'email_digest'       => 'daily',
+    ] );
     $nonce = wp_create_nonce( 'smacg_notif_save_prefs' );
 
-    // 通知類型清單
     $types = [
-        'follow'        => [ 'icon' => '👥', 'name' => '有人追蹤我',            'desc' => '當有用戶開始追蹤你時通知' ],
-        'comment_reply' => [ 'icon' => '💬', 'name' => '留言被回覆',            'desc' => '當有人回覆你的留言時通知' ],
-        'rating'        => [ 'icon' => '⭐', 'name' => '收藏的動畫有人評分',    'desc' => '當你收藏的作品收到新評分時通知' ],
-        'level_up'      => [ 'icon' => '🎖', 'name' => '等級提升',              'desc' => '當你升級時通知' ],
-        'badge'         => [ 'icon' => '🏅', 'name' => '獲得徽章',              'desc' => '當你解鎖新徽章時通知' ],
-        'system'        => [ 'icon' => '📢', 'name' => '系統公告',              'desc' => '網站重要更新與公告' ],
+        'follow'        => [ '👥', '有人追蹤我',          '當有用戶開始追蹤你時通知' ],
+        'comment_reply' => [ '💬', '留言被回覆',          '當有人回覆你的留言時通知' ],
+        'rating'        => [ '⭐', '收藏的動畫有人評分',  '當你收藏的作品收到新評分時通知' ],
+        'level_up'      => [ '🎖', '等級提升',            '當你升級時通知' ],
+        'badge'         => [ '🏅', '獲得徽章',            '當你解鎖新徽章時通知' ],
+        'system'        => [ '📢', '系統公告',            '網站重要更新與公告' ],
     ];
     ?>
-    <div class="mc-set-card mc-set-card--notif-prefs"
-         data-uid="<?php echo $uid; ?>"
-         data-nonce="<?php echo esc_attr( $nonce ); ?>">
+    <div class="mc-set-card mc-set-card--notif-prefs" data-uid="<?php echo $uid; ?>" data-nonce="<?php echo esc_attr( $nonce ); ?>">
         <h3 class="mc-set-title"><i class="fa-solid fa-bell"></i> 通知偏好</h3>
         <p class="mc-set-hint">選擇你想收到哪些類型的通知。「站內」會顯示在鈴鐺/通知頁，「Email」會依下方摘要頻率寄送。</p>
 
@@ -1036,16 +881,16 @@ function smacg_render_notification_prefs_card( $uid ) {
                 <span class="mc-notif-col-toggle">Email</span>
             </div>
 
-            <?php foreach ( $types as $key => $t ):
+            <?php foreach ( $types as $key => [ $icon, $name, $desc ] ):
                 $site_key  = $key . '_site';
                 $email_key = $key . '_email';
             ?>
                 <div class="mc-notif-prefs-row">
                     <div class="mc-notif-col-name">
-                        <span class="mc-notif-type-icon"><?php echo $t['icon']; ?></span>
+                        <span class="mc-notif-type-icon"><?php echo $icon; ?></span>
                         <div class="mc-notif-type-text">
-                            <div class="mc-notif-type-name"><?php echo esc_html( $t['name'] ); ?></div>
-                            <div class="mc-notif-type-desc"><?php echo esc_html( $t['desc'] ); ?></div>
+                            <div class="mc-notif-type-name"><?php echo esc_html( $name ); ?></div>
+                            <div class="mc-notif-type-desc"><?php echo esc_html( $desc ); ?></div>
                         </div>
                     </div>
                     <div class="mc-notif-col-toggle">
@@ -1081,27 +926,23 @@ function smacg_render_notification_prefs_card( $uid ) {
     <?php
 }
 
-/* =====================================================
- *  Continue Watching - 繼續觀看橫向列（P1-2）
- * ===================================================== */
+/* ===== 繼續觀看橫向列 ===== */
 function smacg_render_continue_watching( $watchlist ) {
     if ( empty( $watchlist ) || ! is_array( $watchlist ) ) return;
 
     $continue = [];
     foreach ( $watchlist as $w ) {
         if ( ( $w['status'] ?? '' ) !== 'watching' ) continue;
-
         $pid = (int) ( $w['post_id'] ?? 0 );
         if ( ! $pid ) continue;
 
         $total = (int) get_post_meta( $pid, 'anime_episodes', true );
         $prog  = (int) ( $w['progress'] ?? 0 );
-
         if ( $total > 0 && $prog >= $total ) continue;
 
         $w['_total']   = $total;
         $w['_percent'] = $total > 0 ? min( 100, round( $prog / $total * 100 ) ) : 0;
-        $continue[] = $w;
+        $continue[]    = $w;
         if ( count( $continue ) >= 10 ) break;
     }
 
@@ -1146,22 +987,14 @@ function smacg_render_continue_watching( $watchlist ) {
                          data-status="watching"
                          data-title="<?php echo esc_attr( mb_strtolower( $title ) ); ?>">
 
-                    <div class="mc-card-actions"
-                         data-anime="<?php echo $pid; ?>"
-                         data-progress="<?php echo $prog; ?>"
-                         data-total="<?php echo $total; ?>">
-                        <button type="button" class="mc-card-btn mc-card-btn--plus" title="進度 +1">
-                            <i class="fa-solid fa-plus"></i>
-                        </button>
-                        <button type="button" class="mc-card-btn mc-card-btn--done" title="標記完成">
-                            <i class="fa-solid fa-check"></i>
-                        </button>
+                    <div class="mc-card-actions" data-anime="<?php echo $pid; ?>" data-progress="<?php echo $prog; ?>" data-total="<?php echo $total; ?>">
+                        <button type="button" class="mc-card-btn mc-card-btn--plus" title="進度 +1"><i class="fa-solid fa-plus"></i></button>
+                        <button type="button" class="mc-card-btn mc-card-btn--done" title="標記完成"><i class="fa-solid fa-check"></i></button>
                     </div>
 
                     <a href="<?php echo esc_url( $permalink ); ?>" class="mc-card-thumb">
                         <?php if ( $thumb ): ?>
-                            <?php
-                            if ( function_exists( 'smacg_picture_tag' ) && has_post_thumbnail( $pid ) ) {
+                            <?php if ( function_exists( 'smacg_picture_tag' ) && has_post_thumbnail( $pid ) ) {
                                 echo smacg_picture_tag( $pid, 'medium', $title );
                             } else { ?>
                                 <img src="<?php echo esc_url( $thumb ); ?>" alt="<?php echo esc_attr( $title ); ?>" loading="lazy">
@@ -1172,9 +1005,7 @@ function smacg_render_continue_watching( $watchlist ) {
                     </a>
 
                     <div class="mc-card-body">
-                        <h4 class="mc-card-title">
-                            <a href="<?php echo esc_url( $permalink ); ?>"><?php echo esc_html( $title ); ?></a>
-                        </h4>
+                        <h4 class="mc-card-title"><a href="<?php echo esc_url( $permalink ); ?>"><?php echo esc_html( $title ); ?></a></h4>
                         <div class="mc-card-progress">
                             <div class="mc-card-progress-fill" style="width:<?php echo $percent; ?>%"></div>
                             <span class="mc-card-progress-text"><?php echo $prog; ?> / <?php echo $total ?: '?'; ?></span>
