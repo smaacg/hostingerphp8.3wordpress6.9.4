@@ -190,3 +190,117 @@ if ( ! function_exists( 'smacg_get_event_progress_count' ) ) {
         return Event_Tracker::get_progress_count( $event_id );
     }
 }
+/* ========================================================== Level Guide 頁面用 ========================================================== */
+if ( ! function_exists( 'smacg_get_all_exp_rules' ) ) {
+    /**
+     * 取得所有 EXP 行為規則 + 中文標籤
+     */
+    function smacg_get_all_exp_rules() {
+        $rules  = \SMACG\Gamification\Exp_Config::rules();
+        $labels = [
+            'register'           => [ '🎉', '註冊帳號',       '完成註冊立即獲得' ],
+            'daily_login'        => [ '📅', '每日登入',       '每天首次登入' ],
+            'streak_7'           => [ '🔥', '連續登入 7 天',  '里程碑獎勵' ],
+            'streak_30'          => [ '💎', '連續登入 30 天', '里程碑獎勵' ],
+            'comment_post'       => [ '💬', '發表評論',       '評論通過審核後' ],
+            'follow_action'      => [ '👥', '追蹤他人',       '追蹤其他會員' ],
+            'followed_by'        => [ '⭐', '被他人追蹤',     '獲得新粉絲' ],
+            'watchlist_add'      => [ '🎬', '加入清單',       '加入想看 / 在看 / 已看' ],
+            'watchlist_complete' => [ '🏁', '完成觀看',       '將動畫標為已完成' ],
+            'rating_add'         => [ '⭐', '評分動畫',       '為動畫評分' ],
+            'badge_unlock'       => [ '🏆', '解鎖徽章',       '獲得任一徽章預設值' ],
+        ];
+
+        $out = [];
+        foreach ( $rules as $key => $rule ) {
+            $meta = $labels[ $key ] ?? [ '📌', $key, '' ];
+            $out[ $key ] = [
+                'key'      => $key,
+                'icon'     => $meta[0],
+                'label'    => $meta[1],
+                'desc'     => $meta[2],
+                'exp'      => (int) $rule['exp'],
+                'cap_type' => $rule['cap_type'] ?? null,
+                'cap_text' => self_describe_cap( $rule['cap_type'] ?? null ),
+            ];
+        }
+        return $out;
+    }
+}
+
+if ( ! function_exists( 'self_describe_cap' ) ) {
+    function self_describe_cap( $cap_type ) {
+        return [
+            'once'  => '一次性',
+            'daily' => '每日 1 次',
+            null    => '無上限',
+        ][ $cap_type ] ?? '無上限';
+    }
+}
+
+if ( ! function_exists( 'smacg_get_all_level_jobs' ) ) {
+    function smacg_get_all_level_jobs() {
+        return \SMACG\Gamification\Level_System::get_jobs();
+    }
+}
+
+if ( ! function_exists( 'smacg_get_full_level_table' ) ) {
+    /**
+     * 取得 Lv.1~200 累計 EXP 表（key = level, value = accumulated exp）
+     */
+    function smacg_get_full_level_table() {
+        return \SMACG\Gamification\Level_System::get_level_table();
+    }
+}
+
+if ( ! function_exists( 'smacg_get_all_rank_tiers' ) ) {
+    /**
+     * 取得 TFT 段位完整表
+     */
+    function smacg_get_all_rank_tiers() {
+        $tiers = \SMACG\Gamification\Rank_Tier::TIERS;
+        $out   = [];
+        foreach ( $tiers as $row ) {
+            $out[] = [
+                'key'      => $row[0],
+                'division' => $row[1],
+                'min'      => $row[2],
+                'label'    => $row[3],
+                'color'    => $row[4],
+                'icon'     => \SMACG\Gamification\Rank_Tier::ICONS[ $row[0] ] ?? '🎖️',
+            ];
+        }
+        return $out;
+    }
+}
+
+if ( ! function_exists( 'smacg_get_all_seasons_schedule' ) ) {
+    /**
+     * 取得本年度與下一年度的賽季時程
+     */
+    function smacg_get_all_seasons_schedule() {
+        $cur_year = (int) date( 'Y', current_time( 'timestamp' ) );
+        $codes    = [];
+        foreach ( [ $cur_year, $cur_year + 1 ] as $y ) {
+            foreach ( [ 'spring', 'summer', 'fall', 'winter' ] as $s ) {
+                $codes[] = $y . '-' . $s;
+            }
+        }
+
+        $now = current_time( 'timestamp' );
+        $out = [];
+        foreach ( $codes as $code ) {
+            [ $start, $end ] = \SMACG\Gamification\Rank_Tier::season_range( $code );
+            $status = ( $now < $start ) ? 'upcoming'
+                    : ( ( $now <= $end ) ? 'active' : 'ended' );
+            $out[] = [
+                'code'   => $code,
+                'label'  => \SMACG\Gamification\Rank_Tier::season_label( $code ),
+                'start'  => $start,
+                'end'    => $end,
+                'status' => $status,
+            ];
+        }
+        return $out;
+    }
+}
