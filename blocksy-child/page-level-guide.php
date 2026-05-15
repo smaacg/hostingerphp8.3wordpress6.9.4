@@ -250,35 +250,133 @@ $current_season_label = function_exists( 'smacg_get_season_label' )        ? sma
       </div>
     </section>
 
-    <!-- ===== §4 賽季段位 ===== -->
-    <section id="tier" class="guide-section">
-      <h2 class="guide-section-title">🏆 賽季段位 — 季內排名系統</h2>
-      <p class="guide-section-intro">
-        每季根據你累積的「賽季積分」分配段位（仿《聯盟戰旗》設計）。
-        段位每季重置，但「生涯最高段位」會永久保留在你的個人頁。
-      </p>
+   <!-- ===== Section: 賽季段位（10 階精簡版）===== -->
+<section id="rank" class="lg-section">
+    <h2><span class="lg-num">4</span>賽季段位</h2>
+    <p>賽季積分由互動行為累積（留言、追蹤、評分等），每季結算重置。<strong>大師以下</strong>純看積分；<strong>大師、宗師、菁英</strong>同屬 7600+ 分，再依全站名次切分。</p>
 
-      <?php if ( ! empty( $rank_tiers ) ): ?>
-        <div class="guide-rank-grid">
-          <?php foreach ( $rank_tiers as $t ):
-            $is_mine = ( $me_rank && ! empty( $me_rank['tier']['key'] ) && $me_rank['tier']['key'] === $t['key'] && ( $me_rank['tier']['division'] ?? '' ) === $t['division'] );
-          ?>
-            <div class="guide-rank-card <?php echo $is_mine ? 'is-mine' : ''; ?>" style="--rank-color: <?php echo esc_attr( $t['color'] ); ?>">
-              <div class="guide-rank-icon"><?php echo esc_html( $t['icon'] ); ?></div>
-              <div class="guide-rank-name"><?php echo esc_html( $t['label'] ); ?></div>
-              <div class="guide-rank-min"><?php echo number_format( (int) $t['min'] ); ?> 分</div>
-              <?php if ( $is_mine ): ?><div class="guide-rank-mine">⭐ 你的段位</div><?php endif; ?>
+    <?php
+    // 10 階段位摘要（對應 Rank_Tier::TIERS + 名次修正）
+    $lg_rank_tiers = [
+        [
+            'key'   => 'iron',
+            'name'  => '鐵',
+            'icon'  => '🥉',
+            'color' => '#6b6b6b',
+            'range' => '0 – 399',
+            'divs'  => 'IV 0 ‧ III 100 ‧ II 200 ‧ I 300',
+            'note'  => '',
+        ],
+        [
+            'key'   => 'bronze',
+            'name'  => '銅',
+            'icon'  => '🟫',
+            'color' => '#a97142',
+            'range' => '400 – 999',
+            'divs'  => 'IV 400 ‧ III 550 ‧ II 700 ‧ I 850',
+            'note'  => '',
+        ],
+        [
+            'key'   => 'silver',
+            'name'  => '銀',
+            'icon'  => '⚪',
+            'color' => '#b8b8b8',
+            'range' => '1000 – 1799',
+            'divs'  => 'IV 1000 ‧ III 1200 ‧ II 1400 ‧ I 1600',
+            'note'  => '',
+        ],
+        [
+            'key'   => 'gold',
+            'name'  => '金',
+            'icon'  => '🟡',
+            'color' => '#f0c040',
+            'range' => '1800 – 2799',
+            'divs'  => 'IV 1800 ‧ III 2050 ‧ II 2300 ‧ I 2550',
+            'note'  => '',
+        ],
+        [
+            'key'   => 'platinum',
+            'name'  => '白金',
+            'icon'  => '🟦',
+            'color' => '#4ad6c0',
+            'range' => '2800 – 3999',
+            'divs'  => 'IV 2800 ‧ III 3100 ‧ II 3400 ‧ I 3700',
+            'note'  => '',
+        ],
+        [
+            'key'   => 'emerald',
+            'name'  => '翡翠',
+            'icon'  => '🟢',
+            'color' => '#28b463',
+            'range' => '4000 – 5599',
+            'divs'  => 'IV 4000 ‧ III 4400 ‧ II 4800 ‧ I 5200',
+            'note'  => '',
+        ],
+        [
+            'key'   => 'diamond',
+            'name'  => '鑽石',
+            'icon'  => '💎',
+            'color' => '#5dade2',
+            'range' => '5600 – 7599',
+            'divs'  => 'IV 5600 ‧ III 6100 ‧ II 6600 ‧ I 7100',
+            'note'  => '',
+        ],
+        [
+            'key'   => 'master',
+            'name'  => '大師',
+            'icon'  => '👑',
+            'color' => '#bb8fce',
+            'range' => '7600+ 分',
+            'divs'  => '',
+            'note'  => '達門檻但未進前 200 名',
+        ],
+        [
+            'key'   => 'grandmaster',
+            'name'  => '宗師',
+            'icon'  => '🔥',
+            'color' => '#ff9f43',
+            'range' => '7600+ 分',
+            'divs'  => '',
+            'note'  => '全站名次 51 – 200',
+        ],
+        [
+            'key'   => 'challenger',
+            'name'  => '菁英',
+            'icon'  => '⚡',
+            'color' => '#ff6b6b',
+            'range' => '7600+ 分',
+            'divs'  => '',
+            'note'  => '全站名次 1 – 50',
+        ],
+    ];
+    ?>
+
+    <div class="lg-rank-grid">
+        <?php foreach ( $lg_rank_tiers as $t ) :
+            $is_apex = in_array( $t['key'], [ 'master', 'grandmaster', 'challenger' ], true );
+        ?>
+            <div class="lg-rank-card<?php echo $is_apex ? ' is-apex' : ''; ?>"
+                 data-rank="<?php echo esc_attr( $t['key'] ); ?>"
+                 style="--rank-color: <?php echo esc_attr( $t['color'] ); ?>;">
+                <div class="lg-rank-icon"><?php echo esc_html( $t['icon'] ); ?></div>
+                <div class="lg-rank-name"><?php echo esc_html( $t['name'] ); ?></div>
+                <div class="lg-rank-range"><?php echo esc_html( $t['range'] ); ?></div>
+
+                <?php if ( ! empty( $t['divs'] ) ) : ?>
+                    <div class="lg-rank-divs"><?php echo esc_html( $t['divs'] ); ?></div>
+                <?php endif; ?>
+
+                <?php if ( ! empty( $t['note'] ) ) : ?>
+                    <div class="lg-rank-note"><?php echo esc_html( $t['note'] ); ?></div>
+                <?php endif; ?>
             </div>
-          <?php endforeach; ?>
-        </div>
-      <?php endif; ?>
+        <?php endforeach; ?>
+    </div>
 
-      <div class="guide-callout">
-        <strong>💡 計分方式：</strong>
-        賽季積分與 EXP 同源 — 每次獲得 EXP 時，賽季積分也會 +1（同步累積）。
-        舉例：發評論 +5 EXP，同時 +5 賽季積分。
-      </div>
-    </section>
+    <div class="lg-note">
+        <strong>提醒：</strong>宗師與菁英席位每日依排行榜重算，掉到 200 名外會自動降回大師。賽季結束時依當季最終排名發放紀念徽章。
+    </div>
+</section>
 
     <!-- ===== §5 賽季時程 ===== -->
     <section id="season" class="guide-section">
