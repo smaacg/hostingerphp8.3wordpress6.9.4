@@ -1,9 +1,0 @@
-{
-    "name": "anime-sync-pro/plugin",
-    "require": {
-        "overtrue/php-opencc": "^1.0"
-    },
-    "config": {
-        "vendor-dir": "vendor"
-    }
-}
