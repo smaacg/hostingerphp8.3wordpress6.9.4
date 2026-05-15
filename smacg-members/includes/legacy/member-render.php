@@ -627,7 +627,7 @@ function smacg_render_badges( $uid ) {
     <?php
 }
 
-/* ===== Tab：🎯 職業 ===== */
+/* ===== Tab：🎯 職業（v2.0.0 — 接 AJAX、加冷卻提示、優化空狀態）===== */
 function smacg_render_career( $uid, $lvl_info = null, $job_title = null ) {
     $uid = (int) $uid;
     if ( $uid <= 0 ) { echo '<p class="mc-empty">請先登入</p>'; return; }
@@ -644,22 +644,34 @@ function smacg_render_career( $uid, $lvl_info = null, $job_title = null ) {
     $level = (int) ( $lvl_info['level'] ?? 1 );
     $exp   = (int) ( $lvl_info['exp']   ?? 0 );
 
-    // 尚未一轉（Lv.10）
+    /* ============================================================
+     * 狀態 1：尚未一轉（Lv.10）
+     * ============================================================ */
     if ( $level < 10 ) {
         $exp_needed = max( 0, 500 - $exp );
+        $percent    = $exp >= 500 ? 100 : (int) floor( $exp / 500 * 100 );
         ?>
         <div class="mc-career-locked">
             <div class="mc-career-locked-icon">🔒</div>
             <h3>職業系統 Lv.10 解鎖</h3>
             <p>目前 Lv.<?php echo $level; ?>，距離一轉還需 <b><?php echo number_format( $exp_needed ); ?> EXP</b></p>
+            <div class="mc-career-locked-bar">
+                <div class="mc-career-locked-fill" style="width:<?php echo $percent; ?>%"></div>
+            </div>
             <p class="mc-career-locked-hint">繼續觀看動畫、寫評論、追蹤朋友來累積 EXP！</p>
+            <p class="mc-career-locked-link">
+                <a href="<?php echo esc_url( home_url( '/level-guide/#career' ) ); ?>">查看 8 大職業介紹 →</a>
+            </p>
         </div>
         <?php
         return;
     }
 
+    /* ============================================================
+     * 狀態 2：職業系統未載入（防呆）
+     * ============================================================ */
     if ( ! function_exists( 'smacg_get_jobs' ) ) {
-        echo '<p class="mc-empty">職業系統尚未載入</p>';
+        echo '<div class="mc-empty"><p>職業系統尚未載入，請聯絡管理員</p></div>';
         return;
     }
 
@@ -668,48 +680,82 @@ function smacg_render_career( $uid, $lvl_info = null, $job_title = null ) {
     $career_stage = function_exists( 'smacg_get_career_stage' )     ? smacg_get_career_stage( $level ) : 0;
     $milestones   = function_exists( 'smacg_get_career_milestones' )? smacg_get_career_milestones()   : [];
 
-    // 尚未選擇職業
+    /* ============================================================
+     * 狀態 3：已解鎖但尚未選擇職業 → 顯示 8 卡選擇器
+     * ============================================================ */
     if ( ! $current_job ) {
         ?>
-        <div class="mc-career-choose">
+        <div class="mc-career-choose" data-mode="select">
             <h2>🎯 選擇你的職業</h2>
             <p class="mc-career-intro">
                 恭喜達成 Lv.10！請從下列 8 種職業中選擇一個作為你的天命之路。
-                <br><small>※ 選擇後 3 個月內無法變更。每次升級會自動進化稱號。</small>
+                <br><small>※ 選擇後 <b>3 個月內無法變更</b>，每次升級會自動進化稱號。</small>
             </p>
+
             <div class="mc-career-grid">
                 <?php foreach ( $jobs as $key => $job ): ?>
-                    <button class="mc-career-card" data-job-key="<?php echo esc_attr( $key ); ?>" type="button">
+                    <button class="mc-career-card"
+                            data-job-key="<?php echo esc_attr( $key ); ?>"
+                            data-job-label="<?php echo esc_attr( $job['label'] ); ?>"
+                            type="button"
+                            aria-label="選擇職業：<?php echo esc_attr( $job['label'] ); ?>">
                         <div class="mc-career-card-icon"><?php echo esc_html( $job['icon'] ); ?></div>
                         <h4 class="mc-career-card-name"><?php echo esc_html( $job['label'] ); ?></h4>
+                        <?php if ( ! empty( $job['desc'] ) ): ?>
+                            <p class="mc-career-card-desc"><?php echo esc_html( $job['desc'] ); ?></p>
+                        <?php endif; ?>
                         <ul class="mc-career-card-path">
                             <?php foreach ( $job['titles'] as $stage => $t ):
                                 $milestone_lv = (int) ( $milestones[ $stage ]['level'] ?? 0 ); ?>
                                 <li><small>Lv.<?php echo $milestone_lv; ?></small> <?php echo esc_html( $t['name'] ); ?></li>
                             <?php endforeach; ?>
                         </ul>
+                        <span class="mc-career-card-pick">選擇此職業 →</span>
                     </button>
                 <?php endforeach; ?>
             </div>
+
             <p class="mc-career-note">
                 <i class="fa-solid fa-circle-info"></i>
-                ※ 職業選擇 AJAX 介面將於下個 batch（2A-4）實作；目前為 UI 預覽。
+                看不到適合的？先逛逛 <a href="<?php echo esc_url( home_url( '/level-guide/#career' ) ); ?>">完整職業介紹</a>，再決定。
             </p>
+        </div>
+
+        <?php /* 確認對話框（career-select.js 控制顯示）*/ ?>
+        <div class="mc-career-confirm" id="mc-career-confirm" hidden role="dialog" aria-modal="true" aria-labelledby="mc-career-confirm-title">
+            <div class="mc-career-confirm-inner">
+                <h3 id="mc-career-confirm-title">確認選擇？</h3>
+                <p>你即將選擇職業：<b id="mc-career-confirm-label"></b></p>
+                <p class="mc-career-confirm-warn">⚠ 選擇後 3 個月內無法變更，請慎重考慮。</p>
+                <div class="mc-career-confirm-actions">
+                    <button type="button" class="mc-btn-secondary" data-action="cancel">再想想</button>
+                    <button type="button" class="mc-btn-primary"   data-action="confirm">確認選擇</button>
+                </div>
+                <p class="mc-career-confirm-msg" id="mc-career-confirm-msg" hidden></p>
+            </div>
         </div>
         <?php
         return;
     }
 
-    // 已選擇職業 — 進化路線
+    /* ============================================================
+     * 狀態 4：已選擇職業 → 顯示進化路線
+     * ============================================================ */
     if ( ! isset( $jobs[ $current_job ] ) ) {
-        echo '<p class="mc-empty">職業資料異常，請聯絡管理員</p>';
+        echo '<div class="mc-empty"><p>職業資料異常，請聯絡管理員</p></div>';
         return;
     }
 
-    $job       = $jobs[ $current_job ];
-    $chosen_at = get_user_meta( $uid, 'smacg_job_chosen_at', true );
+    $job        = $jobs[ $current_job ];
+    $chosen_at  = get_user_meta( $uid, 'smacg_job_chosen_at', true );
+    $chosen_ts  = $chosen_at ? strtotime( $chosen_at ) : 0;
+
+    /* 冷卻：3 個月內不可變更 */
+    $cooldown_end = $chosen_ts ? ( $chosen_ts + 3 * MONTH_IN_SECONDS ) : 0;
+    $can_change   = $cooldown_end > 0 && time() >= $cooldown_end;
+    $remain_days  = $can_change ? 0 : (int) ceil( max( 0, $cooldown_end - time() ) / DAY_IN_SECONDS );
     ?>
-    <div class="mc-career-view">
+    <div class="mc-career-view" data-mode="view" data-current-job="<?php echo esc_attr( $current_job ); ?>">
         <div class="mc-career-current">
             <div class="mc-career-current-icon"><?php echo esc_html( $job['icon'] ); ?></div>
             <div class="mc-career-current-body">
@@ -717,11 +763,22 @@ function smacg_render_career( $uid, $lvl_info = null, $job_title = null ) {
                 <?php if ( ! empty( $job_title ) ): ?>
                     <p class="mc-career-current-title">
                         當前稱號：<b><?php echo esc_html( $job_title['title_name'] ?? '' ); ?></b>
-                        <small>（動漫梗：<?php echo esc_html( $job_title['title_ref'] ?? '' ); ?>）</small>
+                        <?php if ( ! empty( $job_title['title_ref'] ) ): ?>
+                            <small>（動漫梗：<?php echo esc_html( $job_title['title_ref'] ); ?>）</small>
+                        <?php endif; ?>
                     </p>
                 <?php endif; ?>
                 <?php if ( $chosen_at ): ?>
-                    <p class="mc-career-current-meta"><small>選擇於 <?php echo esc_html( mysql2date( 'Y-m-d', $chosen_at ) ); ?></small></p>
+                    <p class="mc-career-current-meta">
+                        <small>
+                            選擇於 <?php echo esc_html( mysql2date( 'Y-m-d', $chosen_at ) ); ?>
+                            <?php if ( $can_change ): ?>
+                                · <span class="mc-career-can-change">可變更職業</span>
+                            <?php else: ?>
+                                · 距離可變更還有 <b><?php echo $remain_days; ?> 天</b>
+                            <?php endif; ?>
+                        </small>
+                    </p>
                 <?php endif; ?>
             </div>
         </div>
@@ -729,20 +786,23 @@ function smacg_render_career( $uid, $lvl_info = null, $job_title = null ) {
         <h3 class="mc-career-path-title">🎬 進化路線</h3>
         <ol class="mc-career-path">
             <?php foreach ( $job['titles'] as $stage => $t ):
-                $milestone    = $milestones[ $stage ] ?? [ 'level' => 0, 'icon' => '•' ];
+                $milestone    = $milestones[ $stage ] ?? [ 'level' => 0, 'icon' => '•', 'label' => '' ];
                 $milestone_lv = (int) $milestone['level'];
                 $reached      = $career_stage >= $stage;
                 $current      = $career_stage === $stage;
                 $cls          = $reached ? ( $current ? 'is-current' : 'is-done' ) : 'is-locked';
             ?>
                 <li class="mc-career-path-item <?php echo $cls; ?>">
-                    <div class="mc-career-path-marker">
+                    <div class="mc-career-path-marker" aria-hidden="true">
                         <i class="fa-solid fa-<?php echo $reached ? 'check' : 'lock'; ?>"></i>
                     </div>
                     <div class="mc-career-path-body">
                         <div class="mc-career-path-stage">
                             <?php echo esc_html( $milestone['icon'] ); ?>
                             <?php echo (int) $stage; ?> 轉 · Lv.<?php echo $milestone_lv; ?>
+                            <?php if ( $current ): ?>
+                                <span class="mc-career-path-now">當前</span>
+                            <?php endif; ?>
                         </div>
                         <div class="mc-career-path-name"><?php echo esc_html( $t['name'] ); ?></div>
                         <div class="mc-career-path-ref"><small>動漫梗：<?php echo esc_html( $t['ref'] ); ?></small></div>
@@ -750,9 +810,17 @@ function smacg_render_career( $uid, $lvl_info = null, $job_title = null ) {
                 </li>
             <?php endforeach; ?>
         </ol>
+
+        <?php if ( $can_change ): ?>
+            <div class="mc-career-change">
+                <p class="mc-career-change-hint">已超過 3 個月冷卻期，可變更職業：</p>
+                <button type="button" class="mc-btn-secondary" id="mc-career-change-btn" data-action="change">變更職業 →</button>
+            </div>
+        <?php endif; ?>
     </div>
     <?php
 }
+
 
 /* ===== Tab 7：設定 ===== */
 function smacg_render_settings( $user, $privacy = null, $is_owner = true ) {
