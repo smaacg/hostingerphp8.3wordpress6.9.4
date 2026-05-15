@@ -1,6 +1,9 @@
 <?php
 /**
  * 微笑動漫 Child Theme — footer.php
+ *
+ * v1.1.0 (2026-05-15)
+ *  - 站內欄目新增「等級指南」連結 → /level-guide/
  */
 
 /* ── 社群連結 ── */
@@ -77,6 +80,8 @@ foreach ( $social as [ $url ] ) {
             '首頁'      => home_url('/'),
             '新番導覽'  => home_url('/season/'),
             '最新新聞'  => home_url('/news/'),
+            '等級指南'  => home_url('/level-guide/'),
+            '會員排行榜' => home_url('/ranking-users/'),
         ];
         foreach ( $col1 as $label => $url ) : ?>
           <a href="<?php echo esc_url( $url ); ?>"><?php echo esc_html( $label ); ?></a>
@@ -213,4 +218,3 @@ foreach ( $social as [ $url ] ) {
 <?php wp_footer(); ?>
 </body>
 </html>
-
