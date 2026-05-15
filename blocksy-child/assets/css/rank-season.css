@@ -3,7 +3,7 @@
  * 載入：page-ranking-users.php / page-member.php
  * ============================================================ */
 
-/* Hero 段位卡 */
+/* ---------- Hero 段位卡（排行榜頁） ---------- */
 .ranku-hero__tier {
   display: inline-flex;
   flex-direction: column;
@@ -54,7 +54,7 @@
   transition: width 0.6s ease;
 }
 
-/* 排行列表中的段位 chip（賽季 tab 用） */
+/* ---------- 排行列表段位 chip ---------- */
 .ranku-row .ranku-tier-chip {
   display: inline-flex;
   align-items: center;
@@ -68,14 +68,14 @@
   color: var(--tier-color, #fff);
 }
 
-/* chip--violet（hero eyebrow 賽季標籤） */
+/* ---------- Hero eyebrow 賽季標籤 ---------- */
 .chip.chip--violet {
   background: rgba(155, 89, 182, 0.12);
   border-color: rgba(155, 89, 182, 0.35);
   color: #d2a4ee;
 }
 
-/* 會員中心 hero 用的迷你段位徽章 */
+/* ---------- 會員中心 hero 內迷你段位徽章 ---------- */
 .mc-tier-mini {
   display: inline-flex;
   align-items: center;
@@ -87,17 +87,32 @@
   color: var(--tier-color, #fff);
   font-size: 13px;
   font-weight: 600;
+  text-decoration: none;
+  transition: opacity .2s ease, transform .15s ease;
+}
+.mc-tier-mini:hover {
+  transform: translateY(-1px);
 }
 .mc-tier-mini__icon { font-size: 16px; }
-
-/* RWD */
-@media (max-width: 640px) {
-  .ranku-hero__tier { min-width: 0; width: 100%; }
-  .ranku-hero__tier-label { font-size: 18px; }
-  .ranku-hero__tier-icon { font-size: 24px; }
+.mc-tier-mini__rank {
+  margin-left: 4px;
+  padding: 1px 6px;
+  background: rgba(0, 0, 0, 0.25);
+  border-radius: 999px;
+  font-size: 11px;
 }
 
-/* 會員中心 hero — 賽季段位進度條 */
+/* 0 分變體：降低存在感但仍顯示 */
+.mc-tier-mini--zero { opacity: 0.65; }
+.mc-tier-mini--zero:hover { opacity: 1; }
+
+/* 生涯最高段位變體 */
+.mc-tier-mini--peak {
+  opacity: 0.7;
+  cursor: help;
+}
+
+/* ---------- 會員中心 hero 賽季段位進度條 ---------- */
 .mc-rank-bar {
   position: relative;
   display: block;
@@ -108,7 +123,7 @@
   border: 1px solid var(--tier-color, rgba(255, 255, 255, 0.15));
   overflow: hidden;
   text-decoration: none;
-  transition: transform .15s ease, box-shadow .2s ease;
+  transition: transform .15s ease, box-shadow .2s ease, opacity .2s ease;
 }
 .mc-rank-bar:hover {
   transform: translateY(-1px);
@@ -145,23 +160,23 @@
   font-size: 11px;
 }
 
-/* 生涯最高段位變體（半透明） */
-.mc-tier-mini--peak {
+/* 0 分變體：虛線邊框、淡色填充 */
+.mc-rank-bar--zero {
   opacity: 0.7;
-  cursor: help;
+  border-style: dashed;
 }
-
-.mc-tier-mini__rank {
-  margin-left: 4px;
-  padding: 1px 6px;
-  background: rgba(0, 0, 0, 0.25);
-  border-radius: 999px;
-  font-size: 11px;
+.mc-rank-bar--zero .mc-rank-fill {
+  background: linear-gradient(90deg,
+    rgba(255, 255, 255, 0.08),
+    rgba(255, 255, 255, 0.15));
 }
+.mc-rank-bar--zero:hover { opacity: 1; }
 
-/* RWD */
+/* ---------- RWD ---------- */
 @media (max-width: 640px) {
+  .ranku-hero__tier { min-width: 0; width: 100%; }
+  .ranku-hero__tier-label { font-size: 18px; }
+  .ranku-hero__tier-icon { font-size: 24px; }
   .mc-rank-bar { height: 32px; }
   .mc-rank-text { font-size: 12px; flex-wrap: wrap; }
 }
-
