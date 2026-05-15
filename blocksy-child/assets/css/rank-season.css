@@ -96,3 +96,72 @@
   .ranku-hero__tier-label { font-size: 18px; }
   .ranku-hero__tier-icon { font-size: 24px; }
 }
+
+/* 會員中心 hero — 賽季段位進度條 */
+.mc-rank-bar {
+  position: relative;
+  display: block;
+  margin-top: 10px;
+  height: 28px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--tier-color, rgba(255, 255, 255, 0.15));
+  overflow: hidden;
+  text-decoration: none;
+  transition: transform .15s ease, box-shadow .2s ease;
+}
+.mc-rank-bar:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
+}
+.mc-rank-fill {
+  position: absolute;
+  inset: 0;
+  width: 0;
+  background: linear-gradient(90deg,
+    color-mix(in srgb, var(--tier-color) 60%, transparent),
+    var(--tier-color, #5dade2));
+  transition: width .6s ease;
+}
+.mc-rank-text {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  padding: 0 12px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #fff;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+}
+.mc-rank-max {
+  margin-left: 6px;
+  padding: 1px 6px;
+  background: linear-gradient(135deg, #ffd700, #ff9500);
+  color: #000;
+  border-radius: 4px;
+  font-size: 11px;
+}
+
+/* 生涯最高段位變體（半透明） */
+.mc-tier-mini--peak {
+  opacity: 0.7;
+  cursor: help;
+}
+
+.mc-tier-mini__rank {
+  margin-left: 4px;
+  padding: 1px 6px;
+  background: rgba(0, 0, 0, 0.25);
+  border-radius: 999px;
+  font-size: 11px;
+}
+
+/* RWD */
+@media (max-width: 640px) {
+  .mc-rank-bar { height: 32px; }
+  .mc-rank-text { font-size: 12px; flex-wrap: wrap; }
+}
+
