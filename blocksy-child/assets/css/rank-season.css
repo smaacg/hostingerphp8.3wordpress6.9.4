@@ -1,0 +1,98 @@
+/* ============================================================
+ * Rank Season — TFT 段位賽季樣式
+ * 載入：page-ranking-users.php / page-member.php
+ * ============================================================ */
+
+/* Hero 段位卡 */
+.ranku-hero__tier {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+  margin-top: 14px;
+  padding: 14px 18px;
+  min-width: 280px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--tier-color, rgba(255, 255, 255, 0.15));
+  border-radius: 14px;
+  backdrop-filter: blur(8px);
+}
+.ranku-hero__tier-badge {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.ranku-hero__tier-icon {
+  font-size: 28px;
+  filter: drop-shadow(0 0 6px var(--tier-color, rgba(255, 255, 255, 0.4)));
+}
+.ranku-hero__tier-label {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--tier-color, #fff);
+  text-shadow: 0 0 12px var(--tier-color, transparent);
+  letter-spacing: 0.5px;
+}
+.ranku-hero__tier-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.75);
+}
+.ranku-hero__tier-to-next { color: rgba(255, 255, 255, 0.55); }
+.ranku-hero__tier-bar {
+  height: 6px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 3px;
+  overflow: hidden;
+}
+.ranku-hero__tier-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--tier-color, #5dade2), #fff);
+  border-radius: 3px;
+  transition: width 0.6s ease;
+}
+
+/* 排行列表中的段位 chip（賽季 tab 用） */
+.ranku-row .ranku-tier-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--tier-color, rgba(255, 255, 255, 0.15));
+  color: var(--tier-color, #fff);
+}
+
+/* chip--violet（hero eyebrow 賽季標籤） */
+.chip.chip--violet {
+  background: rgba(155, 89, 182, 0.12);
+  border-color: rgba(155, 89, 182, 0.35);
+  color: #d2a4ee;
+}
+
+/* 會員中心 hero 用的迷你段位徽章 */
+.mc-tier-mini {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--tier-color, rgba(255, 255, 255, 0.15));
+  color: var(--tier-color, #fff);
+  font-size: 13px;
+  font-weight: 600;
+}
+.mc-tier-mini__icon { font-size: 16px; }
+
+/* RWD */
+@media (max-width: 640px) {
+  .ranku-hero__tier { min-width: 0; width: 100%; }
+  .ranku-hero__tier-label { font-size: 18px; }
+  .ranku-hero__tier-icon { font-size: 24px; }
+}
