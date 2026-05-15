@@ -84,6 +84,7 @@ class Plugin {
         add_action( 'wp_enqueue_scripts', [ $this, 'enqueue_leaderboard_css' ], 20 );
         add_action( 'wp_enqueue_scripts', [ $this, 'enqueue_season_event_css' ], 20 );
         add_action( 'wp_enqueue_scripts', [ $this, 'enqueue_rank_season_css' ], 20 );
+        add_action( 'wp_enqueue_scripts', [ $this, 'enqueue_level_guide_assets' ], 20 );
         add_action( 'init', [ $this, 'maybe_upgrade_db' ], 5 );
         add_action( 'init', [ $this, 'maybe_flush_rewrite' ], 99 );
     }
@@ -129,6 +130,24 @@ class Plugin {
             wp_enqueue_style( 'smacg-rank-season',
                 get_stylesheet_directory_uri() . '/assets/css/rank-season.css',
                 [], filemtime( $f ) );
+        }
+    }
+
+    public function enqueue_level_guide_assets() {
+        if ( ! is_page_template( 'page-level-guide.php' ) ) return;
+
+        $css = get_stylesheet_directory() . '/assets/css/level-guide.css';
+        if ( file_exists( $css ) ) {
+            wp_enqueue_style( 'smacg-level-guide',
+                get_stylesheet_directory_uri() . '/assets/css/level-guide.css',
+                [], filemtime( $css ) );
+        }
+
+        $js = get_stylesheet_directory() . '/assets/js/level-guide.js';
+        if ( file_exists( $js ) ) {
+            wp_enqueue_script( 'smacg-level-guide',
+                get_stylesheet_directory_uri() . '/assets/js/level-guide.js',
+                [], filemtime( $js ), true );
         }
     }
 
