@@ -19,12 +19,12 @@ $default_tab = isset( $_GET['tab'] ) ? sanitize_key( $_GET['tab'] ) : 'exp_total
 $valid_tabs  = [ 'exp_total', 'exp_monthly', 'followers', 'badges', 'rank_season' ];
 if ( ! in_array( $default_tab, $valid_tabs, true ) ) $default_tab = 'exp_total';
 
-// 賽季資訊（給 hero 顯示）
 $season_info = null;
 if ( $is_logged_in && function_exists( 'smacg_get_user_rank_season_info' ) ) {
     $season_info = smacg_get_user_rank_season_info( $current_uid );
 }
-$season_label = function_exists( 'smacg_get_season_label' ) ? smacg_get_season_label() : '';
+$season_label  = function_exists( 'smacg_get_season_label' ) ? smacg_get_season_label() : '';
+$guide_url     = home_url( '/level-guide/' );
 ?>
 
 <section class="ranku-hero">
@@ -160,6 +160,11 @@ $season_label = function_exists( 'smacg_get_season_label' ) ? smacg_get_season_l
             <li><i class="fa-solid fa-user-group"></i> <strong><?php esc_html_e( '粉絲數', 'weixiaoacg' ); ?></strong> — <?php esc_html_e( '追蹤你的會員人數', 'weixiaoacg' ); ?></li>
             <li><i class="fa-solid fa-medal"></i> <strong><?php esc_html_e( '徽章數', 'weixiaoacg' ); ?></strong> — <?php esc_html_e( '解鎖的成就徽章總數', 'weixiaoacg' ); ?></li>
           </ul>
+          <a href="<?php echo esc_url( $guide_url ); ?>" class="ranku-guide-link">
+            <i class="fa-solid fa-book"></i>
+            <?php esc_html_e( '查看完整規則指南', 'weixiaoacg' ); ?>
+            <i class="fa-solid fa-arrow-right"></i>
+          </a>
         </div>
 
         <?php if ( $is_logged_in ) : ?>
@@ -207,5 +212,25 @@ $season_label = function_exists( 'smacg_get_season_label' ) ? smacg_get_season_l
 </section>
 
 <div class="toast-container" id="ranku-toast-container" aria-live="polite"></div>
+
+<style>
+/* 規則卡底部「完整規則」連結 */
+.ranku-guide-link {
+  display: flex; align-items: center; gap: 8px;
+  margin-top: 14px; padding: 10px 14px;
+  background: rgba(40, 200, 214, 0.08);
+  border: 1px solid rgba(40, 200, 214, 0.25);
+  border-radius: 10px;
+  color: var(--accent-cyan, #28c8d6);
+  font-size: 13px; font-weight: 600;
+  text-decoration: none;
+  transition: all .2s ease;
+}
+.ranku-guide-link:hover {
+  background: rgba(40, 200, 214, 0.15);
+  transform: translateX(2px);
+}
+.ranku-guide-link i:last-child { margin-left: auto; }
+</style>
 
 <?php get_footer(); ?>
