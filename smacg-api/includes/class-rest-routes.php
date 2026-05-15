@@ -6,7 +6,9 @@
  *   GET  /wp-json/weixiaoacg/v1/ranking
  *   GET  /wp-json/weixiaoacg/v1/user/favorites
  *   GET  /wp-json/weixiaoacg/v1/anime-url?ids=1,2,3
- *   GET  /wp-json/smacg/v1/user-level
+ *
+ * 註：/wp-json/smacg/v1/user-level 已交由 smacg-gamification 外掛
+ *     （includes/rest/class-rest-api.php）註冊，不在本外掛範圍。
  *
  * @package SmacgApi
  */
@@ -23,7 +25,6 @@ class Smacg_Api_Rest_Routes {
         $this->route_ranking();
         $this->route_user_favorites();
         $this->route_anime_url();
-        $this->route_user_level();
     }
 
     /* ──────────────────────────────────────────────
@@ -173,29 +174,6 @@ class Smacg_Api_Rest_Routes {
         }
 
         return rest_ensure_response( $map );
-    }
-
-    /* ──────────────────────────────────────────────
-     * /smacg/v1/user-level
-     * ────────────────────────────────────────────── */
-    private function route_user_level(): void {
-        register_rest_route( 'smacg/v1', '/user-level', [
-            'methods'             => 'GET',
-            'permission_callback' => 'is_user_logged_in',
-            'callback'            => [ $this, 'callback_user_level' ],
-        ] );
-    }
-
-    public function callback_user_level() {
-        // smacg_get_user_level() 由 blocksy-child/inc/level-system.php 定義（Phase 2 才會搬）
-        if ( ! function_exists( 'smacg_get_user_level' ) ) {
-            return new WP_Error(
-                'level_system_unavailable',
-                '等級系統尚未載入',
-                [ 'status' => 503 ]
-            );
-        }
-        return rest_ensure_response( smacg_get_user_level( get_current_user_id() ) );
     }
 
     /* ──────────────────────────────────────────────
