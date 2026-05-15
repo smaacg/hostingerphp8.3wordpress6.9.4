@@ -1,198 +1,131 @@
 <?php
-/**
- * Season Event - CPT 註冊 + helper API
- *
- * 原檔：blocksy-child/inc/season-event-cpt.php v1.0.0
- *
- * @package SMACG_Gamification
- */
-
-namespace SMACG\Gamification\SeasonEvent;
+namespace SMACG\Gamification;
 
 defined( 'ABSPATH' ) || exit;
 
-class CPT {
+/**
+ * 季賽事件 CPT（搬自 theme/inc/season-event-cpt.php）
+ *
+ * Post type: smacg_season_event
+ * Archive  : /events/
+ *
+ * Meta keys（_smacg_event_* 前綴）：
+ *   _smacg_event_starts_at      DATETIME
+ *   _smacg_event_ends_at        DATETIME
+ *   _smacg_event_action_type    string (comment / follow / watchlist / rating / login_streak / ...)
+ *   _smacg_event_target         int    (目標數值)
+ *   _smacg_event_reward_exp     int
+ *   _smacg_event_reward_badge   int    (badge post_id)
+ *   _smacg_event_reward_title   string
+ *   _smacg_event_ended_flag     '1'    (settle 完成標記)
+ *   _smacg_event_final_snapshot string (json: top N 用戶 + 完成人數)
+ */
+class Event_CPT {
 
-    public static function init() {
-        add_action( 'init', [ __CLASS__, 'register' ], 11 );
-        add_action( 'init', [ __CLASS__, 'maybe_flush' ], 99 );
+    private static $instance = null;
+
+    public static function instance() {
+        if ( self::$instance === null ) self::$instance = new self();
+        return self::$instance;
     }
 
-    /* ---------- 註冊 CPT ---------- */
+    private function __construct() {
+        add_action( 'init', [ __CLASS__, 'register' ], 10 );
+    }
+
+    /* ==========================================================
+     * 註冊 CPT
+     * ========================================================== */
     public static function register() {
-        $labels = [
-            'name'                  => '季度活動',
-            'singular_name'         => '季度活動',
-            'menu_name'             => '🏆 季度活動',
-            'name_admin_bar'        => '季度活動',
-            'add_new'               => '新增活動',
-            'add_new_item'          => '新增季度活動',
-            'edit_item'             => '編輯活動',
-            'new_item'              => '新活動',
-            'view_item'             => '查看活動',
-            'all_items'             => '全部活動',
-            'search_items'          => '搜尋活動',
-            'not_found'             => '沒有找到活動',
-            'not_found_in_trash'    => '垃圾桶中無活動',
-            'featured_image'        => '活動 Banner',
-            'set_featured_image'    => '設定 Banner',
-            'remove_featured_image' => '移除 Banner',
-            'use_featured_image'    => '使用為 Banner',
-        ];
-
         register_post_type( SMACG_EVENT_CPT, [
-            'labels'              => $labels,
-            'description'         => '季度活動 / 排行賽事',
-            'public'              => true,
-            'publicly_queryable'  => true,
-            'show_ui'             => true,
-            'show_in_menu'        => true,
-            'show_in_rest'        => false,
-            'menu_position'       => 30,
-            'menu_icon'           => 'dashicons-awards',
-            'capability_type'     => 'post',
-            'has_archive'         => 'events',
-            'rewrite'             => [ 'slug' => 'event', 'with_front' => false ],
-            'supports'            => [ 'title', 'editor', 'thumbnail', 'excerpt' ],
-            'hierarchical'        => false,
+            'labels' => [
+                'name'               => '季賽活動',
+                'singular_name'      => '季賽活動',
+                'menu_name'          => '季賽活動',
+                'add_new'            => '新增活動',
+                'add_new_item'       => '新增季賽活動',
+                'edit_item'          => '編輯活動',
+                'new_item'           => '新活動',
+                'view_item'          => '查看活動',
+                'search_items'       => '搜尋活動',
+                'not_found'          => '找不到活動',
+                'not_found_in_trash' => '回收桶中沒有活動',
+            ],
+            'public'             => true,
+            'publicly_queryable' => true,
+            'show_ui'            => true,
+            'show_in_menu'       => true,
+            'show_in_rest'       => true,
+            'menu_icon'          => 'dashicons-awards',
+            'menu_position'      => 26,
+            'has_archive'        => 'events',
+            'rewrite'            => [ 'slug' => 'event', 'with_front' => false ],
+            'supports'           => [ 'title', 'editor', 'excerpt', 'thumbnail', 'author' ],
+            'capability_type'    => 'post',
         ] );
     }
 
-    public static function maybe_flush() {
-        if ( get_option( 'smacg_event_cpt_flushed' ) !== '1' ) {
-            flush_rewrite_rules( false );
-            update_option( 'smacg_event_cpt_flushed', '1' );
-        }
-    }
+    /* ==========================================================
+     * 取得活動完整 meta（給模板用）
+     * ========================================================== */
+    public static function get_meta( $event_id ) {
+        $event_id = (int) $event_id;
+        if ( $event_id <= 0 ) return null;
 
-    /* ---------- Task type 設定 ---------- */
-    public static function task_options() {
+        $post = get_post( $event_id );
+        if ( ! $post || $post->post_type !== SMACG_EVENT_CPT ) return null;
+
         return [
-            'exp_gain' => [
-                'label' => '累積 EXP',
-                'unit'  => 'EXP',
-                'desc'  => '活動期間累積獲得的 EXP 達標',
-            ],
-            'watchlist_completed' => [
-                'label' => '完成觀看數',
-                'unit'  => '部',
-                'desc'  => '活動期間將觀看清單標記「完成」的作品數',
-            ],
-            'comment_count' => [
-                'label' => '留言數',
-                'unit'  => '則',
-                'desc'  => '活動期間發表並通過審核的留言數',
-            ],
-            'rating_count' => [
-                'label' => '評分數',
-                'unit'  => '次',
-                'desc'  => '活動期間給出的作品評分次數',
-            ],
-            'manual' => [
-                'label' => '手動指定',
-                'unit'  => '次',
-                'desc'  => '由管理員透過 admin 工具手動標記達成',
-            ],
+            'id'           => $event_id,
+            'title'        => $post->post_title,
+            'excerpt'      => $post->post_excerpt,
+            'content'      => $post->post_content,
+            'status'       => $post->post_status,
+            'permalink'    => get_permalink( $event_id ),
+            'thumbnail'    => get_the_post_thumbnail_url( $event_id, 'large' ),
+            'starts_at'    => get_post_meta( $event_id, '_smacg_event_starts_at',    true ),
+            'ends_at'      => get_post_meta( $event_id, '_smacg_event_ends_at',      true ),
+            'action_type'  => get_post_meta( $event_id, '_smacg_event_action_type',  true ),
+            'target'       => (int) get_post_meta( $event_id, '_smacg_event_target',       true ),
+            'reward_exp'   => (int) get_post_meta( $event_id, '_smacg_event_reward_exp',   true ),
+            'reward_badge' => (int) get_post_meta( $event_id, '_smacg_event_reward_badge', true ),
+            'reward_title' => get_post_meta( $event_id, '_smacg_event_reward_title',  true ),
+            'is_ended'     => (bool) get_post_meta( $event_id, '_smacg_event_ended_flag', true ),
+            'is_active'    => self::is_active( $event_id ),
         ];
     }
 
-    public static function task_label( $key ) {
-        $opts = self::task_options();
-        return $opts[ $key ]['label'] ?? $key;
+    public static function is_active( $event_id ) {
+        $event_id = (int) $event_id;
+        $starts   = get_post_meta( $event_id, '_smacg_event_starts_at', true );
+        $ends     = get_post_meta( $event_id, '_smacg_event_ends_at',   true );
+        if ( ! $starts || ! $ends ) return false;
+        $now = current_time( 'timestamp' );
+        return $now >= strtotime( $starts ) && $now <= strtotime( $ends );
     }
 
-    public static function task_unit( $key ) {
-        $opts = self::task_options();
-        return $opts[ $key ]['unit'] ?? '';
-    }
-
-    /* ---------- Meta 讀取 ---------- */
-    public static function get_meta( $post_id ) {
-        $post_id = (int) $post_id;
-        if ( $post_id <= 0 ) return [];
-
-        $banner_id = (int) get_post_meta( $post_id, '_smacg_event_banner', true );
-        if ( ! $banner_id ) $banner_id = (int) get_post_thumbnail_id( $post_id );
-
-        return [
-            'id'              => $post_id,
-            'title'           => get_the_title( $post_id ),
-            'permalink'       => get_permalink( $post_id ),
-            'excerpt'         => get_the_excerpt( $post_id ),
-            'banner_id'       => $banner_id,
-            'banner_url'      => $banner_id ? wp_get_attachment_image_url( $banner_id, 'large' ) : '',
-            'start'           => (string) get_post_meta( $post_id, '_smacg_event_start', true ),
-            'end'             => (string) get_post_meta( $post_id, '_smacg_event_end', true ),
-            'task_type'       => (string) get_post_meta( $post_id, '_smacg_event_task_type', true ) ?: 'exp_gain',
-            'task_target'     => (int) get_post_meta( $post_id, '_smacg_event_task_target', true ),
-            'reward_exp'      => (int) get_post_meta( $post_id, '_smacg_event_reward_exp', true ),
-            'reward_badge'    => (int) get_post_meta( $post_id, '_smacg_event_reward_badge', true ),
-            'reward_title'    => (string) get_post_meta( $post_id, '_smacg_event_reward_title', true ),
-            'max_participants'=> (int) get_post_meta( $post_id, '_smacg_event_max_participants', true ),
-            'status'          => self::get_status( $post_id ),
-        ];
-    }
-
-    public static function get_status( $post_id ) {
-        $start = get_post_meta( $post_id, '_smacg_event_start', true );
-        $end   = get_post_meta( $post_id, '_smacg_event_end',   true );
-
-        if ( empty( $start ) || empty( $end ) ) return 'invalid';
-
-        $now  = current_time( 'timestamp' );
-        $ts_s = strtotime( $start );
-        $ts_e = strtotime( $end );
-
-        if ( ! $ts_s || ! $ts_e ) return 'invalid';
-        if ( $now < $ts_s ) return 'upcoming';
-        if ( $now > $ts_e ) return 'ended';
-        return 'active';
-    }
-
-    public static function get_active_events( $limit = 10 ) {
-        $posts = get_posts( [
+    /* ==========================================================
+     * 取得目前所有「進行中」活動
+     * ========================================================== */
+    public static function get_active_events() {
+        $now = current_time( 'mysql' );
+        $q   = new \WP_Query( [
             'post_type'      => SMACG_EVENT_CPT,
             'post_status'    => 'publish',
-            'posts_per_page' => max( 1, (int) $limit ),
-            'orderby'        => 'meta_value',
-            'meta_key'       => '_smacg_event_end',
-            'order'          => 'ASC',
+            'posts_per_page' => -1,
+            'meta_query'     => [
+                'relation' => 'AND',
+                [ 'key' => '_smacg_event_starts_at', 'value' => $now, 'compare' => '<=', 'type' => 'DATETIME' ],
+                [ 'key' => '_smacg_event_ends_at',   'value' => $now, 'compare' => '>=', 'type' => 'DATETIME' ],
+            ],
+            'no_found_rows' => true,
+            'orderby'       => 'meta_value',
+            'meta_key'      => '_smacg_event_ends_at',
+            'order'         => 'ASC',
         ] );
-        return array_filter( $posts, function ( $p ) {
-            return self::get_status( $p->ID ) === 'active';
-        } );
-    }
 
-    public static function get_upcoming_events( $limit = 10 ) {
-        $posts = get_posts( [
-            'post_type'      => SMACG_EVENT_CPT,
-            'post_status'    => 'publish',
-            'posts_per_page' => max( 1, (int) $limit ),
-            'orderby'        => 'meta_value',
-            'meta_key'       => '_smacg_event_start',
-            'order'          => 'ASC',
-        ] );
-        return array_filter( $posts, function ( $p ) {
-            return self::get_status( $p->ID ) === 'upcoming';
-        } );
-    }
-
-    /* ---------- Badge 選單 ---------- */
-    public static function get_badge_options() {
-        $cpt = defined( 'SMACG_BADGE_SLUG' ) ? SMACG_BADGE_SLUG : 'badge';
-        if ( ! post_type_exists( $cpt ) ) return [];
-
-        $posts = get_posts( [
-            'post_type'      => $cpt,
-            'post_status'    => 'publish',
-            'posts_per_page' => 200,
-            'orderby'        => 'title',
-            'order'          => 'ASC',
-        ] );
-        $out = [];
-        foreach ( $posts as $p ) $out[ $p->ID ] = $p->post_title;
-        return $out;
+        $events = [];
+        foreach ( $q->posts as $p ) $events[] = self::get_meta( $p->ID );
+        return $events;
     }
 }
-
-CPT::init();
