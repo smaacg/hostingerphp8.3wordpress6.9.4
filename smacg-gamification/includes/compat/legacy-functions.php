@@ -4,6 +4,10 @@
  * 全部用 function_exists 包住，避免 plugin 在主題尚未停用對應檔時 fatal。
  *
  * @package SMACG_Gamification
+ *
+ * Changelog:
+ * - v2.5.1 (2026-05-15)：補上 smacg_get_user_level_info() alias
+ *   修復 smacg-members/member-render.php:548 的 fatal error
  */
 defined( 'ABSPATH' ) || exit;
 
@@ -49,6 +53,10 @@ if ( ! function_exists( 'smacg_award_badge' ) ) {
  * ========================================================== */
 if ( ! function_exists( 'smacg_get_user_level' ) ) {
     function smacg_get_user_level( $uid ) { return Level_System::get_user_level( $uid ); }
+}
+/* v2.5.1：補上舊名稱（member-render.php 仍使用） */
+if ( ! function_exists( 'smacg_get_user_level_info' ) ) {
+    function smacg_get_user_level_info( $uid ) { return Level_System::get_user_level( $uid ); }
 }
 if ( ! function_exists( 'smacg_calc_level_from_exp' ) ) {
     function smacg_calc_level_from_exp( $exp ) { return Level_System::calc_level_from_exp( $exp ); }
