@@ -76,10 +76,25 @@ $lvl_info = function_exists( 'smacg_get_user_level_info' )
         'to_next' => 5, 'is_max' => false, 'next_floor' => 5,
     ];
 
-/* ---------- TFT 段位賽季 ---------- */
-$rank_info = function_exists( 'smacg_get_user_rank_season_info' )
-    ? smacg_get_user_rank_season_info( $uid )
-    : null;
+/* ---------- TFT 段位賽季（永遠顯示，0 分 fallback 為鐵 IV） ---------- */
+if ( function_exists( 'smacg_get_user_rank_season_info' ) ) {
+    $rank_info = smacg_get_user_rank_season_info( $uid );
+} else {
+    $rank_info = [
+        'season_code'  => '',
+        'season_label' => '',
+        'score'        => 0,
+        'rank'         => 0,
+        'tier'         => [
+            'key' => 'iron', 'division' => 'IV', 'min' => 0,
+            'label' => '鐵 IV', 'color' => '#6b6b6b', 'icon' => '🥉',
+        ],
+        'progress' => [
+            'is_max' => false, 'cur_min' => 0, 'next_min' => 100,
+            'to_next' => 100, 'percent' => 0, 'next_label' => '鐵 III',
+        ],
+    ];
+}
 $career_peak = function_exists( 'smacg_get_user_career_peak_tier' )
     ? smacg_get_user_career_peak_tier( $uid )
     : null;
@@ -180,25 +195,28 @@ get_header(); ?>
                     </span>
                 <?php endif; ?>
 
-                <?php if ( $rank_info && $rank_info['score'] > 0 ) :
-                    $tier = $rank_info['tier'];
+                <?php
+                // 段位徽章：永遠顯示當季段位（含 0 分新手）
+                $tier      = $rank_info['tier'];
+                $has_score = $rank_info['score'] > 0;
+                $rank_pos  = (int) $rank_info['rank'];
                 ?>
-                    <a href="<?php echo esc_url( $rank_page_url ); ?>"
-                       class="mc-tier-mini"
-                       style="--tier-color: <?php echo esc_attr( $tier['color'] ); ?>;"
-                       title="<?php echo esc_attr( sprintf( '%s · %s 分 · #%s',
-                           $rank_info['season_label'],
-                           number_format( $rank_info['score'] ),
-                           $rank_info['rank'] > 0 ? $rank_info['rank'] : '—' ) ); ?>">
-                        <span class="mc-tier-mini__icon"><?php echo esc_html( $tier['icon'] ); ?></span>
-                        <span class="mc-tier-mini__label"><?php echo esc_html( $tier['label'] ); ?></span>
-                        <?php if ( $rank_info['rank'] > 0 && $rank_info['rank'] <= 200 ) : ?>
-                            <span class="mc-tier-mini__rank">#<?php echo (int) $rank_info['rank']; ?></span>
-                        <?php endif; ?>
-                    </a>
-                <?php elseif ( $career_peak ) : ?>
-                    <span class="mc-tier-mini mc-tier-mini--peak"
-                          title="生涯最高段位（本季尚未獲得積分）">
+                <a href="<?php echo esc_url( $rank_page_url ); ?>"
+                   class="mc-tier-mini<?php echo $has_score ? '' : ' mc-tier-mini--zero'; ?>"
+                   style="--tier-color: <?php echo esc_attr( $tier['color'] ); ?>;"
+                   title="<?php echo esc_attr( sprintf( '%s · %s 分 · %s',
+                       $rank_info['season_label'] ?: '本賽季',
+                       number_format( $rank_info['score'] ),
+                       $rank_pos > 0 ? '#' . $rank_pos : '未上榜' ) ); ?>">
+                    <span class="mc-tier-mini__icon"><?php echo esc_html( $tier['icon'] ); ?></span>
+                    <span class="mc-tier-mini__label"><?php echo esc_html( $tier['label'] ); ?></span>
+                    <?php if ( $rank_pos > 0 && $rank_pos <= 200 ) : ?>
+                        <span class="mc-tier-mini__rank">#<?php echo $rank_pos; ?></span>
+                    <?php endif; ?>
+                </a>
+
+                <?php if ( $career_peak ) : ?>
+                    <span class="mc-tier-mini mc-tier-mini--peak" title="生涯最高段位">
                         <span class="mc-tier-mini__icon"><?php echo esc_html( $career_peak['icon'] ); ?></span>
                         <span class="mc-tier-mini__label">生涯 <?php echo esc_html( $career_peak['label'] ); ?></span>
                     </span>
@@ -253,28 +271,25 @@ get_header(); ?>
                 </span>
             </div>
 
-            <?php if ( $rank_info && $rank_info['score'] > 0 ) :
-                $prog = $rank_info['progress'];
-            ?>
-                <a href="<?php echo esc_url( $rank_page_url ); ?>"
-                   class="mc-rank-bar"
-                   style="--tier-color: <?php echo esc_attr( $rank_info['tier']['color'] ); ?>;"
-                   title="<?php echo esc_attr( $rank_info['season_label'] ); ?>">
-                    <div class="mc-rank-fill" style="width:<?php echo (int) $prog['percent']; ?>%"></div>
-                    <span class="mc-rank-text">
-                        <?php echo esc_html( $rank_info['tier']['icon'] ); ?>
-                        <?php echo esc_html( $rank_info['tier']['label'] ); ?>
-                        ·
-                        <?php echo number_format( $rank_info['score'] ); ?> 賽季積分
-                        <?php if ( $prog['is_max'] ) : ?>
-                            <span class="mc-rank-max">MAX</span>
-                        <?php else : ?>
-                            （距 <?php echo esc_html( $prog['next_label'] ); ?> 還差
-                            <?php echo number_format( $prog['to_next'] ); ?> 分）
-                        <?php endif; ?>
-                    </span>
-                </a>
-            <?php endif; ?>
+            <?php $prog = $rank_info['progress']; ?>
+            <a href="<?php echo esc_url( $rank_page_url ); ?>"
+               class="mc-rank-bar<?php echo $rank_info['score'] > 0 ? '' : ' mc-rank-bar--zero'; ?>"
+               style="--tier-color: <?php echo esc_attr( $rank_info['tier']['color'] ); ?>;"
+               title="<?php echo esc_attr( $rank_info['season_label'] ?: '本賽季' ); ?>">
+                <div class="mc-rank-fill" style="width:<?php echo (int) $prog['percent']; ?>%"></div>
+                <span class="mc-rank-text">
+                    <?php echo esc_html( $rank_info['tier']['icon'] ); ?>
+                    <?php echo esc_html( $rank_info['tier']['label'] ); ?>
+                    ·
+                    <?php echo number_format( $rank_info['score'] ); ?> 賽季積分
+                    <?php if ( $prog['is_max'] ) : ?>
+                        <span class="mc-rank-max">MAX</span>
+                    <?php else : ?>
+                        （距 <?php echo esc_html( $prog['next_label'] ); ?> 還差
+                        <?php echo number_format( $prog['to_next'] ); ?> 分）
+                    <?php endif; ?>
+                </span>
+            </a>
 
             <div class="mc-hero-stats">
                 <div><b><?php echo (int) ( $stats['counts']['watching']  ?? 0 ); ?></b><span>追番中</span></div>
