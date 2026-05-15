@@ -3,18 +3,20 @@
  * 微笑動漫 Child Theme — functions.php
  *
  * @package weixiaoacg
- * @version 2.13.0 (2026-05-15)
+ * @version 2.14.0 (2026-05-15)
  *
  * Changelog：
+ *   2.14.0 (2026-05-15) Phase 3-A：會員核心模組搬遷至 smacg-members 外掛
+ *                       移除主載入清單內 member-functions / member-stats / member-render /
+ *                                       member-ajax / um-integration
  *   2.13.0 (2026-05-15) 整合 smacg-api 外掛
  *                       移除主載入清單內 api-rest / content-slug / external-links
  *   2.12.0 (2026-05-15) Phase 2：所有 gamification 模組搬遷至 smacg-gamification
- *   2.7.3 (2026-05-14) Batch 2B-5 — season-event 模組
- *   ...（前略）
+ *   2.7.3  (2026-05-14) Batch 2B-5 — season-event 模組
  */
 defined( 'ABSPATH' ) || exit;
 
-define( 'weixiaoacg_VERSION',   '2.13.0' );
+define( 'weixiaoacg_VERSION',   '2.14.0' );
 define( 'weixiaoacg_THEME_URL', get_stylesheet_directory_uri() );
 define( 'weixiaoacg_THEME_DIR', get_stylesheet_directory() );
 
@@ -42,16 +44,18 @@ if ( ! defined( 'SMACG_EVENT_CPT' ) )  define( 'SMACG_EVENT_CPT',  'smacg_season
 
 $inc = weixiaoacg_THEME_DIR . '/inc/';
 
-/* === 主載入：純主題（會員中心、選單、enqueue、佈景設定、UM 整合） === */
+/* === 主載入：純主題層級（選單、enqueue、佈景設定） ===
+       注意：member-* 與 um-integration 已搬至 smacg-members 外掛
+*/
 foreach ( [
-    'member-functions','member-stats','member-render','setup-theme',
-    'class-nav-walker','setup-enqueue','member-ajax',
-    'um-integration',
+    'setup-theme',
+    'class-nav-walker',
+    'setup-enqueue',
 ] as $f ) {
     require_once $inc . $f . '.php';
 }
 
-/* === 選擇性載入（仍在主題的非 gamification 模組） === */
+/* === 選擇性載入（仍在主題的非 gamification、非 members 模組） === */
 $optional = [
     'image-optimizer',
     'public-profile','public-profile-render',
@@ -69,6 +73,9 @@ $optional = [
        leaderboard-ajax, leaderboard-widget,
        season-event-cpt, season-event-admin, season-event-tracker, season-event-settle
 */
+/* === 已搬至 smacg-members 外掛（不再從主題載入） ===
+       member-functions, member-stats, member-render, member-ajax, um-integration
+*/
 
 foreach ( $optional as $f ) {
     $path = $inc . $f . '.php';
@@ -81,8 +88,9 @@ unset( $inc, $optional, $f, $path );
 add_action( 'admin_notices', function () {
     if ( ! current_user_can( 'activate_plugins' ) ) return;
     $missing = [];
-    if ( ! defined( 'SMACG_GAMIFY_VERSION' ) ) $missing[] = 'SMACG Gamification';
-    if ( ! defined( 'SMACG_API_VERSION' ) )    $missing[] = 'SMACG API';
+    if ( ! defined( 'SMACG_GAMIFY_VERSION' ) )  $missing[] = 'SMACG Gamification';
+    if ( ! defined( 'SMACG_API_VERSION' ) )     $missing[] = 'SMACG API';
+    if ( ! defined( 'SMACG_MEMBERS_VERSION' ) ) $missing[] = 'SMACG Members';
     if ( empty( $missing ) ) return;
     echo '<div class="notice notice-error"><p><strong>weixiaoacg 主題：</strong>'
        . '以下外掛未啟用，相關功能將完全停用：<code>'
