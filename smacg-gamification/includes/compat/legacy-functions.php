@@ -4,10 +4,7 @@
  * 全部用 function_exists 包住，避免 plugin 在主題尚未停用對應檔時 fatal。
  *
  * @package SMACG_Gamification
- *
- * Changelog:
- * - v2.5.1 (2026-05-15)：補上 smacg_get_user_level_info() alias
- *   修復 smacg-members/member-render.php:548 的 fatal error
+ * @version 1.1.0 (2026-05-15) - 新增 smacg_get_user_level_info() 完整版,補齊 SMACG_MAX_LEVEL 常數
  */
 defined( 'ABSPATH' ) || exit;
 
@@ -15,6 +12,13 @@ use SMACG\Gamification\Gamipress_Bridge;
 use SMACG\Gamification\Level_System;
 use SMACG\Gamification\Ranking_System;
 use SMACG\Gamification\Event_Tracker;
+
+/* ==========================================================
+ * 常數
+ * ========================================================== */
+if ( ! defined( 'SMACG_MAX_LEVEL' ) ) {
+    define( 'SMACG_MAX_LEVEL', 200 );
+}
 
 /* ==========================================================
  * GamiPress
@@ -54,10 +58,6 @@ if ( ! function_exists( 'smacg_award_badge' ) ) {
 if ( ! function_exists( 'smacg_get_user_level' ) ) {
     function smacg_get_user_level( $uid ) { return Level_System::get_user_level( $uid ); }
 }
-/* v2.5.1：補上舊名稱（member-render.php 仍使用） */
-if ( ! function_exists( 'smacg_get_user_level_info' ) ) {
-    function smacg_get_user_level_info( $uid ) { return Level_System::get_user_level( $uid ); }
-}
 if ( ! function_exists( 'smacg_calc_level_from_exp' ) ) {
     function smacg_calc_level_from_exp( $exp ) { return Level_System::calc_level_from_exp( $exp ); }
 }
@@ -69,6 +69,60 @@ if ( ! function_exists( 'smacg_get_job_by_level' ) ) {
 }
 if ( ! function_exists( 'smacg_grant_exp' ) ) {
     function smacg_grant_exp( $uid, $amount, $reason = '' ) { return Level_System::grant_exp( $uid, $amount, $reason ); }
+}
+
+/**
+ * 取得使用者等級完整資訊（page-member.php / member-render.php 使用）
+ * 回傳欄位：exp, level, title, icon, percent, in_level_exp, level_total_exp,
+ *           to_next, is_max, next_floor, cur_floor
+ */
+if ( ! function_exists( 'smacg_get_user_level_info' ) ) {
+    function smacg_get_user_level_info( $uid ) {
+        $uid = (int) $uid;
+        $exp = function_exists( 'smacg_get_user_exp' ) ? (int) smacg_get_user_exp( $uid ) : 0;
+
+        // 取等級
+        $level = function_exists( 'smacg_calc_level_from_exp' )
+            ? (int) smacg_calc_level_from_exp( $exp )
+            : 1;
+        if ( $level < 1 ) { $level = 1; }
+        if ( $level > SMACG_MAX_LEVEL ) { $level = SMACG_MAX_LEVEL; }
+
+        $is_max = ( $level >= SMACG_MAX_LEVEL );
+
+        // 取本級 / 下一級門檻
+        $table = function_exists( 'smacg_get_level_table' ) ? smacg_get_level_table() : array();
+        $cur_floor  = isset( $table[ $level ] )     ? (int) $table[ $level ]     : 0;
+        $next_floor = $is_max
+            ? $cur_floor
+            : ( isset( $table[ $level + 1 ] ) ? (int) $table[ $level + 1 ] : $cur_floor );
+
+        $level_total_exp = max( 0, $next_floor - $cur_floor );
+        $in_level_exp    = max( 0, $exp - $cur_floor );
+        $to_next         = $is_max ? 0 : max( 0, $next_floor - $exp );
+        $percent         = ( $is_max || $level_total_exp <= 0 )
+            ? 100
+            : min( 100, (int) floor( $in_level_exp * 100 / $level_total_exp ) );
+
+        // 取頭銜 / 圖示
+        $job   = function_exists( 'smacg_get_job_by_level' ) ? smacg_get_job_by_level( $level ) : array();
+        $title = isset( $job['title'] ) ? $job['title'] : '見習';
+        $icon  = isset( $job['icon'] )  ? $job['icon']  : '🌱';
+
+        return array(
+            'exp'             => $exp,
+            'level'           => $level,
+            'title'           => $title,
+            'icon'            => $icon,
+            'percent'         => $percent,
+            'in_level_exp'    => $in_level_exp,
+            'level_total_exp' => $level_total_exp,
+            'to_next'         => $to_next,
+            'is_max'          => $is_max,
+            'next_floor'      => $next_floor,
+            'cur_floor'       => $cur_floor,
+        );
+    }
 }
 
 /* ==========================================================
