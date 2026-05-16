@@ -3,7 +3,10 @@
  * Notifications System — Render（會員中心通知頁）
  *
  * @package weixiaoacg
- * @version 1.0.0 (2026-05-13)
+ * @version 1.1.0 (2026-05-16)
+ *
+ * v1.1.0 變更：
+ *   - Bug #5 修正：時間計算改用 get_gmt_from_date 避免時區錯位
  *
  * 提供：
  *   smacg_render_notifications_tab()  會員中心通知 tab 內容
@@ -89,8 +92,10 @@ function smacg_render_notification_item( $n ) {
 		}
 	}
 
-	$ts        = mysql2date( 'U', $n['created_at'] );
-	$time_diff = human_time_diff( $ts, current_time( 'timestamp' ) ) . '前';
+	// v1.1.0 修正：created_at 是本地時間字串，要先轉成 UTC timestamp
+	$ts        = (int) strtotime( get_gmt_from_date( $n['created_at'] ) . ' UTC' );
+	$time_diff = $ts ? human_time_diff( $ts, time() ) . '前' : '';
+
 	$unread_cls = ( (int) $n['is_read'] === 0 ) ? ' is-unread' : '';
 	?>
 	<a class="smacg-notif-item<?php echo $unread_cls; ?>"
