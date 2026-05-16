@@ -4,7 +4,26 @@
  *
  * @package weixiaoacg
  * @subpackage PublicProfile
- * @version 1.2.0 (2026-05-16)
+ * @version 1.2.1 (2026-05-16)
+ *
+ * v1.2.1 變更（2026-05-16，hotfix）：
+ *   - 【Bug 修復・回滾 v1.2.0 的 Section 6 設計】
+ *     v1.2.0 一度將新用戶預設隱私改寫成 4 個扁平裸 key
+ *     （public_profile / public_watchlist / show_email / show_continue_watching），
+ *     原意是要對齊「假設中的 privacy.php 抽離層」。
+ *     但 privacy.php 實際上因與 member-stats.php::smacg_get_user_privacy()
+ *     重複宣告造成 Fatal，已永久刪除。
+ *     真正的隱私資料層為：
+ *       - 讀：smacg-members/includes/legacy/member-stats.php::smacg_get_user_privacy()
+ *             → 讀 user_meta 'smacg_privacy'（陣列）
+ *       - 寫：smacg-members/includes/legacy/member-ajax.php::wp_ajax_smacg_update_privacy
+ *             → 寫 user_meta 'smacg_privacy'（陣列）
+ *     v1.2.0 殘留的扁平裸 key 寫法導致新註冊用戶的預設值被寫到沒人讀的位置，
+ *     雖然不會 fatal、預設值與 fallback 相同所以表面無感，
+ *     但會殘留 4 列無用 user_meta，並讓「使用者是否已初始化偏好」的判斷失準。
+ *   - Section 6 改回寫入單一 'smacg_privacy' 陣列 meta（int 0/1 值）。
+ *   - 移除對 smacg_get_user_privacy_defaults() 的死引用（該函式從未在 repo 中存在）。
+ *   - 其餘區段（rewrite / dispatch / SEO / helper / admin bar / 等級徽章注入）byte-perfect 不變。
  *
  * v1.2.0 變更（2026-05-16）：
  *   - 新增 /u/{username}/(followers|following)/ rewrite 規則（含分頁）
@@ -14,12 +33,6 @@
  *   - smacg_is_public_profile_page() 自動對 followers/following 頁回傳 true
  *     （因為仍會設定 $GLOBALS['smacg_pp_user_obj']），
  *     使主題 setup-enqueue.php 的 public-profile.css/js 自動載入。
- *   - 【Bug 修復】Section 6 新用戶預設隱私改寫扁平裸 key
- *     （public_profile / public_watchlist / show_email / show_continue_watching），
- *     與 member-ajax.php 的 smacg_update_privacy 寫入位置對齊。
- *     原本寫入 'smacg_privacy' 陣列 meta 的方式與 settings 寫入位置不一致，
- *     導致 smacg_can_view_profile_section() 讀不到註冊預設值。
- *     舊用戶資料由 privacy.php 的 smacg_get_user_privacy() 自動相容讀取與遷移。
  *
  * v1.1.0 變更：
  *   - Bug #10 修正：移除模糊比對 fallback，避免 /u/taro/ 撈到 taro2
@@ -387,34 +400,35 @@ function smacg_pp_is_owner() {
 /* ============================================================
    6. 新使用者預設隱私
    ------------------------------------------------------------
-   v1.2.0 修復：改寫扁平裸 key，與 member-ajax.php 的 smacg_update_privacy
-   寫入位置對齊。
-   原本寫入 'smacg_privacy' 陣列 meta 的方式與 settings 寫入位置不同，
-   導致 smacg_can_view_profile_section() 讀不到註冊預設值。
-   舊用戶資料由 privacy.php 的 smacg_get_user_privacy() 自動相容讀取與遷移。
+   v1.2.1 修復：回滾為單一 'smacg_privacy' 陣列 meta，
+   與資料層（member-stats.php 的 smacg_get_user_privacy / member-ajax.php
+   的 smacg_update_privacy）一致。
+
+   背景：v1.2.0 曾改寫為 4 個扁平裸 key（public_profile / public_watchlist /
+   show_email / show_continue_watching），目的是配合計畫中的 privacy.php
+   抽離層；但 privacy.php 最終因與 member-stats.php 內既有的
+   smacg_get_user_privacy() 重複宣告而被永久刪除，
+   殘留的扁平裸 key 寫法導致新註冊用戶預設值被寫到沒人讀的位置。
+   現在改回單一陣列寫法，並僅在尚未存在時才寫入，
+   避免覆寫使用者後續儲存的偏好。
    ============================================================ */
 add_action( 'user_register', 'smacg_pp_set_default_privacy', 20 );
 function smacg_pp_set_default_privacy( $user_id ) {
     $user_id = (int) $user_id;
     if ( ! $user_id ) return;
 
-    // v1.2.0：優先呼叫資料層提供的預設值（privacy.php），確保單一資料源。
-    $defaults = function_exists( 'smacg_get_user_privacy_defaults' )
-        ? smacg_get_user_privacy_defaults()
-        : [
-            'public_profile'         => '1',
-            'public_watchlist'       => '1',
-            'show_email'             => '0',
-            'show_continue_watching' => '1',
-        ];
-
-    // 僅在欄位不存在時寫入，避免覆寫其他來源預先寫入的偏好。
-    foreach ( $defaults as $key => $val ) {
-        $existing = get_user_meta( $user_id, $key, true );
-        if ( $existing === '' || $existing === false || $existing === null ) {
-            update_user_meta( $user_id, $key, $val );
-        }
+    // 已存在則不覆寫，保留使用者自身設定（含其他來源預先寫入）。
+    $existing = get_user_meta( $user_id, 'smacg_privacy', true );
+    if ( is_array( $existing ) && ! empty( $existing ) ) {
+        return;
     }
+
+    update_user_meta( $user_id, 'smacg_privacy', [
+        'show_email'             => 0, // 預設遮罩 email
+        'public_profile'         => 1, // 預設公開個人頁
+        'public_watchlist'       => 1, // 預設公開追番列表
+        'show_continue_watching' => 1, // 預設顯示「繼續觀看」
+    ] );
 }
 
 /* ============================================================
