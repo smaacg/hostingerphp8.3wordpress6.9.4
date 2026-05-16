@@ -2,467 +2,456 @@
 /**
  * Public Profile - Render Functions
  *
- * @package weixiaoacg
- * @version 1.0.0 (2026-05-13)
+ * 公開個人頁渲染層：hero、overview、watchlist、ratings、badges、activity。
  *
- * 公開個人頁的所有 render 函式集中於此。
- * 受限於隱私 + 訪客身份，僅顯示「公開可見」的內容。
+ * @package    weixiaoacg
+ * @subpackage smacg-social
+ * @version    1.2.0
+ * @since      1.0.0
  *
- * 提供函式：
- *   smacg_pp_render_hero( $user, $args )
- *   smacg_pp_render_overview( $user, $watchlist, $stats, $can_w, $can_r )
- *   smacg_pp_render_watchlist( $watchlist )
- *   smacg_pp_render_ratings( $ratings )
- *   smacg_pp_render_badges( $uid, $stats )
- *   smacg_pp_render_activity( $activity )
- *
- * 共用卡片：reuse smacg_render_anime_card()（member-render.php 已定義）
- * v1.1.0 (2026-05-13) Batch 1B-3：
- *   - hero 加入粉絲數 / 追蹤中顯示
- *   - 「追蹤」佔位按鈕替換為 .smacg-follow-btn（由 follow.js 接管）
-
+ * Changelog:
+ * - 1.2.0 (2026-05-16)
+ *   * Hero 區粉絲/追蹤中數字改為 <a> 連結，指向 /u/{username}/followers/ 與 /following/。
+ *   * 追蹤按鈕右側新增互追膠囊（🤝 互相追蹤），透過 smacg_is_mutual_follow() 判定。
+ *   * 加入 smacg_is_mutual_follow() function_exists 守衛，缺失時 fallback 為兩次 smacg_is_following()。
+ *   * 加入一次性 inline CSS（.pp-count-link / .pp-mutual-badge），使用 static guard 避免重複輸出。
+ * - 1.1.0 (2026-05-13)
+ *   * Hero 顯示粉絲/追蹤中數字。
+ *   * 追蹤按鈕改用 .smacg-follow-btn class，交由 follow.js 統一處理。
+ * - 1.0.0 (2026-05-13)
+ *   * 初始版本。
  */
 
-defined( 'ABSPATH' ) || exit;
+if ( ! defined( 'ABSPATH' ) ) exit;
 
-/* ============================================================
-   Hero
-   ============================================================ */
+/* ========================================================================
+ * Hero 區塊
+ * ====================================================================== */
+
+if ( ! function_exists( 'smacg_pp_render_hero' ) ) :
 function smacg_pp_render_hero( $user, $args ) {
-    $a   = $args;
-    $uid = (int) $user->ID;
+    $uid          = (int) $user->ID;
+    $display_name = ! empty( $args['display_name'] ) ? $args['display_name'] : $user->display_name;
+    $bio          = ! empty( $args['bio'] )          ? $args['bio']          : '';
+    $reg_date     = ! empty( $args['reg_date'] )     ? $args['reg_date']     : '';
+    $email        = isset( $args['email'] )          ? $args['email']        : '';
+    $points       = isset( $args['points'] )         ? (int) $args['points'] : 0;
+    $plan_label   = ! empty( $args['plan_label'] )   ? $args['plan_label']   : '';
+    $avatar_url   = ! empty( $args['avatar_url'] )   ? $args['avatar_url']   : get_avatar_url( $uid, [ 'size' => 200 ] );
+    $lvl          = ! empty( $args['lvl_info'] )     ? $args['lvl_info']     : null;
+    $is_owner     = ! empty( $args['is_owner'] );
 
-    // Batch 1B-3：取追蹤數
-    $followers_count = function_exists( 'smacg_get_followers_count' )
-        ? smacg_get_followers_count( $uid ) : 0;
-    $following_count = function_exists( 'smacg_get_following_count' )
-        ? smacg_get_following_count( $uid ) : 0;
+    // 粉絲 / 追蹤中數字
+    $followers_count = function_exists( 'smacg_get_followers_count' ) ? (int) smacg_get_followers_count( $uid ) : 0;
+    $following_count = function_exists( 'smacg_get_following_count' ) ? (int) smacg_get_following_count( $uid ) : 0;
 
-    // 訪客 vs. 目標 的追蹤狀態
-    $is_following = false;
-    if ( $a['is_logged_in'] && ! $a['is_owner'] && function_exists( 'smacg_is_following' ) ) {
-        $is_following = smacg_is_following( get_current_user_id(), $uid );
+    // 連結到 followers / following 子頁
+    $profile_url        = function_exists( 'smacg_get_public_profile_url' ) ? smacg_get_public_profile_url( $user ) : home_url( '/u/' . $user->user_login . '/' );
+    $profile_url        = trailingslashit( $profile_url );
+    $followers_url      = $profile_url . 'followers/';
+    $following_url      = $profile_url . 'following/';
+
+    // 互追判定（僅在登入且非本人時計算）
+    $is_mutual = false;
+    if ( ! $is_owner && is_user_logged_in() ) {
+        $viewer_id = get_current_user_id();
+        if ( function_exists( 'smacg_is_mutual_follow' ) ) {
+            $is_mutual = (bool) smacg_is_mutual_follow( $viewer_id, $uid );
+        } elseif ( function_exists( 'smacg_is_following' ) ) {
+            $is_mutual = smacg_is_following( $viewer_id, $uid ) && smacg_is_following( $uid, $viewer_id );
+        }
     }
     ?>
     <section class="pp-hero">
-        <div class="pp-hero-avatar">
-            <img src="<?php echo esc_url( $a['avatar'] ); ?>"
-                 alt="<?php echo esc_attr( $a['display'] ); ?>"
-                 loading="lazy">
-        </div>
+        <div class="pp-hero-inner">
 
-        <div class="pp-hero-info">
-            <h1 class="pp-hero-name">
-                <?php echo esc_html( $a['display'] ); ?>
-                <span class="pp-plan-badge"><?php echo esc_html( $a['plan'] ); ?></span>
-            </h1>
-
-            <p class="pp-hero-meta">
-                <span><i class="fa-solid fa-calendar-days"></i> 加入於 <?php echo esc_html( $a['reg_date'] ); ?></span>
-                <?php if ( $a['can_view_email'] && $a['email_display'] ) : ?>
-                    <span><i class="fa-solid fa-envelope"></i> <?php echo esc_html( $a['email_display'] ); ?></span>
+            <div class="pp-hero-avatar">
+                <img src="<?php echo esc_url( $avatar_url ); ?>" alt="<?php echo esc_attr( $display_name ); ?>" loading="eager" decoding="async">
+                <?php if ( $lvl && ! empty( $lvl['icon'] ) ) : ?>
+                    <span class="pp-hero-level-icon" title="<?php echo esc_attr( 'Lv.' . $lvl['level'] . ' ' . $lvl['title'] ); ?>"><?php echo esc_html( $lvl['icon'] ); ?></span>
                 <?php endif; ?>
-                <span><i class="fa-solid fa-coins"></i> <?php echo number_format( $a['points'] ); ?> 點</span>
-            </p>
-
-            <?php /* Batch 1B-3：追蹤數顯示 */ ?>
-            <p class="pp-hero-follow-meta">
-                <span class="pp-follow-stat">
-                    <b class="pp-followers-count" data-followers-of="<?php echo $uid; ?>"><?php echo number_format( $followers_count ); ?></b>
-                    <em>粉絲</em>
-                </span>
-                <span class="pp-follow-stat">
-                    <b><?php echo number_format( $following_count ); ?></b>
-                    <em>追蹤中</em>
-                </span>
-            </p>
-
-            <?php if ( ! empty( $a['bio'] ) ) : ?>
-                <p class="pp-hero-bio"><?php echo esc_html( $a['bio'] ); ?></p>
-            <?php endif; ?>
-
-            <div class="pp-level-bar" title="Lv.<?php echo (int) $a['lvl_info']['level']; ?>　<?php echo (int) $a['points']; ?> 點">
-                <div class="pp-level-fill" style="width:<?php echo (int) $a['lvl_info']['percent']; ?>%"></div>
-                <span class="pp-level-text">
-                    Lv.<?php echo (int) $a['lvl_info']['level']; ?> · <?php echo esc_html( $a['lvl_info']['title'] ); ?>
-                    （<?php echo (int) $a['points']; ?> / <?php echo (int) $a['lvl_info']['next']; ?>）
-                </span>
             </div>
 
-            <?php /* 互動按鈕區 */ ?>
-            <div class="pp-hero-actions">
-                <?php if ( $a['is_owner'] ) : ?>
-                    <a href="<?php echo esc_url( home_url( '/mc/' ) ); ?>" class="pp-btn pp-btn-primary">
-                        <i class="fa-solid fa-gear"></i> 編輯資料
+            <div class="pp-hero-main">
+                <div class="pp-hero-title">
+                    <h1 class="pp-hero-name"><?php echo esc_html( $display_name ); ?></h1>
+                    <?php if ( $plan_label ) : ?>
+                        <span class="pp-hero-plan"><?php echo esc_html( $plan_label ); ?></span>
+                    <?php endif; ?>
+                </div>
+
+                <div class="pp-hero-meta">
+                    <?php if ( $reg_date ) : ?>
+                        <span class="pp-meta-item">📅 <?php echo esc_html( '加入於 ' . $reg_date ); ?></span>
+                    <?php endif; ?>
+                    <?php if ( $email ) : ?>
+                        <span class="pp-meta-item">✉️ <?php echo esc_html( $email ); ?></span>
+                    <?php endif; ?>
+                    <?php if ( $points ) : ?>
+                        <span class="pp-meta-item">💎 <?php echo esc_html( number_format_i18n( $points ) ); ?> 點</span>
+                    <?php endif; ?>
+                    <a class="pp-meta-item pp-count-link" href="<?php echo esc_url( $followers_url ); ?>">
+                        👥 粉絲 <strong class="pp-followers-count"><?php echo esc_html( number_format_i18n( $followers_count ) ); ?></strong>
                     </a>
-                <?php elseif ( $a['is_logged_in'] ) : ?>
-                    <?php /* Batch 1B-3：真的能用的追蹤按鈕 */ ?>
-                    <button class="smacg-follow-btn <?php echo $is_following ? 'smacg-follow-btn--following' : 'smacg-follow-btn--idle'; ?>"
-                            data-user-id="<?php echo $uid; ?>"
-                            data-state="<?php echo $is_following ? 'following' : 'follow'; ?>"
-                            type="button">
-                        <i class="fa-solid <?php echo $is_following ? 'fa-user-check' : 'fa-user-plus'; ?>"></i>
-                        <span class="smacg-follow-label"><?php echo $is_following ? '追蹤中' : '追蹤'; ?></span>
-                    </button>
-                <?php else : ?>
-                    <a href="<?php echo esc_url( wp_login_url( get_permalink() ?: home_url( '/' ) ) ); ?>"
-                       class="pp-btn pp-btn-primary">
-                        <i class="fa-solid fa-right-to-bracket"></i> 登入後追蹤
+                    <a class="pp-meta-item pp-count-link" href="<?php echo esc_url( $following_url ); ?>">
+                        ➡️ 追蹤中 <strong class="pp-following-count"><?php echo esc_html( number_format_i18n( $following_count ) ); ?></strong>
                     </a>
+                </div>
+
+                <?php if ( $bio ) : ?>
+                    <p class="pp-hero-bio"><?php echo esc_html( $bio ); ?></p>
                 <?php endif; ?>
 
-                <button class="pp-btn pp-btn-ghost pp-btn-share" type="button"
-                        data-url="<?php echo esc_attr( smacg_get_public_profile_url( $user ) ); ?>"
-                        data-title="<?php echo esc_attr( $a['display'] ); ?>">
-                    <i class="fa-solid fa-share-nodes"></i> 分享
-                </button>
-            </div>
+                <?php if ( $lvl ) : ?>
+                    <div class="pp-hero-level">
+                        <div class="pp-level-info">
+                            <span class="pp-level-title">Lv.<?php echo (int) $lvl['level']; ?> <?php echo esc_html( $lvl['title'] ); ?></span>
+                            <?php if ( empty( $lvl['is_max'] ) ) : ?>
+                                <span class="pp-level-exp"><?php echo esc_html( number_format_i18n( (int) $lvl['exp'] ) ); ?> EXP</span>
+                            <?php else : ?>
+                                <span class="pp-level-exp">MAX</span>
+                            <?php endif; ?>
+                        </div>
+                        <div class="pp-level-bar">
+                            <div class="pp-level-bar-fill" style="width: <?php echo esc_attr( (float) ( $lvl['percent'] ?? 0 ) ); ?>%;"></div>
+                        </div>
+                    </div>
+                <?php endif; ?>
 
-            <?php /* 統計 chips */ ?>
-            <div class="pp-hero-stats">
-                <div><b><?php echo (int) ( $a['stats']['counts']['watching'] ?? 0 ); ?></b><span>追番中</span></div>
-                <div><b><?php echo (int) ( $a['stats']['counts']['completed'] ?? 0 ); ?></b><span>已看完</span></div>
-                <div><b><?php echo (int) ( $a['stats']['counts']['favorited'] ?? 0 ); ?></b><span>收藏</span></div>
-                <div><b><?php echo (int) ( $a['stats']['rating']['count'] ?? 0 ); ?></b><span>評分</span></div>
-                <div><b><?php echo (int) ( $a['stats']['watch_time']['days'] ?? 0 ); ?>天</b><span>觀看時數</span></div>
+                <div class="pp-hero-actions">
+                    <?php if ( $is_owner ) : ?>
+                        <a class="pp-btn pp-btn-primary" href="<?php echo esc_url( home_url( '/mc/#settings' ) ); ?>">⚙️ 編輯個人資料</a>
+                    <?php elseif ( is_user_logged_in() ) : ?>
+                        <?php
+                        $is_following = function_exists( 'smacg_is_following' ) ? smacg_is_following( get_current_user_id(), $uid ) : false;
+                        ?>
+                        <button class="smacg-follow-btn <?php echo $is_following ? 'is-following' : ''; ?>"
+                                data-user-id="<?php echo esc_attr( $uid ); ?>"
+                                data-following="<?php echo $is_following ? '1' : '0'; ?>">
+                            <?php echo $is_following ? '✓ 追蹤中' : '+ 追蹤'; ?>
+                        </button>
+                        <?php if ( $is_mutual ) : ?>
+                            <span class="pp-mutual-badge" title="你們互相追蹤對方">🤝 互相追蹤</span>
+                        <?php endif; ?>
+                    <?php else : ?>
+                        <a class="pp-btn pp-btn-primary" href="<?php echo esc_url( wp_login_url( get_permalink() ) ); ?>">登入後追蹤</a>
+                    <?php endif; ?>
+                    <button class="pp-btn pp-btn-ghost pp-share-btn" data-url="<?php echo esc_attr( get_permalink() ); ?>">🔗 分享</button>
+                </div>
+
             </div>
         </div>
     </section>
     <?php
+    smacg_pp_render_inline_css();
 }
-/* ============================================================
-   Overview (總覽 tab)
-   ============================================================ */
+endif;
+
+/* ========================================================================
+ * 一次性 inline CSS（v1.2.0 新增元素）
+ * ====================================================================== */
+
+if ( ! function_exists( 'smacg_pp_render_inline_css' ) ) :
+function smacg_pp_render_inline_css() {
+    static $printed = false;
+    if ( $printed ) return;
+    $printed = true;
+    ?>
+    <style id="smacg-pp-inline-v120">
+        .pp-count-link{text-decoration:none;color:inherit;transition:color .15s ease, transform .15s ease;display:inline-flex;align-items:center;gap:4px}
+        .pp-count-link:hover{color:var(--theme-palette-color-1,#4a6cf7);transform:translateY(-1px)}
+        .pp-count-link strong{font-weight:700}
+        .pp-mutual-badge{display:inline-flex;align-items:center;gap:4px;padding:6px 12px;border-radius:999px;background:linear-gradient(135deg,#10b981,#059669);color:#fff;font-size:13px;font-weight:600;line-height:1;white-space:nowrap;box-shadow:0 2px 6px rgba(16,185,129,.25);cursor:default;user-select:none}
+        .pp-hero-actions{display:flex;flex-wrap:wrap;align-items:center;gap:10px}
+        @media (max-width:480px){.pp-mutual-badge{font-size:12px;padding:5px 10px}}
+    </style>
+    <?php
+}
+endif;
+
+/* ========================================================================
+ * Overview Tab
+ * ====================================================================== */
+
+if ( ! function_exists( 'smacg_pp_render_overview' ) ) :
 function smacg_pp_render_overview( $user, $watchlist, $stats, $can_w, $can_r ) {
     $uid = (int) $user->ID;
     ?>
-    <div class="pp-overview">
+    <section class="pp-section pp-overview">
+        <div class="pp-grid pp-grid-2">
 
-        <?php if ( $can_w && ! empty( $watchlist ) ) : ?>
-            <?php
-            // 最近更新 8 部
-            $recent = array_slice( $watchlist, 0, 8 );
-            ?>
-            <div class="pp-section">
-                <h2 class="pp-section-title">
-                    <i class="fa-solid fa-clock-rotate-left"></i> 最近更新
-                </h2>
-                <div class="pp-grid">
-                    <?php foreach ( $recent as $w ) : ?>
-                        <?php smacg_pp_render_anime_card( $w['post_id'], $w ); ?>
-                    <?php endforeach; ?>
-                </div>
+            <div class="pp-card">
+                <h2 class="pp-card-title">📺 最近更新</h2>
+                <?php
+                $recent = [];
+                if ( $can_w && ! empty( $watchlist ) ) {
+                    $recent = array_slice( $watchlist, 0, 8 );
+                }
+                if ( $recent ) :
+                ?>
+                    <div class="pp-anime-grid">
+                        <?php foreach ( $recent as $item ) {
+                            $pid = is_array( $item ) ? ( $item['post_id'] ?? 0 ) : (int) $item;
+                            if ( $pid ) smacg_pp_render_anime_card( $pid, $item );
+                        } ?>
+                    </div>
+                <?php else : ?>
+                    <p class="pp-empty">尚無資料</p>
+                <?php endif; ?>
             </div>
-        <?php endif; ?>
 
-        <?php if ( ! empty( $stats['top_genres'] ) ) : ?>
-            <div class="pp-section">
-                <h2 class="pp-section-title">
-                    <i class="fa-solid fa-tags"></i> 最常看的類型
-                </h2>
-                <div class="pp-tag-cloud">
-                    <?php
-                    $top = array_slice( $stats['top_genres'], 0, 10, true );
-                    foreach ( $top as $name => $count ) :
-                    ?>
-                        <span class="pp-tag">
-                            <?php echo esc_html( $name ); ?>
-                            <em><?php echo (int) $count; ?></em>
-                        </span>
-                    <?php endforeach; ?>
-                </div>
+            <div class="pp-card">
+                <h2 class="pp-card-title">🏷️ 喜愛類型</h2>
+                <?php
+                $top_genres = ! empty( $stats['top_genres'] ) ? array_slice( (array) $stats['top_genres'], 0, 10 ) : [];
+                if ( $top_genres ) :
+                ?>
+                    <div class="pp-tag-cloud">
+                        <?php foreach ( $top_genres as $g ) :
+                            $name = is_array( $g ) ? ( $g['name'] ?? '' ) : (string) $g;
+                            $cnt  = is_array( $g ) ? (int) ( $g['count'] ?? 0 ) : 0;
+                            if ( ! $name ) continue;
+                        ?>
+                            <span class="pp-tag"><?php echo esc_html( $name ); ?><?php if ( $cnt ) : ?> <em>×<?php echo (int) $cnt; ?></em><?php endif; ?></span>
+                        <?php endforeach; ?>
+                    </div>
+                <?php else : ?>
+                    <p class="pp-empty">尚無偏好統計</p>
+                <?php endif; ?>
             </div>
-        <?php endif; ?>
 
-        <?php if ( empty( $watchlist ) && empty( $stats['top_genres'] ) ) : ?>
-            <div class="pp-empty">
-                <i class="fa-solid fa-folder-open"></i>
-                <p>這位使用者尚未有公開內容</p>
-            </div>
-        <?php endif; ?>
-    </div>
+        </div>
+    </section>
     <?php
 }
+endif;
 
-/* ============================================================
-   Watchlist (清單 tab)
-   ============================================================ */
+/* ========================================================================
+ * Watchlist Tab
+ * ====================================================================== */
+
+if ( ! function_exists( 'smacg_pp_render_watchlist' ) ) :
 function smacg_pp_render_watchlist( $watchlist ) {
     if ( empty( $watchlist ) ) {
-        echo '<div class="pp-empty"><i class="fa-solid fa-list"></i><p>清單為空</p></div>';
+        echo '<section class="pp-section"><p class="pp-empty">尚未加入任何作品</p></section>';
         return;
     }
-
-    // 統計各 status
-    $by_status = [
-        'all'       => count( $watchlist ),
-        'watching'  => 0,
-        'completed' => 0,
-        'favorited' => 0,
-        'want'      => 0,
-        'dropped'   => 0,
-    ];
+    $counts = [ 'all' => 0, 'watching' => 0, 'completed' => 0, 'favorite' => 0, 'want' => 0 ];
     foreach ( $watchlist as $w ) {
-        if ( isset( $by_status[ $w['status'] ] ) ) $by_status[ $w['status'] ]++;
-        if ( $w['favorited'] && $w['status'] !== 'favorited' ) $by_status['favorited']++;
+        $counts['all']++;
+        $s = is_array( $w ) ? ( $w['status'] ?? '' ) : '';
+        if ( isset( $counts[ $s ] ) ) $counts[ $s ]++;
+        if ( ! empty( $w['favorite'] ) ) $counts['favorite']++;
     }
-
-    $filters = [
-        'all'       => [ '全部',   '🎬' ],
-        'watching'  => [ '追番中', '▶️' ],
-        'completed' => [ '已看完', '✅' ],
-        'favorited' => [ '收藏',   '⭐' ],
-        'want'      => [ '想看',   '📌' ],
-    ];
     ?>
-    <div class="pp-watchlist">
+    <section class="pp-section pp-watchlist">
         <div class="pp-filter-bar">
-            <?php foreach ( $filters as $key => $info ) :
-                [ $label, $icon ] = $info;
-                $count = $by_status[ $key ] ?? 0;
-                $active = $key === 'all' ? ' active' : '';
-            ?>
-                <button class="pp-filter-btn<?php echo $active; ?>" data-filter="<?php echo esc_attr( $key ); ?>">
-                    <?php echo $icon; ?> <?php echo esc_html( $label ); ?>
-                    <em><?php echo (int) $count; ?></em>
-                </button>
-            <?php endforeach; ?>
+            <button class="pp-filter pp-filter-active" data-filter="all">全部 <em><?php echo (int) $counts['all']; ?></em></button>
+            <button class="pp-filter" data-filter="watching">👀 觀看中 <em><?php echo (int) $counts['watching']; ?></em></button>
+            <button class="pp-filter" data-filter="completed">✅ 已完結 <em><?php echo (int) $counts['completed']; ?></em></button>
+            <button class="pp-filter" data-filter="favorite">❤️ 收藏 <em><?php echo (int) $counts['favorite']; ?></em></button>
+            <button class="pp-filter" data-filter="want">📌 想看 <em><?php echo (int) $counts['want']; ?></em></button>
         </div>
-
-        <div class="pp-grid" id="pp-watchlist-grid">
-            <?php foreach ( $watchlist as $w ) : ?>
-                <?php smacg_pp_render_anime_card( $w['post_id'], $w ); ?>
-            <?php endforeach; ?>
+        <div class="pp-anime-grid">
+            <?php foreach ( $watchlist as $item ) {
+                $pid = is_array( $item ) ? ( $item['post_id'] ?? 0 ) : (int) $item;
+                if ( $pid ) smacg_pp_render_anime_card( $pid, $item );
+            } ?>
         </div>
-    </div>
+    </section>
     <?php
 }
+endif;
 
-/* ============================================================
-   Ratings (評分 tab)
-   ============================================================ */
+/* ========================================================================
+ * Ratings Tab
+ * ====================================================================== */
+
+if ( ! function_exists( 'smacg_pp_render_ratings' ) ) :
 function smacg_pp_render_ratings( $ratings ) {
     if ( empty( $ratings ) ) {
-        echo '<div class="pp-empty"><i class="fa-solid fa-star"></i><p>尚未評分</p></div>';
+        echo '<section class="pp-section"><p class="pp-empty">尚未評分任何作品</p></section>';
         return;
     }
-
-    // 預設依 overall_score DESC
-    usort( $ratings, fn( $a, $b ) => (float) $b['overall_score'] <=> (float) $a['overall_score'] );
-
+    usort( $ratings, function( $a, $b ) {
+        $sa = (float) ( $a['overall_score'] ?? 0 );
+        $sb = (float) ( $b['overall_score'] ?? 0 );
+        return $sb <=> $sa;
+    } );
     ?>
-    <div class="pp-ratings">
-        <p class="pp-section-desc">依評分從高到低排序，共 <?php echo count( $ratings ); ?> 部作品</p>
-        <div class="pp-grid">
-            <?php foreach ( $ratings as $r ) : ?>
-                <?php smacg_pp_render_anime_card( (int) $r['anime_id'], [
-                    'user_score' => (float) $r['overall_score'],
-                ] ); ?>
-            <?php endforeach; ?>
+    <section class="pp-section pp-ratings">
+        <p class="pp-section-info">共評分 <strong><?php echo count( $ratings ); ?></strong> 部作品</p>
+        <div class="pp-anime-grid">
+            <?php foreach ( $ratings as $r ) {
+                $pid = (int) ( $r['post_id'] ?? 0 );
+                if ( $pid ) smacg_pp_render_anime_card( $pid, $r );
+            } ?>
         </div>
-    </div>
+    </section>
     <?php
 }
+endif;
 
-/* ============================================================
-   Badges (徽章 tab)
-   ============================================================ */
+/* ========================================================================
+ * Badges Tab
+ * ====================================================================== */
+
+if ( ! function_exists( 'smacg_pp_render_badges' ) ) :
 function smacg_pp_render_badges( $uid, $stats ) {
     $badges = [];
+    $completed   = (int) ( $stats['completed'] ?? 0 );
+    $rated_count = (int) ( $stats['rated_count'] ?? 0 );
+    $watch_days  = (int) ( $stats['watch_days'] ?? 0 );
+    $favorites   = (int) ( $stats['favorites'] ?? 0 );
 
-    $counts = $stats['counts'] ?? [];
-    $rating_count = (int) ( $stats['rating']['count'] ?? 0 );
-    $days = (int) ( $stats['watch_time']['days'] ?? 0 );
+    if ( $completed >= 1 )   $badges[] = [ '🎬', '初心者', '完結第一部作品' ];
+    if ( $completed >= 10 )  $badges[] = [ '📺', '觀劇達人', '完結 10 部作品' ];
+    if ( $completed >= 50 )  $badges[] = [ '🏆', '資深觀眾', '完結 50 部作品' ];
+    if ( $completed >= 100 ) $badges[] = [ '👑', '動畫王者', '完結 100 部作品' ];
+    if ( $rated_count >= 10 )  $badges[] = [ '⭐', '評論家', '評分 10 部作品' ];
+    if ( $rated_count >= 50 )  $badges[] = [ '🌟', '專業評論', '評分 50 部作品' ];
+    if ( $watch_days >= 30 )   $badges[] = [ '📅', '常駐觀眾', '觀看 30 天' ];
+    if ( $favorites >= 10 )    $badges[] = [ '❤️', '收藏家', '收藏 10 部作品' ];
 
-    // 動態徽章
-    if ( ( $counts['completed'] ?? 0 ) >= 100 ) {
-        $badges[] = [ '🏆', '百番達人', '看完 100 部以上' ];
-    } elseif ( ( $counts['completed'] ?? 0 ) >= 50 ) {
-        $badges[] = [ '🎖️', '半百達人', '看完 50 部以上' ];
-    } elseif ( ( $counts['completed'] ?? 0 ) >= 10 ) {
-        $badges[] = [ '⭐', '入門達人', '看完 10 部以上' ];
-    }
-
-    if ( $rating_count >= 100 ) {
-        $badges[] = [ '⭐', '評分大師', '評分 100 部以上' ];
-    } elseif ( $rating_count >= 30 ) {
-        $badges[] = [ '✨', '評分愛好者', '評分 30 部以上' ];
-    }
-
-    if ( $days >= 30 ) {
-        $badges[] = [ '⏰', '時間旅人', '觀看時數達 30 天' ];
-    }
-
-    if ( ( $counts['favorited'] ?? 0 ) >= 20 ) {
-        $badges[] = [ '💖', '收藏家', '收藏 20 部以上' ];
-    }
-
-    // GamiPress 徽章（如果有裝）
     if ( function_exists( 'gamipress_get_user_achievements' ) ) {
-        $gp = gamipress_get_user_achievements( [ 'user_id' => $uid ] );
-        if ( ! empty( $gp ) ) {
-            foreach ( array_slice( $gp, 0, 12 ) as $a ) {
-                $thumb = get_the_post_thumbnail_url( $a->ID, 'thumbnail' );
-                $title = get_the_title( $a->ID );
-                $badges[] = [
-                    'gp',
-                    $title,
-                    '',
-                    $thumb,
-                ];
+        $achievements = gamipress_get_user_achievements( [ 'user_id' => $uid ] );
+        if ( $achievements ) {
+            foreach ( $achievements as $a ) {
+                $badges[] = [ '🏅', get_the_title( $a->ID ), wp_strip_all_tags( get_post_field( 'post_excerpt', $a->ID ) ) ];
             }
         }
     }
-
-    if ( empty( $badges ) ) {
-        echo '<div class="pp-empty"><i class="fa-solid fa-medal"></i><p>尚未獲得任何徽章</p></div>';
-        return;
-    }
-
     ?>
-    <div class="pp-badges">
-        <?php foreach ( $badges as $b ) :
-            $icon = $b[0]; $title = $b[1]; $desc = $b[2] ?? ''; $thumb = $b[3] ?? '';
-        ?>
-            <div class="pp-badge">
-                <div class="pp-badge-icon">
-                    <?php if ( $icon === 'gp' && $thumb ) : ?>
-                        <img src="<?php echo esc_url( $thumb ); ?>" alt="<?php echo esc_attr( $title ); ?>">
-                    <?php else : ?>
-                        <?php echo esc_html( $icon ); ?>
-                    <?php endif; ?>
-                </div>
-                <div class="pp-badge-info">
-                    <h3><?php echo esc_html( $title ); ?></h3>
-                    <?php if ( $desc ) : ?><p><?php echo esc_html( $desc ); ?></p><?php endif; ?>
-                </div>
+    <section class="pp-section pp-badges">
+        <?php if ( $badges ) : ?>
+            <div class="pp-badge-grid">
+                <?php foreach ( $badges as $b ) : ?>
+                    <div class="pp-badge">
+                        <div class="pp-badge-icon"><?php echo esc_html( $b[0] ); ?></div>
+                        <div class="pp-badge-name"><?php echo esc_html( $b[1] ); ?></div>
+                        <div class="pp-badge-desc"><?php echo esc_html( $b[2] ); ?></div>
+                    </div>
+                <?php endforeach; ?>
             </div>
-        <?php endforeach; ?>
-    </div>
+        <?php else : ?>
+            <p class="pp-empty">尚未獲得任何徽章</p>
+        <?php endif; ?>
+    </section>
     <?php
 }
+endif;
 
-/* ============================================================
-   Activity (動態 tab)
-   ============================================================ */
+/* ========================================================================
+ * Activity Tab
+ * ====================================================================== */
+
+if ( ! function_exists( 'smacg_pp_render_activity' ) ) :
 function smacg_pp_render_activity( $activity ) {
     if ( empty( $activity ) ) {
-        echo '<div class="pp-empty"><i class="fa-solid fa-satellite-dish"></i><p>暫無動態</p></div>';
+        echo '<section class="pp-section"><p class="pp-empty">尚無近期活動</p></section>';
         return;
     }
     ?>
-    <ul class="pp-timeline">
-        <?php foreach ( $activity as $a ) :
-            $type  = $a['type'] ?? 'default';
-            $icon  = $a['icon'] ?? '📌';
-            $title = $a['title'] ?? '';
-            $meta  = $a['meta'] ?? '';
-            $time  = $a['time'] ?? 0;
-            $pid   = (int) ( $a['post_id'] ?? 0 );
-        ?>
-            <li class="pp-timeline-item pp-timeline-item--<?php echo esc_attr( $type ); ?>">
-                <div class="pp-timeline-dot">
+    <section class="pp-section pp-activity">
+        <ul class="pp-timeline">
+            <?php foreach ( $activity as $ev ) :
+                $icon  = $ev['icon']  ?? '📝';
+                $title = $ev['title'] ?? '';
+                $meta  = $ev['meta']  ?? '';
+                $url   = $ev['url']   ?? '';
+                $ts    = (int) ( $ev['timestamp'] ?? 0 );
+                $diff  = $ts ? human_time_diff( $ts, current_time( 'timestamp' ) ) . '前' : '';
+            ?>
+                <li class="pp-timeline-item">
                     <span class="pp-timeline-icon"><?php echo esc_html( $icon ); ?></span>
-                </div>
-                <div class="pp-timeline-body">
-                    <div class="pp-timeline-main">
-                        <?php if ( $meta ) : ?>
-                            <span class="pp-timeline-meta"><?php echo esc_html( $meta ); ?></span>
-                        <?php endif; ?>
-                        <?php if ( $pid && get_post_status( $pid ) === 'publish' ) : ?>
-                            <a class="pp-timeline-target" href="<?php echo esc_url( get_permalink( $pid ) ); ?>">
+                    <div class="pp-timeline-body">
+                        <div class="pp-timeline-title">
+                            <?php if ( $url ) : ?>
+                                <a href="<?php echo esc_url( $url ); ?>"><?php echo esc_html( $title ); ?></a>
+                            <?php else : ?>
                                 <?php echo esc_html( $title ); ?>
-                            </a>
-                        <?php else : ?>
-                            <span class="pp-timeline-target"><?php echo esc_html( $title ); ?></span>
+                            <?php endif; ?>
+                        </div>
+                        <?php if ( $meta ) : ?>
+                            <div class="pp-timeline-meta"><?php echo esc_html( $meta ); ?></div>
+                        <?php endif; ?>
+                        <?php if ( $diff ) : ?>
+                            <div class="pp-timeline-time"><?php echo esc_html( $diff ); ?></div>
                         <?php endif; ?>
                     </div>
-                    <span class="pp-timeline-time">
-                        <?php echo esc_html( human_time_diff( $time, current_time( 'U' ) ) ); ?>前
-                    </span>
-                </div>
-            </li>
-        <?php endforeach; ?>
-    </ul>
+                </li>
+            <?php endforeach; ?>
+        </ul>
+    </section>
     <?php
 }
+endif;
 
-/* ============================================================
-   共用：動畫卡片（公開頁版，不顯示快速操作按鈕）
-   ------------------------------------------------------------
-   會員中心的卡片有 +1/完成/移除 按鈕，公開頁要把它們關掉。
-   ============================================================ */
-function smacg_pp_render_anime_card( $post_id, $args = [] ) {
-    $post_id = (int) $post_id;
-    if ( ! $post_id || get_post_status( $post_id ) !== 'publish' ) return;
+/* ========================================================================
+ * 共用 Anime 卡片（公開版，無 quick-action 按鈕）
+ * ====================================================================== */
 
-    $title = get_the_title( $post_id );
-    $url   = get_permalink( $post_id );
-    $thumb = get_the_post_thumbnail_url( $post_id, 'weixiaoacg-thumb' )
-          ?: get_the_post_thumbnail_url( $post_id, 'medium' );
+if ( ! function_exists( 'smacg_pp_render_anime_card' ) ) :
+function smacg_pp_render_anime_card( $pid, $extra = [] ) {
+    $pid = (int) $pid;
+    if ( ! $pid ) return;
+    $post = get_post( $pid );
+    if ( ! $post || $post->post_status !== 'publish' ) return;
+
+    $title = get_the_title( $pid );
+    $url   = get_permalink( $pid );
+    $thumb = '';
+    if ( has_post_thumbnail( $pid ) ) {
+        $thumb = get_the_post_thumbnail_url( $pid, 'weixiaoacg-cover' );
+    }
     if ( ! $thumb && function_exists( 'weixiaoacg_acf' ) ) {
-        $thumb = weixiaoacg_acf( 'weixiaoacg_cover_url', $post_id, '' );
+        $thumb = weixiaoacg_acf( 'cover_image', $pid );
+    }
+    if ( ! $thumb ) {
+        $thumb = get_stylesheet_directory_uri() . '/assets/images/placeholder.svg';
     }
 
-    $status     = $args['status']     ?? '';
-    $favorited  = ! empty( $args['favorited'] );
-    $progress   = (int) ( $args['progress'] ?? 0 );
-    $user_score = isset( $args['user_score'] ) ? (float) $args['user_score'] : null;
+    $status      = is_array( $extra ) ? ( $extra['status'] ?? '' ) : '';
+    $is_favorite = is_array( $extra ) ? ! empty( $extra['favorite'] ) : false;
+    $score       = is_array( $extra ) ? (float) ( $extra['overall_score'] ?? 0 ) : 0;
+    $watched_ep  = is_array( $extra ) ? (int) ( $extra['watched_ep'] ?? 0 ) : 0;
+    $total_ep    = is_array( $extra ) ? (int) ( $extra['total_ep'] ?? 0 ) : 0;
 
-    $total_ep = (int) get_post_meta( $post_id, 'anime_episodes', true );
+    $status_labels = [
+        'watching'  => '👀 觀看中',
+        'completed' => '✅ 已完結',
+        'want'      => '📌 想看',
+        'dropped'   => '⛔ 棄追',
+    ];
+    $status_label = $status_labels[ $status ] ?? '';
     ?>
-    <div class="pp-anime-card"
-         data-pid="<?php echo $post_id; ?>"
-         data-status="<?php echo esc_attr( $status ); ?>"
-         data-favorited="<?php echo $favorited ? '1' : '0'; ?>"
-         data-title="<?php echo esc_attr( mb_strtolower( $title ) ); ?>">
-        <a href="<?php echo esc_url( $url ); ?>" class="pp-card-thumb">
-            <?php if ( $thumb ) : ?>
-                <img src="<?php echo esc_url( $thumb ); ?>" alt="<?php echo esc_attr( $title ); ?>" loading="lazy">
-            <?php else : ?>
-                <div class="pp-card-no-image"><i class="fa-solid fa-image"></i></div>
+    <article class="pp-anime-card"
+             data-status="<?php echo esc_attr( $status ); ?>"
+             data-favorite="<?php echo $is_favorite ? '1' : '0'; ?>">
+        <a class="pp-anime-thumb" href="<?php echo esc_url( $url ); ?>">
+            <img src="<?php echo esc_url( $thumb ); ?>" alt="<?php echo esc_attr( $title ); ?>" loading="lazy" decoding="async">
+            <?php if ( $is_favorite ) : ?>
+                <span class="pp-anime-fav">❤️</span>
             <?php endif; ?>
-
-            <?php if ( $status ) : ?>
-                <span class="pp-card-status pp-card-status--<?php echo esc_attr( $status ); ?>">
-                    <?php
-                    echo esc_html( [
-                        'watching'  => '追番中',
-                        'completed' => '已看完',
-                        'favorited' => '收藏',
-                        'want'      => '想看',
-                        'dropped'   => '棄追',
-                    ][ $status ] ?? $status );
-                    ?>
-                </span>
-            <?php endif; ?>
-
-            <?php if ( $favorited && $status !== 'favorited' ) : ?>
-                <span class="pp-card-fav"><i class="fa-solid fa-heart"></i></span>
+            <?php if ( $status_label ) : ?>
+                <span class="pp-anime-status"><?php echo esc_html( $status_label ); ?></span>
             <?php endif; ?>
         </a>
-
-        <div class="pp-card-body">
-            <h3 class="pp-card-title"><a href="<?php echo esc_url( $url ); ?>"><?php echo esc_html( $title ); ?></a></h3>
-
-            <?php if ( $user_score !== null ) : ?>
-                <div class="pp-card-score">
-                    <i class="fa-solid fa-star"></i>
-                    <b><?php echo number_format( $user_score, 1 ); ?></b>
-                    <span>/ 10</span>
-                </div>
+        <div class="pp-anime-info">
+            <h3 class="pp-anime-title"><a href="<?php echo esc_url( $url ); ?>"><?php echo esc_html( $title ); ?></a></h3>
+            <?php if ( $score > 0 ) : ?>
+                <div class="pp-anime-score">⭐ <?php echo esc_html( number_format( $score, 1 ) ); ?></div>
             <?php endif; ?>
-
-            <?php if ( $total_ep > 0 && $progress > 0 && $status === 'watching' ) : ?>
-                <div class="pp-card-progress">
-                    <div class="pp-card-progress-bar">
-                        <div class="pp-card-progress-fill"
-                             style="width:<?php echo min( 100, round( $progress / $total_ep * 100 ) ); ?>%"></div>
-                    </div>
-                    <span class="pp-card-progress-text"><?php echo $progress; ?> / <?php echo $total_ep; ?></span>
+            <?php if ( $status === 'watching' && $total_ep > 0 ) :
+                $percent = min( 100, round( $watched_ep / $total_ep * 100 ) );
+            ?>
+                <div class="pp-anime-progress">
+                    <div class="pp-anime-progress-bar"><div class="pp-anime-progress-fill" style="width:<?php echo (float) $percent; ?>%"></div></div>
+                    <div class="pp-anime-progress-text"><?php echo (int) $watched_ep; ?> / <?php echo (int) $total_ep; ?></div>
                 </div>
             <?php endif; ?>
         </div>
-    </div>
+    </article>
     <?php
 }
+endif;
