@@ -69,7 +69,7 @@ function smacg_followers_page_template_redirect() {
         ? smacg_get_user_privacy( $user->ID )
         : [ 'public_profile' => '1' ];
 
-    if ( $privacy['public_profile'] !== '1' && get_current_user_id() !== (int) $user->ID ) {
+    if ( empty( $privacy['public_profile'] ) && get_current_user_id() !== (int) $user->ID ) {
         smacg_followers_render_private_page( $user, $section );
         exit;
     }
@@ -375,7 +375,7 @@ function smacg_followers_ajax_load() {
     $privacy = function_exists( 'smacg_get_user_privacy' )
         ? smacg_get_user_privacy( $uid )
         : [ 'public_profile' => '1' ];
-    if ( $privacy['public_profile'] !== '1' && get_current_user_id() !== $uid ) {
+    if ( empty( $privacy['public_profile'] ) && get_current_user_id() !== $uid ) {
         wp_send_json_error( [ 'message' => 'private_profile' ] );
     }
 
