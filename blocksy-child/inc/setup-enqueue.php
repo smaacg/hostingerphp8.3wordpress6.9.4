@@ -4,7 +4,12 @@
  *
  * @package weixiaoacg
  * @subpackage Enqueue
- * @version 2.6.1 (2026-05-14)
+ * @version 2.8.0 (2026-05-16)
+ *
+ * v2.8.0 變更 — News Filter AJAX：
+ *   - 在 news/review/feature/announcement 分類及其 channel 子頁啟用
+ *   - enqueue assets/js/news-filter.js
+ *   - 注入 smacgNewsFilter（ajaxUrl / nonce）
  *
  * v2.1.0 變更 — Batch C #14：
  *   - 新增 page-year-review.php 範本的條件式 CSS/JS 載入
@@ -21,28 +26,15 @@
  * v2.4.0 變更 — Batch 1B-2 追蹤系統：
  *   - 全站載入 follow.js / follow.css
  *   - 注入 smacgFollow（ajax / nonce / loggedIn / loginUrl）
- *   - 在 functions.php 載入 inc/follow-ajax.php
  *
  * v2.5.0 變更 — Batch 1C-3 通知中心 UI：
  *   - 全站載入 notifications.js / notifications.css（僅登入使用者）
- *   - 注入 smacgNotif（ajax / nonce / loggedIn / mcUrl / pollInterval）
  *
- * v2.6.0 變更 — Batch 2A-0 GamiPress 整合層：
- *   - 全站載入 gamification.css（會員中心、公開頁、其他需顯示等級/徽章處都需要）
- *   - 依賴 weixiaoacg-fa6（圖示）
- *   - 不需 JS（此 batch 僅樣式；級別計算在 PHP 端）
- * 
- *  * v2.6.1 變更 — Batch 2A-4 職業選擇 + 等級徽章：
- *   - 全站載入 level-badge.css（留言區小徽章 + 公開頁大徽章）
- *   - 僅在 /mc/?tab=career 載入 career.js + 注入 smacgCareer localize
- *   - 依賴 smacg-gamification（共用變數 / 顏色）
- *  * v2.7.0 變更 — Batch 2B-2 會員排行榜：
- *   - 條件式載入 leaderboard.css / leaderboard.js（page-ranking-users.php）
- *   - 注入 smacgRanku localize（ajax / defaultTab / currentUid / privacy）
- *  * v2.7.1 變更 — Batch 2B-3 Top N widget：
- *   - 全站載入 leaderboard-widget.css（widget / shortcode 共用）
- *  * v2.7.2 變更 — Batch 2B-5 Season Event 模板：
- *   - 條件式載入 season-event.css（/event/{slug}/）
+ * v2.6.0 變更 — Batch 2A-0 GamiPress 整合層
+ * v2.6.1 變更 — Batch 2A-4 職業選擇 + 等級徽章
+ * v2.7.0 變更 — Batch 2B-2 會員排行榜
+ * v2.7.1 變更 — Batch 2B-3 Top N widget
+ * v2.7.2 變更 — Batch 2B-5 Season Event 模板
  */
 
 defined( 'ABSPATH' ) || exit;
@@ -221,6 +213,39 @@ add_action( 'wp_enqueue_scripts', function () {
 }, 20 );
 
 /* ============================================================
+   News Filter AJAX（v2.8.0 - 2026-05-16）
+   ------------------------------------------------------------
+   - 在 news/review/feature/announcement 分類及其 channel 子頁啟用
+   - 攔截 .news-filter-btn 點擊，AJAX 換 #news-list-root 內容
+   - 同步 History API 更新網址
+   ============================================================ */
+add_action( 'wp_enqueue_scripts', function () {
+
+    $is_target = is_category( [ 'news', 'review', 'feature', 'announcement' ] )
+              || is_tax( 'channel' );
+    if ( ! $is_target ) return;
+
+    $base_dir = weixiaoacg_THEME_DIR;
+    $base_url = weixiaoacg_THEME_URL;
+
+    $js_path = $base_dir . '/assets/js/news-filter.js';
+    if ( ! file_exists( $js_path ) ) return;
+
+    wp_enqueue_script(
+        'smacg-news-filter',
+        $base_url . '/assets/js/news-filter.js',
+        [],
+        filemtime( $js_path ),
+        true
+    );
+
+    wp_localize_script( 'smacg-news-filter', 'smacgNewsFilter', [
+        'ajaxUrl' => admin_url( 'admin-ajax.php' ),
+        'nonce'   => wp_create_nonce( 'smacg_news_filter' ),
+    ] );
+}, 21 );
+
+/* ============================================================
    Year Review 頁面（Batch C #14 - 2026-05-13）
    ============================================================ */
 add_action( 'wp_enqueue_scripts', function () {
@@ -231,7 +256,6 @@ add_action( 'wp_enqueue_scripts', function () {
     $base_dir = weixiaoacg_THEME_DIR;
     $base_url = weixiaoacg_THEME_URL;
 
-    // CSS
     $css_path = $base_dir . '/assets/css/year-review.css';
     if ( file_exists( $css_path ) ) {
         wp_enqueue_style(
@@ -242,7 +266,6 @@ add_action( 'wp_enqueue_scripts', function () {
         );
     }
 
-    // JS
     $js_path = $base_dir . '/assets/js/year-review.js';
     if ( file_exists( $js_path ) ) {
         wp_enqueue_script(
@@ -310,7 +333,6 @@ add_action( 'wp_enqueue_scripts', function () {
     $base_dir = weixiaoacg_THEME_DIR;
     $base_url = weixiaoacg_THEME_URL;
 
-    // CSS
     $css_path = $base_dir . '/assets/css/public-profile.css';
     if ( file_exists( $css_path ) ) {
         wp_enqueue_style(
@@ -320,7 +342,6 @@ add_action( 'wp_enqueue_scripts', function () {
             filemtime( $css_path )
         );
 
-        // Toast 樣式（直接 inline，省去額外請求）
         wp_add_inline_style( 'smacg-public-profile', '
             .pp-toast {
                 position: fixed;
@@ -338,16 +359,12 @@ add_action( 'wp_enqueue_scripts', function () {
                 transition: opacity .2s, transform .2s;
                 z-index: 99999;
             }
-            .pp-toast--show {
-                opacity: 1;
-                transform: translateX(-50%) translateY(0);
-            }
-            .pp-toast--ok  { background: linear-gradient(135deg, #34d399, #10b981); }
-            .pp-toast--err { background: linear-gradient(135deg, #f87171, #ef4444); }
+            .pp-toast--show { opacity: 1; transform: translateX(-50%) translateY(0); }
+            .pp-toast--ok   { background: linear-gradient(135deg, #34d399, #10b981); }
+            .pp-toast--err  { background: linear-gradient(135deg, #f87171, #ef4444); }
         ' );
     }
 
-    // JS
     $js_path = $base_dir . '/assets/js/public-profile.js';
     if ( file_exists( $js_path ) ) {
         wp_enqueue_script(
@@ -362,15 +379,11 @@ add_action( 'wp_enqueue_scripts', function () {
 
 /* ============================================================
    Follow System 追蹤按鈕（v2.4.0 - 2026-05-13）
-   ------------------------------------------------------------
-   - 全站載入（任何頁面都可能出現 .smacg-follow-btn）
-   - 體積小，且只在頁面有按鈕時實際發 AJAX
    ============================================================ */
 add_action( 'wp_enqueue_scripts', function () {
     $base_dir = weixiaoacg_THEME_DIR;
     $base_url = weixiaoacg_THEME_URL;
 
-    // CSS
     $css_path = $base_dir . '/assets/css/follow.css';
     if ( file_exists( $css_path ) ) {
         wp_enqueue_style(
@@ -381,7 +394,6 @@ add_action( 'wp_enqueue_scripts', function () {
         );
     }
 
-    // JS
     $js_path = $base_dir . '/assets/js/follow.js';
     if ( file_exists( $js_path ) ) {
         wp_enqueue_script(
@@ -404,10 +416,6 @@ add_action( 'wp_enqueue_scripts', function () {
 
 /* ============================================================
    Notifications 通知中心（v2.5.0 - 2026-05-13）
-   ------------------------------------------------------------
-   - 僅在登入後載入
-   - 全站載入（鈴鐺需要存在於任何頁面）
-   - 注入 smacgNotif（給 notifications.js 用）
    ============================================================ */
 add_action( 'wp_enqueue_scripts', function () {
     if ( ! is_user_logged_in() ) return;
@@ -415,7 +423,6 @@ add_action( 'wp_enqueue_scripts', function () {
     $base_dir = weixiaoacg_THEME_DIR;
     $base_url = weixiaoacg_THEME_URL;
 
-    // CSS
     $css_path = $base_dir . '/assets/css/notifications.css';
     if ( file_exists( $css_path ) ) {
         wp_enqueue_style(
@@ -426,7 +433,6 @@ add_action( 'wp_enqueue_scripts', function () {
         );
     }
 
-    // JS
     $js_path = $base_dir . '/assets/js/notifications.js';
     if ( file_exists( $js_path ) ) {
         wp_enqueue_script(
@@ -441,19 +447,13 @@ add_action( 'wp_enqueue_scripts', function () {
             'nonce'        => wp_create_nonce( 'smacg_notif_nonce' ),
             'loggedIn'     => true,
             'mcUrl'        => home_url( '/mc/' ),
-            'pollInterval' => 60,  // 秒
+            'pollInterval' => 60,
         ] );
     }
 }, 23 );
 
 /* ============================================================
    Gamification 等級／徽章系統（v2.6.0 - 2026-05-14）
-   ------------------------------------------------------------
-   - Batch 2A-0：GamiPress 整合層基礎樣式
-   - 全站載入（會員中心、公開個人頁、留言、排行榜都需顯示等級徽章）
-   - 依賴 weixiaoacg-fa6（圖示）
-   - 體積小（< 5KB），全站載入 OK
-   - 此 batch 暫無 JS（級別計算在 PHP 端）
    ============================================================ */
 add_action( 'wp_enqueue_scripts', function () {
     $base_dir = weixiaoacg_THEME_DIR;
@@ -472,9 +472,6 @@ add_action( 'wp_enqueue_scripts', function () {
 
 /* ============================================================
    Level Badge 等級徽章（v2.6.1 - 2026-05-14）
-   ------------------------------------------------------------
-   - Batch 2A-4：留言區 / 公開頁 / 排行榜共用樣式
-   - 全站載入（CSS 體積 < 3KB）
    ============================================================ */
 add_action( 'wp_enqueue_scripts', function () {
     $base_dir = weixiaoacg_THEME_DIR;
@@ -493,9 +490,6 @@ add_action( 'wp_enqueue_scripts', function () {
 
 /* ============================================================
    Career Selection 職業選擇（v2.6.1 - 2026-05-14）
-   ------------------------------------------------------------
-   - 僅在會員中心 career tab 載入 JS
-   - 偵測條件：is_page_template('page-member.php') && ?tab=career
    ============================================================ */
 add_action( 'wp_enqueue_scripts', function () {
     if ( ! is_user_logged_in() ) return;
@@ -536,10 +530,6 @@ add_action( 'wp_enqueue_scripts', function () {
 
 /* ============================================================
    Leaderboard 會員排行榜（v2.7.0 - 2026-05-14）
-   ------------------------------------------------------------
-   - Batch 2B-2：/ranking-users/ 頁面
-   - 條件：is_page_template('page-ranking-users.php')
-   - 注入 smacgRanku（ajax / defaultTab / currentUid / privacy）
    ============================================================ */
 add_action( 'wp_enqueue_scripts', function () {
     if ( ! is_page_template( 'page-ranking-users.php' ) ) return;
@@ -547,7 +537,6 @@ add_action( 'wp_enqueue_scripts', function () {
     $base_dir = weixiaoacg_THEME_DIR;
     $base_url = weixiaoacg_THEME_URL;
 
-    // CSS
     $css_path = $base_dir . '/assets/css/leaderboard.css';
     if ( file_exists( $css_path ) ) {
         wp_enqueue_style(
@@ -558,7 +547,6 @@ add_action( 'wp_enqueue_scripts', function () {
         );
     }
 
-    // JS
     $js_path = $base_dir . '/assets/js/leaderboard.js';
     if ( ! file_exists( $js_path ) ) return;
 
@@ -590,10 +578,6 @@ add_action( 'wp_enqueue_scripts', function () {
 
 /* ============================================================
    Leaderboard Widget / Shortcode 樣式（v2.7.1 - 2026-05-14）
-   ------------------------------------------------------------
-   - Batch 2B-3：Top N widget + [smacg_leaderboard] shortcode
-   - 全站載入（widget 可能出現在任何 sidebar / footer，shortcode 也可能放在任何頁面）
-   - 體積 < 4KB
    ============================================================ */
 add_action( 'wp_enqueue_scripts', function () {
     $base_dir = weixiaoacg_THEME_DIR;
@@ -612,9 +596,6 @@ add_action( 'wp_enqueue_scripts', function () {
 
 /* ============================================================
    Season Event single 模板（v2.7.2 - 2026-05-14）
-   ------------------------------------------------------------
-   - Batch 2B-5：/event/{slug}/ 單頁
-   - 條件：is_singular( 'smacg_season_event' )
    ============================================================ */
 add_action( 'wp_enqueue_scripts', function () {
     if ( ! is_singular( defined( 'SMACG_EVENT_CPT' ) ? SMACG_EVENT_CPT : 'smacg_season_event' ) ) return;
@@ -637,7 +618,6 @@ add_action( 'wp_enqueue_scripts', function () {
    wpForo 論壇樣式覆蓋（玻璃擬態主題對齊）
    ============================================================ */
 add_action( 'wp_enqueue_scripts', function () {
-
     $uri = isset($_SERVER['REQUEST_URI']) ? $_SERVER['REQUEST_URI'] : '';
     $is_forum = ( strpos($uri, '/community') !== false || strpos($uri, '/forum') !== false );
     if ( ! $is_forum && function_exists('is_wpforo_page') ) {
@@ -657,5 +637,4 @@ add_action( 'wp_enqueue_scripts', function () {
         $deps,
         filemtime( $css_path )
     );
-
 }, 30 );
