@@ -129,10 +129,11 @@ function smacg_followers_render_page( $user, $section ) {
 
     // 設定 SEO meta
     add_filter( 'pre_get_document_title', function() use ( $page_title ) { return $page_title; }, 99 );
-    add_action( 'wp_head', function() use ( $user, $section, $title_label, $privacy = null ) {
+    add_action( 'wp_head', function() use ( $user, $section ) {
         echo '<meta name="robots" content="noindex,follow">' . "\n";
         echo '<link rel="canonical" href="' . esc_url( smacg_followers_get_page_url( $user, $section ) ) . '">' . "\n";
     }, 1 );
+
 
     nocache_headers();
     get_header();
