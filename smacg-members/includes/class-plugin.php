@@ -31,11 +31,12 @@ final class Plugin {
 	 * @return Plugin
 	 */
 	public static function instance() {
-		if ( self::$instance === null ) {
-			self::$instance = new self();
-		}
-		return self::$instance;
-	}
+    if ( self::$instance === null ) {
+        self::$instance = new self();
+        self::$instance->boot();
+    }
+    return self::$instance;
+}
 
 	/**
 	 * 私有建構子。
