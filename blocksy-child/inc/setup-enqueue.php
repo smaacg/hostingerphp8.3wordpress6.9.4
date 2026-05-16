@@ -4,7 +4,13 @@
  *
  * @package weixiaoacg
  * @subpackage Enqueue
- * @version 2.8.0 (2026-05-16)
+ * @version 2.9.1 (2026-05-16)
+ *
+ * v2.9.1 變更 — Pilgrimage 頁面：
+ *   - 新增 page-pilgrimage.php 範本的條件式 CSS 載入
+ *
+ * v2.9.0 變更 — AI Tools：
+ *   - 新增 page-ai-tools.php 範本的條件式 CSS/JS 載入
  *
  * v2.8.0 變更 — News Filter AJAX：
  *   - 在 news/review/feature/announcement 分類及其 channel 子頁啟用
@@ -82,6 +88,7 @@ add_action( 'wp_enqueue_scripts', function() {
     if ( is_page_template('page-ranking.php') )                       $cond['weixiaoacg-ranking']    = 'ranking.css';
     if ( is_page_template('page-anime-list.php') )                    $cond['weixiaoacg-anime-list'] = 'anime-list.css';
     if ( is_page_template('page-music.php') )                         $cond['weixiaoacg-music']      = 'music.css';
+    if ( is_page_template('page-pilgrimage.php') )                    $cond['weixiaoacg-pilgrimage'] = 'pilgrimage.css';
     if ( is_page_template('page-cosplay.php') )                       $cond['weixiaoacg-cosplay']    = 'cosplay.css';
     if ( is_search() )                                                $cond['weixiaoacg-search']     = 'search.css';
     if ( is_404() )                                                   $cond['weixiaoacg-404']        = '404.css';
@@ -647,7 +654,6 @@ add_action( 'wp_enqueue_scripts', function () {
         );
     }
 }, 22 );
-
 
 /* ============================================================
    wpForo 論壇樣式覆蓋（玻璃擬態主題對齊）
