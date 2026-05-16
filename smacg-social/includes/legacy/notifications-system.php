@@ -3,7 +3,12 @@
  * Notifications System — 通知中心核心
  *
  * @package weixiaoacg
- * @version 1.0.0 (2026-05-13)
+ * @version 1.1.0 (2026-05-16)
+ *
+ * v1.1.0 變更：
+ *   - 預設偏好調整：站內全開、Email 全關、digest='off'（開發階段 reset）
+ *   - 刪除無效的 register_activation_hook(__FILE__,...)
+ *   - smacg_should_notify() 對 email channel 加 force 支援
  *
  * 提供：
  * - wp_smacg_notifications 資料表（dbDelta 自動建立）
@@ -83,10 +88,16 @@ add_action( 'init', 'smacg_notifications_install', 5 );
 
 /* ============================================================
    通知偏好預設值
+   ------------------------------------------------------------
+   v1.1.0 設計原則：
+     - 站內鈴鐺：全部預設「開」（產生互動誘因）
+     - Email：全部預設「關」（避免 spam，降低 wp_mail 信譽風險）
+     - email_digest：預設 'off'（即時通知都不寄，摘要更不該寄）
+     - 系統公告 email 若有緊急情況，用 smacg_create_notification([..., 'force_email'=>true]) 強制寄送
    ============================================================ */
 function smacg_get_notification_prefs_defaults() {
 	return [
-		// 站內通知（鈴鐺）
+		// 站內通知（鈴鐺）— 全開
 		'follow_site'         => 1,
 		'comment_reply_site'  => 1,
 		'rating_site'         => 1,
@@ -94,16 +105,16 @@ function smacg_get_notification_prefs_defaults() {
 		'level_up_site'       => 1,
 		'system_site'         => 1,
 
-		// Email 通知
-		'follow_email'        => 1,
-		'comment_reply_email' => 1,
-		'rating_email'        => 1,
-		'badge_email'         => 0,  // 預設關閉，避免太吵
+		// Email 通知 — 全關
+		'follow_email'        => 0,
+		'comment_reply_email' => 0,
+		'rating_email'        => 0,
+		'badge_email'         => 0,
 		'level_up_email'      => 0,
-		'system_email'        => 1,
+		'system_email'        => 0,
 
-		// Email 摘要頻率：off / daily / weekly
-		'email_digest'        => 'daily',
+		// Email 摘要頻率：off / daily / weekly — 預設 off
+		'email_digest'        => 'off',
 	];
 }
 
@@ -140,7 +151,7 @@ function smacg_update_notification_prefs( $user_id, $partial ) {
 	foreach ( $partial as $k => $v ) {
 		if ( ! in_array( $k, $valid_keys, true ) ) continue;
 		if ( $k === 'email_digest' ) {
-			$clean[ $k ] = in_array( $v, [ 'off', 'daily', 'weekly' ], true ) ? $v : 'daily';
+			$clean[ $k ] = in_array( $v, [ 'off', 'daily', 'weekly' ], true ) ? $v : 'off';
 		} else {
 			$clean[ $k ] = $v ? 1 : 0;
 		}
@@ -165,7 +176,7 @@ function smacg_should_notify( $user_id, $type, $channel = 'site' ) {
 }
 
 /* ============================================================
-   新註冊使用者：寫入預設偏好（讓 settings 頁能顯示完整選項）
+   新註冊使用者：寫入預設偏好
    ============================================================ */
 add_action( 'user_register', function( $user_id ) {
 	if ( ! get_user_meta( $user_id, 'smacg_notification_prefs', true ) ) {
@@ -186,7 +197,8 @@ add_action( 'user_register', function( $user_id ) {
  *   - object_type  (string|null) post / comment / anime / badge / level
  *   - object_id    (int|null)
  *   - data         (array|null) 額外資料（會序列化為 JSON）
- *   - force        (bool) 略過偏好檢查（系統通知用）
+ *   - force        (bool) 略過站內偏好檢查（系統通知用）
+ *   - force_email  (bool) 略過 email 偏好檢查（緊急公告用）
  *
  * @return int|WP_Error  通知 ID 或錯誤
  */
@@ -201,6 +213,7 @@ function smacg_create_notification( $args ) {
 		'object_id'   => null,
 		'data'        => null,
 		'force'       => false,
+		'force_email' => false,
 	] );
 
 	$user_id = absint( $args['user_id'] );
@@ -251,6 +264,7 @@ function smacg_create_notification( $args ) {
 
 	/**
 	 * Action: 通知建立後（供 Email 即時寄送、Push 等擴充）
+	 * 注意：force_email 也透過 $args 傳遞下去
 	 */
 	do_action( 'smacg_notification_created', $notif_id, $user_id, $type, $args );
 
@@ -260,13 +274,6 @@ function smacg_create_notification( $args ) {
 /* ============================================================
    查詢通知
    ============================================================ */
-/**
- * 取得使用者的通知列表
- *
- * @param int   $user_id
- * @param array $args   limit, offset, unread_only, type
- * @return array  通知陣列（每筆已 decode data）
- */
 function smacg_get_notifications( $user_id, $args = [] ) {
 	global $wpdb;
 
@@ -301,12 +308,11 @@ function smacg_get_notifications( $user_id, $args = [] ) {
 
 	if ( ! $rows ) return [];
 
-	// Decode JSON data
 	foreach ( $rows as &$r ) {
-		$r['data'] = ! empty( $r['data'] ) ? json_decode( $r['data'], true ) : [];
+		$r['data']     = ! empty( $r['data'] ) ? json_decode( $r['data'], true ) : [];
 		$r['id']       = (int) $r['id'];
 		$r['user_id']  = (int) $r['user_id'];
-		$r['actor_id'] = $r['actor_id'] ? (int) $r['actor_id'] : null;
+		$r['actor_id'] = $r['actor_id']  ? (int) $r['actor_id']  : null;
 		$r['object_id']= $r['object_id'] ? (int) $r['object_id'] : null;
 		$r['is_read']  = (int) $r['is_read'];
 	}
@@ -336,7 +342,7 @@ function smacg_get_unread_count( $user_id ) {
 		$user_id
 	) );
 
-	wp_cache_set( $cache_key, $count, 'smacg_notifications', 60 );  // 60 秒快取
+	wp_cache_set( $cache_key, $count, 'smacg_notifications', 60 );
 	return $count;
 }
 
@@ -379,7 +385,7 @@ function smacg_mark_all_read( $user_id ) {
 	if ( false !== $updated ) {
 		smacg_clear_notification_cache( $user_id );
 	}
-	return (int) $updated;  // 回傳影響筆數
+	return (int) $updated;
 }
 
 /* ============================================================
@@ -419,17 +425,11 @@ function smacg_purge_old_notifications() {
 	) );
 }
 
-// 註冊每日清理 cron
 add_action( 'smacg_notifications_daily_purge', 'smacg_purge_old_notifications' );
 
-register_activation_hook( __FILE__, function() {
-	// child theme 的 require 不會觸發 activation_hook，這裡備用
-} );
-
-// 透過 wp 鉤子註冊 cron（避免依賴 activation）
+// 備援排程（Activator 已排，這裡是 fallback）
 add_action( 'init', function() {
 	if ( ! wp_next_scheduled( 'smacg_notifications_daily_purge' ) ) {
-		// 每天凌晨 3 點清一次
 		wp_schedule_event(
 			strtotime( 'tomorrow 03:00:00 ' . wp_timezone_string() ),
 			'daily',
