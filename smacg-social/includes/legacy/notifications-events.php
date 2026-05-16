@@ -3,17 +3,18 @@
  * Notifications System — 事件監聽（Event Producers）
  *
  * @package weixiaoacg
- * @version 1.0.0 (2026-05-13)
+ * @version 1.1.0 (2026-05-16)
+ *
+ * v1.1.0 變更：
+ *   - Bug #6 修正：smacg_broadcast_system_notification 改用批次 INSERT，
+ *     大量用戶不再 timeout；同時加上 batch_size 與 sleep 避免 DB 壓力
  *
  * 監聽各種站內事件，自動產生通知：
  *   - smacg_user_followed       → 'follow' 通知
- *   - wp_insert_comment         → 'comment_reply' 通知（被回覆者）
- *   - smacg_anime_rated         → 'rating' 通知（給該動畫的收藏者）
+ *   - wp_insert_comment         → 'comment_reply' 通知
+ *   - smacg_anime_rated         → 'rating' 通知
  *   - smacg_level_up            → 'level_up' 通知
- *   - gamipress_award_achievement → 'badge' 通知
- *
- * 所有通知透過 smacg_create_notification() 寫入，
- * 該函式內部會檢查使用者通知偏好（site channel）。
+ *   - gamipress_award_achievement → 'badge' 通知（由 gamification 外掛掛）
  */
 defined( 'ABSPATH' ) || exit;
 
@@ -22,201 +23,251 @@ defined( 'ABSPATH' ) || exit;
    ============================================================ */
 add_action( 'smacg_user_followed', function( $follower_id, $following_id ) {
 
-	$follower = get_userdata( $follower_id );
-	if ( ! $follower ) return;
+    $follower = get_userdata( $follower_id );
+    if ( ! $follower ) return;
 
-	$follower_name = $follower->display_name ?: $follower->user_login;
-	$profile_url   = function_exists( 'smacg_get_public_profile_url' )
-		? smacg_get_public_profile_url( $follower_id )
-		: home_url( '/' );
+    $follower_name = $follower->display_name ?: $follower->user_login;
+    $profile_url   = function_exists( 'smacg_get_public_profile_url' )
+        ? smacg_get_public_profile_url( $follower_id )
+        : home_url( '/' );
 
-	smacg_create_notification( [
-		'user_id'     => $following_id,
-		'type'        => 'follow',
-		'actor_id'    => $follower_id,
-		'object_type' => 'user',
-		'object_id'   => $follower_id,
-		'data'        => [
-			'title'   => sprintf( '%s 開始追蹤你', $follower_name ),
-			'excerpt' => '',
-			'url'     => $profile_url,
-			'icon'    => 'fa-user-plus',
-		],
-	] );
+    smacg_create_notification( [
+        'user_id'     => $following_id,
+        'type'        => 'follow',
+        'actor_id'    => $follower_id,
+        'object_type' => 'user',
+        'object_id'   => $follower_id,
+        'data'        => [
+            'title'   => sprintf( '%s 開始追蹤你', $follower_name ),
+            'excerpt' => '',
+            'url'     => $profile_url,
+            'icon'    => 'fa-user-plus',
+        ],
+    ] );
 }, 10, 2 );
 
 /* ============================================================
    #2 留言被回覆 → comment_reply 通知
-   ------------------------------------------------------------
-   觸發點：wp_insert_comment（wpDiscuz 與原生留言都會走這裡）
-   條件：comment_parent > 0 且 父留言作者 ≠ 新留言作者
    ============================================================ */
 add_action( 'wp_insert_comment', function( $comment_id, $comment ) {
 
-	// 必須為已核可的留言才通知（避免 spam 噪音）
-	if ( (int) $comment->comment_approved !== 1 ) return;
+    if ( (int) $comment->comment_approved !== 1 ) return;
 
-	$parent_id = (int) $comment->comment_parent;
-	if ( ! $parent_id ) return;
+    $parent_id = (int) $comment->comment_parent;
+    if ( ! $parent_id ) return;
 
-	$parent = get_comment( $parent_id );
-	if ( ! $parent ) return;
+    $parent = get_comment( $parent_id );
+    if ( ! $parent ) return;
 
-	// 父留言的作者
-	$parent_uid = (int) $parent->user_id;
-	if ( ! $parent_uid ) return;  // 訪客留言無法通知
+    $parent_uid = (int) $parent->user_id;
+    if ( ! $parent_uid ) return;
 
-	// 新留言的作者
-	$author_uid = (int) $comment->user_id;
-	if ( ! $author_uid || $author_uid === $parent_uid ) return;  // 自己回自己不通知
+    $author_uid = (int) $comment->user_id;
+    if ( ! $author_uid || $author_uid === $parent_uid ) return;
 
-	$author = get_userdata( $author_uid );
-	if ( ! $author ) return;
-	$author_name = $author->display_name ?: $author->user_login;
+    $author = get_userdata( $author_uid );
+    if ( ! $author ) return;
+    $author_name = $author->display_name ?: $author->user_login;
 
-	$post = get_post( $comment->comment_post_ID );
-	if ( ! $post ) return;
+    $post = get_post( $comment->comment_post_ID );
+    if ( ! $post ) return;
 
-	$excerpt = wp_strip_all_tags( $comment->comment_content );
-	if ( mb_strlen( $excerpt ) > 80 ) {
-		$excerpt = mb_substr( $excerpt, 0, 80 ) . '…';
-	}
+    $excerpt = wp_strip_all_tags( $comment->comment_content );
+    if ( mb_strlen( $excerpt ) > 80 ) {
+        $excerpt = mb_substr( $excerpt, 0, 80 ) . '…';
+    }
 
-	smacg_create_notification( [
-		'user_id'     => $parent_uid,
-		'type'        => 'comment_reply',
-		'actor_id'    => $author_uid,
-		'object_type' => 'comment',
-		'object_id'   => (int) $comment_id,
-		'data'        => [
-			'title'   => sprintf( '%s 回覆了你的留言', $author_name ),
-			'excerpt' => $excerpt,
-			'url'     => get_comment_link( $comment_id ),
-			'icon'    => 'fa-reply',
-			'post_title' => get_the_title( $post ),
-		],
-	] );
+    smacg_create_notification( [
+        'user_id'     => $parent_uid,
+        'type'        => 'comment_reply',
+        'actor_id'    => $author_uid,
+        'object_type' => 'comment',
+        'object_id'   => (int) $comment_id,
+        'data'        => [
+            'title'      => sprintf( '%s 回覆了你的留言', $author_name ),
+            'excerpt'    => $excerpt,
+            'url'        => get_comment_link( $comment_id ),
+            'icon'       => 'fa-reply',
+            'post_title' => get_the_title( $post ),
+        ],
+    ] );
 }, 10, 2 );
 
 /* ============================================================
    #3 動畫被評分 → rating 通知（給該動畫的收藏者）
-   ------------------------------------------------------------
-   觸發點：smacg_anime_rated（你的評分系統需要 do_action 觸發；
-   若目前還沒觸發，這段會靜靜等待，不會出錯）
-   參數：( $anime_id, $rater_id, $overall_score )
    ============================================================ */
 add_action( 'smacg_anime_rated', function( $anime_id, $rater_id, $overall_score = null ) {
-	global $wpdb;
+    global $wpdb;
 
-	$anime_id = absint( $anime_id );
-	$rater_id = absint( $rater_id );
-	if ( ! $anime_id || ! $rater_id ) return;
+    $anime_id = absint( $anime_id );
+    $rater_id = absint( $rater_id );
+    if ( ! $anime_id || ! $rater_id ) return;
 
-	$rater = get_userdata( $rater_id );
-	if ( ! $rater ) return;
-	$rater_name = $rater->display_name ?: $rater->user_login;
+    $rater = get_userdata( $rater_id );
+    if ( ! $rater ) return;
+    $rater_name = $rater->display_name ?: $rater->user_login;
 
-	// 找出此動畫的收藏者（status = favorited 或 favorited = 1）
-	// 從 wp_smacg_watchlist 表（你的清單表）
-	$watchlist_table = $wpdb->prefix . 'smacg_watchlist';
+    $watchlist_table = $wpdb->prefix . 'smacg_watchlist';
 
-	// 先檢查表是否存在
-	if ( $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $watchlist_table ) ) !== $watchlist_table ) {
-		return;  // 表不存在就跳過
-	}
+    if ( $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $watchlist_table ) ) !== $watchlist_table ) {
+        return;
+    }
 
-	$collector_ids = $wpdb->get_col( $wpdb->prepare(
-		"SELECT DISTINCT user_id FROM {$watchlist_table}
-		 WHERE post_id = %d AND (status = 'favorited' OR favorited = 1)
-		 LIMIT 200",
-		$anime_id
-	) );
+    $collector_ids = $wpdb->get_col( $wpdb->prepare(
+        "SELECT DISTINCT user_id FROM {$watchlist_table}
+         WHERE post_id = %d AND (status = 'favorited' OR favorited = 1)
+         LIMIT 200",
+        $anime_id
+    ) );
 
-	if ( empty( $collector_ids ) ) return;
+    if ( empty( $collector_ids ) ) return;
 
-	$title    = get_the_title( $anime_id );
-	$url      = get_permalink( $anime_id );
-	$score_str = is_numeric( $overall_score ) ? sprintf( ' %.1f 分', (float) $overall_score ) : '';
+    $title    = get_the_title( $anime_id );
+    $url      = get_permalink( $anime_id );
+    $score_str = is_numeric( $overall_score ) ? sprintf( ' %.1f 分', (float) $overall_score ) : '';
 
-	foreach ( $collector_ids as $uid ) {
-		$uid = (int) $uid;
-		if ( $uid === $rater_id ) continue;  // 不通知評分者本人
+    foreach ( $collector_ids as $uid ) {
+        $uid = (int) $uid;
+        if ( $uid === $rater_id ) continue;
 
-		smacg_create_notification( [
-			'user_id'     => $uid,
-			'type'        => 'rating',
-			'actor_id'    => $rater_id,
-			'object_type' => 'anime',
-			'object_id'   => $anime_id,
-			'data'        => [
-				'title'   => sprintf( '%s 評分了你收藏的《%s》%s', $rater_name, $title, $score_str ),
-				'excerpt' => '',
-				'url'     => $url,
-				'icon'    => 'fa-star',
-			],
-		] );
-	}
+        smacg_create_notification( [
+            'user_id'     => $uid,
+            'type'        => 'rating',
+            'actor_id'    => $rater_id,
+            'object_type' => 'anime',
+            'object_id'   => $anime_id,
+            'data'        => [
+                'title'   => sprintf( '%s 評分了你收藏的《%s》%s', $rater_name, $title, $score_str ),
+                'excerpt' => '',
+                'url'     => $url,
+                'icon'    => 'fa-star',
+            ],
+        ] );
+    }
 }, 10, 3 );
 
 /* ============================================================
    #4 等級提升 → level_up 通知
-   ------------------------------------------------------------
-   觸發點：smacg_level_up（你的等級系統需要 do_action）
-   參數：( $user_id, $new_level, $title )
    ============================================================ */
 add_action( 'smacg_level_up', function( $user_id, $new_level, $level_title = '' ) {
-	$user_id   = absint( $user_id );
-	$new_level = absint( $new_level );
-	if ( ! $user_id || ! $new_level ) return;
+    $user_id   = absint( $user_id );
+    $new_level = absint( $new_level );
+    if ( ! $user_id || ! $new_level ) return;
 
-	smacg_create_notification( [
-		'user_id'     => $user_id,
-		'type'        => 'level_up',
-		'actor_id'    => null,
-		'object_type' => 'level',
-		'object_id'   => $new_level,
-		'data'        => [
-			'title'   => sprintf( '恭喜升上 Lv.%d %s', $new_level, $level_title ),
-			'excerpt' => '繼續觀看、評分、留言可以累積更多點數！',
-			'url'     => home_url( '/mc/?tab=points' ),
-			'icon'    => 'fa-arrow-up',
-		],
-	] );
+    smacg_create_notification( [
+        'user_id'     => $user_id,
+        'type'        => 'level_up',
+        'actor_id'    => null,
+        'object_type' => 'level',
+        'object_id'   => $new_level,
+        'data'        => [
+            'title'   => sprintf( '恭喜升上 Lv.%d %s', $new_level, $level_title ),
+            'excerpt' => '繼續觀看、評分、留言可以累積更多點數！',
+            'url'     => home_url( '/mc/?tab=points' ),
+            'icon'    => 'fa-arrow-up',
+        ],
+    ] );
 }, 10, 3 );
 
 /* ============================================================
    #5 系統公告 helper（供管理員使用）
    ------------------------------------------------------------
-   用法（在你的後台或外掛中呼叫）：
-   smacg_broadcast_system_notification( '網站維護通知', '5/15 將進行維護', home_url('/news/maintenance/') );
+   v1.1.0：改用批次 INSERT，5000 用戶從 5000 次 query 降到 ~10 次
+   用法：
+     smacg_broadcast_system_notification(
+         '網站維護通知',
+         '5/15 將進行維護',
+         home_url('/news/maintenance/')
+     );
+
+   進階用法（強制寄送，略過使用者偏好）：
+     smacg_broadcast_system_notification( $title, $excerpt, $url, null, [
+         'force' => true,    // 強制建立站內通知
+     ] );
    ============================================================ */
-function smacg_broadcast_system_notification( $title, $excerpt = '', $url = '', $user_ids = null ) {
-	$title = wp_strip_all_tags( $title );
-	if ( ! $title ) return 0;
+function smacg_broadcast_system_notification( $title, $excerpt = '', $url = '', $user_ids = null, $opts = [] ) {
+    global $wpdb;
 
-	// 預設：所有訂閱級別以上的使用者
-	if ( $user_ids === null ) {
-		$user_ids = get_users( [
-			'fields' => 'ID',
-			'number' => -1,
-		] );
-	}
-	if ( empty( $user_ids ) ) return 0;
+    $title = wp_strip_all_tags( $title );
+    if ( ! $title ) return 0;
 
-	$sent = 0;
-	foreach ( $user_ids as $uid ) {
-		$r = smacg_create_notification( [
-			'user_id' => (int) $uid,
-			'type'    => 'system',
-			'data'    => [
-				'title'   => $title,
-				'excerpt' => wp_strip_all_tags( $excerpt ),
-				'url'     => esc_url_raw( $url ) ?: home_url( '/' ),
-				'icon'    => 'fa-bullhorn',
-			],
-			'force'   => false,  // 仍然尊重使用者偏好（除非極重要才 force=true）
-		] );
-		if ( ! is_wp_error( $r ) ) $sent++;
-	}
-	return $sent;
+    $opts = wp_parse_args( $opts, [
+        'force'      => false,    // true = 略過使用者偏好
+        'batch_size' => 500,      // 每批 INSERT 多少筆
+        'sleep_ms'   => 50,       // 批次間 sleep（毫秒），避免 DB 壓力
+        'icon'       => 'fa-bullhorn',
+    ] );
+
+    // 預設：所有使用者
+    if ( $user_ids === null ) {
+        $user_ids = $wpdb->get_col( "SELECT ID FROM {$wpdb->users}" );
+    }
+    $user_ids = array_filter( array_map( 'intval', (array) $user_ids ) );
+    if ( empty( $user_ids ) ) return 0;
+
+    // 準備共用資料
+    $data_json = wp_json_encode( [
+        'title'   => $title,
+        'excerpt' => wp_strip_all_tags( $excerpt ),
+        'url'     => esc_url_raw( $url ) ?: home_url( '/' ),
+        'icon'    => sanitize_key( $opts['icon'] ),
+    ] );
+    $now = current_time( 'mysql' );
+
+    // 若 force=false，先過濾掉關閉 system_site 偏好的人
+    if ( ! $opts['force'] ) {
+        $user_ids = array_values( array_filter( $user_ids, function( $uid ) {
+            return smacg_should_notify( $uid, 'system', 'site' );
+        } ) );
+        if ( empty( $user_ids ) ) return 0;
+    }
+
+    $table = smacg_notifications_table();
+    $sent  = 0;
+
+    // 分批批次 INSERT
+    $batches = array_chunk( $user_ids, max( 1, (int) $opts['batch_size'] ) );
+
+    foreach ( $batches as $batch ) {
+        $values = [];
+        $params = [];
+        foreach ( $batch as $uid ) {
+            $values[] = "(%d, %s, NULL, NULL, NULL, %s, 0, %s)";
+            $params[] = $uid;
+            $params[] = 'system';
+            $params[] = $data_json;
+            $params[] = $now;
+        }
+
+        $sql = "INSERT INTO {$table}
+                (user_id, type, actor_id, object_type, object_id, data, is_read, created_at)
+                VALUES " . implode( ', ', $values );
+
+        $result = $wpdb->query( $wpdb->prepare( $sql, $params ) );
+        if ( false !== $result ) {
+            $sent += (int) $result;
+        }
+
+        // 清這批用戶的未讀快取
+        foreach ( $batch as $uid ) {
+            smacg_clear_notification_cache( $uid );
+        }
+
+        // 觸發 hook（讓 email 等其他系統能掛）
+        do_action( 'smacg_system_notification_broadcast_batch', $batch, $title, $data_json );
+
+        // 批次間休息
+        if ( $opts['sleep_ms'] > 0 && count( $batches ) > 1 ) {
+            usleep( (int) $opts['sleep_ms'] * 1000 );
+        }
+    }
+
+    if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+        error_log( sprintf(
+            '[SMACG Broadcast] sent %d / %d users in %d batches',
+            $sent, count( $user_ids ), count( $batches )
+        ) );
+    }
+
+    return $sent;
 }
