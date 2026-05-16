@@ -1,31 +1,21 @@
 <?php
 /**
  * 微笑動漫 Child Theme — header.php
- * v1.5.0 (2026-05-13)
+ * v1.6.0 (2026-05-13)
  *
  * 變更紀錄：
+ * - v1.6.0 (Batch 1C-3 fix):
+ *   1. 在 .header-actions 內、頭像下拉之前加入「通知鈴鐺」DOM
+ *      （僅登入使用者輸出），改由 PHP 直接渲染，
+ *      取代 notifications.js 動態 DOM 注入，避免被插入主選單 <ul>。
+ *
  * - v1.5.0：
  *   1. 「個人頁面」/「設定」連結改用 smacg_get_member_center_url()
- *      動態解析掛 page-member.php 模板的頁面（例如 /mc/），
- *      完全繞開 Ultimate Member 的 /user/{username}/ 路徑，
- *      解決 "We are sorry. We cannot find any users..." 錯誤
  *   2. 移除 um_user_profile_url() 與 /user/{user_login}/ fallback
  *   3. helper 未載入時 fallback 到首頁，避免 fatal
  *
- * - v1.4.0：
- *   1. 頭像下拉選單移除 /account/、/account/privacy/ 兩個項目
- *   2. 新增「設定」項目，使用 #settings hash 直接切到會員中心設定 tab
- *      （搭配 member.js v2.0.3 的 URL/hash 解析）
- *   3. 移除 modal 寫死的 dev.weixiaoacg.com/account/ form action
- *      改用 home_url() 動態取得目前站點 URL
- *   4. 加上 modal 內 esc_js() 安全處理
- *
- * - v1.3.0：
- *   - login modal 加 is_user_logged_in() 判斷
- *   - smacgOpenLoginModal 定義在 modal 外，已登入用戶不報錯
- *   - 搜尋送出統一用 /?s= 格式
- *   - 註冊改為跳轉方案，避免 nonce 衝突
- *   - 登入後顯示頭像下拉選單，未登入只顯示登入／註冊按鈕
+ * - v1.4.0：頭像下拉簡化為三項；移除 dev URL 寫死
+ * - v1.3.0：login modal 已登入用戶不報錯；統一搜尋格式
  *
  * @package weixiaoacg
  */
@@ -42,7 +32,7 @@
 <!-- 引入 Google Fonts：主標題用快樂體，副標題用思源黑體 -->
  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@500;900&display=swap" rel="stylesheet">
   <?php wp_head(); ?>
-  
+
 <!-- ══════════════════════════════════════════
      登入 Modal（訪客才輸出 HTML）
 ══════════════════════════════════════════ -->
@@ -179,14 +169,32 @@
         $user = wp_get_current_user();
 
         /**
-         * v1.5.0：個人頁面 / 設定 一律指向自家會員中心（page-member.php 模板）
-         * 完全繞開 Ultimate Member 的 /user/{username}/ 路徑。
-         * helper 未載入時 fallback 到首頁，避免 fatal。
+         * v1.5.0：個人頁面 / 設定 一律指向自家會員中心
          */
         $profile_url = function_exists( 'smacg_get_member_center_url' )
                        ? smacg_get_member_center_url()
                        : home_url( '/' );
       ?>
+
+        <!-- v1.6.0: 通知鈴鐺 (Phase 1C, Batch 1C-3) -->
+        <div class="smacg-bell-wrap smacg-bell-inline" id="smacg-bell-wrap">
+          <button type="button" class="smacg-bell" id="smacg-bell" aria-label="通知" aria-expanded="false">
+            <i class="fa-solid fa-bell"></i>
+            <span class="smacg-bell-dot" id="smacg-bell-dot" hidden></span>
+          </button>
+          <div class="smacg-bell-panel" id="smacg-bell-panel" hidden>
+            <div class="smacg-bell-panel-header">
+              <strong>通知</strong>
+              <button type="button" class="smacg-bell-mark-all" id="smacg-bell-mark-all">全部已讀</button>
+            </div>
+            <div class="smacg-bell-panel-list" id="smacg-bell-panel-list">
+              <div class="smacg-bell-loading"><i class="fa-solid fa-spinner fa-spin"></i> 載入中…</div>
+            </div>
+            <div class="smacg-bell-panel-footer">
+              <a href="<?php echo esc_url( $profile_url . '?tab=notifications' ); ?>">查看全部 →</a>
+            </div>
+          </div>
+        </div>
 
         <!-- 已登入：頭像下拉選單（v1.4.0 簡化為三項） -->
         <div class="header-user-dropdown">
@@ -369,7 +377,6 @@
       }
     });
 
-    // ESC 關閉
     document.addEventListener('keydown', e => {
       if (e.key === 'Escape' && userMenu.classList.contains('open')) {
         userMenu.classList.remove('open');
@@ -395,7 +402,6 @@
     if (!modal) return;
     document.body.style.overflow = 'hidden';
     setTimeout(() => modal.classList.add('lm-open'), 10);
-    // v1.4.0：移除寫死的 dev.weixiaoacg.com/account/，改用當前站點 URL
     modal.querySelectorAll('form.um-form').forEach(f => {
       f.setAttribute('action', '<?php echo esc_js( home_url('/') ); ?>');
     });
@@ -415,7 +421,6 @@
     });
   }
 
-  // 全域函式，供其他地方呼叫
   window.smacgOpenLoginModal = function (tab) {
     switchTab(tab || 'login');
     openModal();
@@ -440,13 +445,11 @@
     tab.addEventListener('click', function () { switchTab(this.dataset.tab); });
   });
 
-  // 註冊面板「返回登入」按鈕
   const switchLoginBtn = document.querySelector('.lm-switch-login');
   if (switchLoginBtn) {
     switchLoginBtn.addEventListener('click', () => switchTab('login'));
   }
 
-  // 登入面板「切換到註冊」按鈕
   const switchRegBtn = document.querySelector('.lm-switch-register');
   if (switchRegBtn) {
     switchRegBtn.addEventListener('click', () => switchTab('register'));
