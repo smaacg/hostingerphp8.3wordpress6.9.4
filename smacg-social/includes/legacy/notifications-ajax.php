@@ -3,14 +3,17 @@
  * Notifications System — AJAX endpoints
  *
  * @package weixiaoacg
- * @version 1.0.0 (2026-05-13)
+ * @version 1.1.0 (2026-05-16)
+ *
+ * v1.1.0 變更：
+ *   - Bug #5 修正：mysql2date('U',...) 改用 get_gmt_from_date 避免時區錯位
  *
  * Endpoints（皆需登入）：
- *   smacg_notif_unread_count   GET-style，回傳未讀數（輪詢用）
- *   smacg_notif_list           回傳通知列表（分頁）
- *   smacg_notif_mark_read      標記單筆已讀
- *   smacg_notif_mark_all_read  全部標記已讀
- *   smacg_notif_delete         刪除單筆
+ *   smacg_notif_unread_count
+ *   smacg_notif_list
+ *   smacg_notif_mark_read
+ *   smacg_notif_mark_all_read
+ *   smacg_notif_delete
  *
  * Nonce: smacg_notif_nonce
  */
@@ -47,7 +50,7 @@ function smacg_notif_verify_nonce() {
 function smacg_notif_format_for_api( $row ) {
 	$data = is_array( $row['data'] ) ? $row['data'] : [];
 
-	// Actor 頭像
+	// Actor 頭像與名稱
 	$actor_avatar = '';
 	$actor_name   = '';
 	if ( ! empty( $row['actor_id'] ) ) {
@@ -55,7 +58,6 @@ function smacg_notif_format_for_api( $row ) {
 		$au = get_userdata( $row['actor_id'] );
 		if ( $au ) {
 			$actor_name = $au->display_name ?: $au->user_login;
-			// 自訂頭像優先
 			$aid = (int) get_user_meta( $row['actor_id'], 'smacg_avatar_id', true );
 			if ( $aid && wp_attachment_is_image( $aid ) ) {
 				$img = wp_get_attachment_image_src( $aid, 'thumbnail' );
@@ -64,9 +66,9 @@ function smacg_notif_format_for_api( $row ) {
 		}
 	}
 
-	// 時間（人類可讀）
-	$ts = mysql2date( 'U', $row['created_at'] );
-	$time_diff = human_time_diff( $ts, current_time( 'timestamp' ) );
+	// 時間（v1.1.0 修正：created_at 是本地時間字串，要先轉成 UTC timestamp）
+	$ts = (int) strtotime( get_gmt_from_date( $row['created_at'] ) . ' UTC' );
+	$time_diff = $ts ? human_time_diff( $ts, time() ) . '前' : '';
 
 	return [
 		'id'           => (int) $row['id'],
@@ -79,7 +81,7 @@ function smacg_notif_format_for_api( $row ) {
 		'actor_avatar' => $actor_avatar,
 		'is_read'      => (int) $row['is_read'],
 		'created_at'   => $row['created_at'],
-		'time_diff'    => $time_diff . '前',
+		'time_diff'    => $time_diff,
 	];
 }
 
@@ -101,8 +103,8 @@ add_action( 'wp_ajax_smacg_notif_list', function() {
 	smacg_notif_verify_nonce();
 	$uid = get_current_user_id();
 
-	$limit       = isset( $_REQUEST['limit'] )       ? absint( $_REQUEST['limit'] )  : 10;
-	$offset      = isset( $_REQUEST['offset'] )      ? absint( $_REQUEST['offset'] ) : 0;
+	$limit       = isset( $_REQUEST['limit'] )  ? absint( $_REQUEST['limit'] )  : 10;
+	$offset      = isset( $_REQUEST['offset'] ) ? absint( $_REQUEST['offset'] ) : 0;
 	$unread_only = ! empty( $_REQUEST['unread_only'] );
 	$type        = isset( $_REQUEST['type'] ) ? sanitize_key( $_REQUEST['type'] ) : '';
 
