@@ -3,7 +3,11 @@
  * Follow System — 追蹤系統核心
  *
  * @package weixiaoacg
- * @version 1.0.0 (2026-05-13)
+ * @version 1.1.0 (2026-05-16)
+ *
+ * v1.1.0 變更：
+ *   - Bug #3 修正：daily limit 改用 transient 計數器，避免 unfollow→follow 繞過
+ *   - Bug #4 修正：時區比對改用 current_time('Y-m-d 00:00:00')
  *
  * 提供功能：
  * - wp_smacg_follows 資料表自動建立 / 升級（dbDelta）
@@ -15,7 +19,7 @@
  * - smacg_get_following_ids( $user_id, $limit, $offset )
  * - smacg_get_followers_ids( $user_id, $limit, $offset )
  *
- * Action hooks（供 Phase 1C 通知系統接上）：
+ * Action hooks：
  * - do_action( 'smacg_user_followed',   $follower_id, $following_id )
  * - do_action( 'smacg_user_unfollowed', $follower_id, $following_id )
  *
@@ -23,7 +27,7 @@
  * - 不能追蹤自己
  * - 不能追蹤未啟用 / 不存在的使用者
  * - UNIQUE(follower_id, following_id) 防止重複追蹤
- * - 單日上限 SMACG_FOLLOW_DAILY_LIMIT（預設 200）
+ * - 單日上限 SMACG_FOLLOW_DAILY_LIMIT（預設 200）— 使用 transient 計數器
  * - 連點冷卻 SMACG_FOLLOW_COOLDOWN 秒（預設 1）
  */
 defined( 'ABSPATH' ) || exit;
@@ -68,28 +72,18 @@ function smacg_follows_install() {
 
 	update_option( 'smacg_follows_db_version', SMACG_FOLLOWS_DB_VERSION );
 }
-// 每次 admin_init 檢查一次（成本極低，只在 version mismatch 時跑 dbDelta）
 add_action( 'admin_init', 'smacg_follows_install' );
-// 也在前端首次載入時嘗試一次，避免管理員從未進後台時資料表沒建立
 add_action( 'init', 'smacg_follows_install', 5 );
 
 /* ============================================================
    核心：追蹤
    ============================================================ */
-/**
- * 追蹤一位使用者
- *
- * @param int $follower_id   追蹤者
- * @param int $following_id  被追蹤者
- * @return true|WP_Error
- */
 function smacg_follow_user( $follower_id, $following_id ) {
 	global $wpdb;
 
 	$follower_id  = absint( $follower_id );
 	$following_id = absint( $following_id );
 
-	// 基本驗證
 	if ( ! $follower_id || ! $following_id ) {
 		return new WP_Error( 'smacg_invalid_user', '使用者 ID 無效' );
 	}
@@ -100,13 +94,13 @@ function smacg_follow_user( $follower_id, $following_id ) {
 		return new WP_Error( 'smacg_target_not_found', '目標使用者不存在' );
 	}
 
-	// 連點冷卻（同一對 follower-following 在 SMACG_FOLLOW_COOLDOWN 秒內只能操作一次）
+	// 連點冷卻
 	$cd_key = 'smacg_follow_cd_' . $follower_id . '_' . $following_id;
 	if ( get_transient( $cd_key ) ) {
 		return new WP_Error( 'smacg_follow_cooldown', '操作太頻繁，請稍候' );
 	}
 
-	// 單日上限
+	// 單日上限（使用 transient 計數器，不受 unfollow 影響）
 	$today_count = smacg_get_follow_today_count( $follower_id );
 	if ( $today_count >= SMACG_FOLLOW_DAILY_LIMIT ) {
 		return new WP_Error(
@@ -135,16 +129,12 @@ function smacg_follow_user( $follower_id, $following_id ) {
 		return new WP_Error( 'smacg_db_insert_failed', '資料庫寫入失敗' );
 	}
 
-	// 設定冷卻
+	// 成功後：增加 daily 計數、設定冷卻
+	smacg_increment_follow_today_count( $follower_id );
 	set_transient( $cd_key, 1, SMACG_FOLLOW_COOLDOWN );
 
-	// 清快取
 	smacg_clear_follow_cache( $follower_id, $following_id );
 
-	/**
-	 * Action: smacg_user_followed
-	 * Phase 1C 通知系統會接這個 hook
-	 */
 	do_action( 'smacg_user_followed', $follower_id, $following_id );
 
 	return true;
@@ -152,10 +142,6 @@ function smacg_follow_user( $follower_id, $following_id ) {
 
 /**
  * 取消追蹤
- *
- * @param int $follower_id
- * @param int $following_id
- * @return true|WP_Error
  */
 function smacg_unfollow_user( $follower_id, $following_id ) {
 	global $wpdb;
@@ -194,9 +180,6 @@ function smacg_unfollow_user( $follower_id, $following_id ) {
 /* ============================================================
    查詢 helpers
    ============================================================ */
-/**
- * 是否正在追蹤
- */
 function smacg_is_following( $follower_id, $following_id ) {
 	global $wpdb;
 
@@ -225,9 +208,6 @@ function smacg_is_following( $follower_id, $following_id ) {
 	return $result;
 }
 
-/**
- * 追蹤中人數（user 追蹤了多少人）
- */
 function smacg_get_following_count( $user_id ) {
 	global $wpdb;
 
@@ -252,9 +232,6 @@ function smacg_get_following_count( $user_id ) {
 	return $count;
 }
 
-/**
- * 粉絲數（多少人追蹤這個 user）
- */
 function smacg_get_followers_count( $user_id ) {
 	global $wpdb;
 
@@ -279,9 +256,6 @@ function smacg_get_followers_count( $user_id ) {
 	return $count;
 }
 
-/**
- * 取得 user 追蹤的 ID 清單（最新優先）
- */
 function smacg_get_following_ids( $user_id, $limit = 20, $offset = 0 ) {
 	global $wpdb;
 
@@ -304,9 +278,6 @@ function smacg_get_following_ids( $user_id, $limit = 20, $offset = 0 ) {
 	return array_map( 'intval', $ids ?: [] );
 }
 
-/**
- * 取得 user 的粉絲 ID 清單（最新優先）
- */
 function smacg_get_followers_ids( $user_id, $limit = 20, $offset = 0 ) {
 	global $wpdb;
 
@@ -329,25 +300,31 @@ function smacg_get_followers_ids( $user_id, $limit = 20, $offset = 0 ) {
 	return array_map( 'intval', $ids ?: [] );
 }
 
-/**
- * 今日追蹤次數（防刷用）
- */
+/* ============================================================
+   今日追蹤計數（防刷用）
+   ------------------------------------------------------------
+   v1.1.0：改用 transient 累加計數器，避免 unfollow→follow 繞過 daily limit
+   key: smacg_follow_daily_{user_id}_{YYYYMMDD}
+   TTL: DAY_IN_SECONDS（會自動過期）
+   ============================================================ */
+function smacg_follow_today_key( $user_id ) {
+	// 使用本地時區的日期字串
+	$date = current_time( 'Ymd' );
+	return 'smacg_follow_daily_' . absint( $user_id ) . '_' . $date;
+}
+
 function smacg_get_follow_today_count( $user_id ) {
-	global $wpdb;
-
 	$user_id = absint( $user_id );
-	if ( ! $user_id ) {
-		return 0;
-	}
+	if ( ! $user_id ) return 0;
+	return (int) get_transient( smacg_follow_today_key( $user_id ) );
+}
 
-	$table     = smacg_follows_table();
-	$today_gmt = gmdate( 'Y-m-d 00:00:00', current_time( 'timestamp' ) );
-
-	return (int) $wpdb->get_var( $wpdb->prepare(
-		"SELECT COUNT(*) FROM {$table}
-		 WHERE follower_id = %d AND created_at >= %s",
-		$user_id, $today_gmt
-	) );
+function smacg_increment_follow_today_count( $user_id ) {
+	$user_id = absint( $user_id );
+	if ( ! $user_id ) return;
+	$key   = smacg_follow_today_key( $user_id );
+	$count = (int) get_transient( $key );
+	set_transient( $key, $count + 1, DAY_IN_SECONDS );
 }
 
 /* ============================================================
