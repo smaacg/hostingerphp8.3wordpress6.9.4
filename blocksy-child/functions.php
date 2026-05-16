@@ -60,7 +60,7 @@ $optional = [
     'image-optimizer',
     'public-profile','public-profile-render',
     'follow-system','follow-ajax',
-    'notifications-system','notifications-events','notifications-ajax','notifications-render','notifications-email',
+    'notifications-system','notifications-events','notifications-ajax','notifications-render','notifications-email', 'ajax-news-filter',  // ← 新增這行（v2.15.0 - 2026-05-16, News Filter AJAX endpoint）
 ];
 
 /* === 已搬至 smacg-api 外掛（不再從主題載入） ===
