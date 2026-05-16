@@ -3,13 +3,19 @@
  * Template Name: 年度回顧
  *
  * 個人年度觀影回顧頁面（類 Spotify Wrapped）
- * 訪問 /year-review/ 或 /year-review/?year=2025
+ * 訪問 /year-review/ 或 /year-review/?year=2026
  *
  * @package Blocksy_Child
- * @version 1.0.1
+ * @version 1.0.3
  * @since   2026-05-13
  *
  * Changelog:
+ * - v1.0.3 (2026-05-15)：
+ *   1. 年份切換器最小年份改為 2026（網站正式上線年），不再顯示 2025/2024/2022。
+ *   2. $year 參數下限同步改為 2026。
+ * - v1.0.2 (2026-05-15)：
+ *   移除 require_once '/inc/member-stats.php'（Phase 3 已遷移至 smacg-members 外掛，
+ *   由 plugins_loaded 自動載入）。加上 function_exists 防呆，避免外掛停用時 fatal error。
  * - v1.0.1 (2026-05-13)：
  *   兩處「回會員中心」按鈕改用 smacg_get_member_center_url()，
  *   動態解析會員中心頁面 URL（例如 /mc/），不再寫死 /member/。
@@ -20,22 +26,43 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-// 強制登入
+/* ───── 強制登入 ───── */
 if ( ! is_user_logged_in() ) {
     wp_safe_redirect( wp_login_url( get_permalink() ) );
     exit;
 }
 
-require_once get_stylesheet_directory() . '/inc/member-stats.php';
+/* ───── v1.0.2：函式存在性檢查（外掛停用防呆）───── */
+if ( ! function_exists( 'smacg_calc_year_review' ) ) {
+    get_header();
+    ?>
+    <div class="yr-wrap">
+        <section class="yr-section yr-empty">
+            <div class="yr-empty-icon">⚠️</div>
+            <h2>年度回顧暫時無法使用</h2>
+            <p>請聯絡管理員啟用 <code>smacg-members</code> 外掛。</p>
+            <a href="<?php echo esc_url( home_url( '/' ) ); ?>" class="yr-btn">回首頁</a>
+        </section>
+    </div>
+    <?php
+    get_footer();
+    return;
+}
 
+/* ───── 參數處理 ───── */
 $uid          = get_current_user_id();
 $current_year = (int) date( 'Y' );
-$year         = isset( $_GET['year'] ) ? max( 2020, min( $current_year, (int) $_GET['year'] ) ) : $current_year;
+
+// v1.0.3：年份下限改為 2026（網站正式上線年）
+$min_year = 2026;
+$year     = isset( $_GET['year'] )
+            ? max( $min_year, min( $current_year, (int) $_GET['year'] ) )
+            : $current_year;
 
 $user = wp_get_current_user();
 $data = smacg_calc_year_review( $uid, $year );
 
-// v1.0.1：動態取得會員中心 URL（page-member.php 模板的頁面，例如 /mc/）
+/* v1.0.1：動態取得會員中心 URL（page-member.php 模板的頁面，例如 /mc/） */
 $mc_url = function_exists( 'smacg_get_member_center_url' )
           ? smacg_get_member_center_url()
           : home_url( '/' );
@@ -55,16 +82,18 @@ get_header();
             </h1>
             <p class="yr-hero-sub">這一年，你和動畫的故事 ✨</p>
 
-            <?php /* 年份切換 */ ?>
-            <div class="yr-year-switch">
-                <?php
-                for ( $y = $current_year; $y >= 2022; $y-- ) :
-                    $active = ( $y === $year ) ? ' is-active' : '';
-                    ?>
-                    <a href="<?php echo esc_url( add_query_arg( 'year', $y, get_permalink() ) ); ?>"
-                       class="yr-year-pill<?php echo $active; ?>"><?php echo $y; ?></a>
-                <?php endfor; ?>
-            </div>
+            <?php /* 年份切換（v1.0.3：只列 2026 ~ 當年） */ ?>
+            <?php if ( $current_year >= $min_year ) : ?>
+                <div class="yr-year-switch">
+                    <?php
+                    for ( $y = $current_year; $y >= $min_year; $y-- ) :
+                        $active = ( $y === $year ) ? ' is-active' : '';
+                        ?>
+                        <a href="<?php echo esc_url( add_query_arg( 'year', $y, get_permalink() ) ); ?>"
+                           class="yr-year-pill<?php echo $active; ?>"><?php echo $y; ?></a>
+                    <?php endfor; ?>
+                </div>
+            <?php endif; ?>
 
             <div class="yr-hero-scroll">↓ 往下捲動開始 ↓</div>
         </div>
