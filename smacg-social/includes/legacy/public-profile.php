@@ -4,7 +4,12 @@
  *
  * @package weixiaoacg
  * @subpackage PublicProfile
- * @version 1.0.0 (2026-05-13)
+ * @version 1.1.0 (2026-05-16)
+ *
+ * v1.1.0 變更：
+ *   - Bug #10 修正：移除模糊比對 fallback，避免 /u/taro/ 撈到 taro2
+ *   - Bug #11 修正：rewrite flush flag 改用 SMACG_SOCIAL_VERSION，升版自動 flush
+ *   - Bug #12 修正：移除自前 canonical，改 hook 進 Yoast / Rank Math
  *
  * 提供公開個人頁功能：
  * - URL: /u/{username}/
@@ -19,8 +24,8 @@
  *
  * 提供給其他檔案的 helper：
  *   smacg_get_public_profile_url( $user_id_or_login )
- *   smacg_get_public_profile_user()           // 在公開頁內取得當前 user 物件
- *   smacg_is_public_profile_page()            // 判斷是否為公開頁
+ *   smacg_get_public_profile_user()
+ *   smacg_is_public_profile_page()
  *   smacg_can_view_profile_section( $user_id, $section )
  */
 
@@ -40,8 +45,6 @@ add_action( 'init', 'smacg_pp_register_rewrite' );
 function smacg_pp_register_rewrite() {
     $slug = SMACG_PUBLIC_PROFILE_SLUG;
 
-    // /u/{username}/        → 公開頁主頁
-    // /u/{username}/page/2/ → 預留分頁
     add_rewrite_rule(
         '^' . $slug . '/([^/]+)/?$',
         'index.php?smacg_pp_user=$matches[1]',
@@ -52,7 +55,6 @@ function smacg_pp_register_rewrite() {
         'index.php?smacg_pp_user=$matches[1]&smacg_pp_paged=$matches[2]',
         'top'
     );
-    // 預留 tab 子路徑：/u/{username}/watchlist/
     add_rewrite_rule(
         '^' . $slug . '/([^/]+)/(watchlist|ratings|badges|activity)/?$',
         'index.php?smacg_pp_user=$matches[1]&smacg_pp_tab=$matches[2]',
@@ -69,13 +71,16 @@ function smacg_pp_query_vars( $vars ) {
 }
 
 /* ============================================================
-   2. 首次啟用自動 flush rewrite
+   2. 首次啟用 / 版本變更時自動 flush rewrite
+   ------------------------------------------------------------
+   v1.1.0：用 SMACG_SOCIAL_VERSION 比對，升版會自動 flush
    ============================================================ */
 add_action( 'init', 'smacg_pp_maybe_flush_rewrite', 99 );
 function smacg_pp_maybe_flush_rewrite() {
-    if ( get_option( 'smacg_pp_rewrite_flushed' ) !== '1.0.0' ) {
+    $current = defined( 'SMACG_SOCIAL_VERSION' ) ? SMACG_SOCIAL_VERSION : '0.0.0';
+    if ( get_option( 'smacg_pp_rewrite_flushed' ) !== $current ) {
         flush_rewrite_rules( false );
-        update_option( 'smacg_pp_rewrite_flushed', '1.0.0' );
+        update_option( 'smacg_pp_rewrite_flushed', $current );
     }
 }
 
@@ -86,6 +91,9 @@ add_action( 'switch_theme', function () {
 
 /* ============================================================
    3. 解析 URL → 找 user → 載入模板
+   ------------------------------------------------------------
+   v1.1.0：移除模糊比對 fallback（避免 /u/taro/ 跑去顯示 taro2）
+   只依序嘗試 user_login（完全匹配）、user_nicename（slug 完全匹配）
    ============================================================ */
 add_action( 'template_redirect', 'smacg_pp_dispatch' );
 function smacg_pp_dispatch() {
@@ -95,29 +103,20 @@ function smacg_pp_dispatch() {
     // URL 解碼（支援中文 username）
     $username = urldecode( $username );
 
-    // 找使用者（依序試 user_login / user_nicename / display_name）
+    // 1) 完全匹配 user_login
     $user = get_user_by( 'login', $username );
+
+    // 2) 完全匹配 user_nicename (slug)
     if ( ! $user ) {
         $user = get_user_by( 'slug', $username );
     }
-    if ( ! $user ) {
-        // 最後試 user_nicename 模糊
-        $u = get_users( [
-            'search'         => $username,
-            'search_columns' => [ 'user_nicename', 'user_login' ],
-            'number'         => 1,
-            'fields'         => [ 'ID' ],
-        ] );
-        $user = ! empty( $u ) ? get_userdata( $u[0]->ID ) : null;
-    }
 
-    // 找不到使用者 → 404
+    // 找不到 → 直接 404，不再做模糊比對（避免誤指）
     if ( ! $user ) {
         global $wp_query;
         $wp_query->set_404();
         status_header( 404 );
         nocache_headers();
-        // 讓 404 模板處理
         return;
     }
 
@@ -130,6 +129,15 @@ function smacg_pp_dispatch() {
         // SEO：發送 meta tags
         add_action( 'wp_head', 'smacg_pp_render_meta_tags', 1 );
 
+        // v1.1.0：覆寫 Yoast / Rank Math 的 canonical
+        add_filter( 'wpseo_canonical',                 'smacg_pp_filter_seo_canonical', 10, 1 );
+        add_filter( 'rank_math/frontend/canonical',    'smacg_pp_filter_seo_canonical', 10, 1 );
+        add_filter( 'aioseo_canonical_url',            'smacg_pp_filter_seo_canonical', 10, 1 );
+
+        // 同時讓它們的 OG tags 用我們的資料
+        add_filter( 'wpseo_opengraph_title',           'smacg_pp_filter_seo_title', 10, 1 );
+        add_filter( 'rank_math/opengraph/facebook/og_title', 'smacg_pp_filter_seo_title', 10, 1 );
+
         include $template;
         exit;
     }
@@ -141,7 +149,12 @@ function smacg_pp_dispatch() {
 }
 
 /* ============================================================
-   4. SEO Meta Tags（OpenGraph / Twitter Card / noindex）
+   4. SEO Meta Tags
+   ------------------------------------------------------------
+   v1.1.0：
+     - 偵測到 Yoast / Rank Math / AIOSEO 啟用時，不自前 echo canonical
+       （改由上面的 filter 提供 URL）
+     - OG / Twitter tags 仍照發（這些 SEO 外掛通常會跳過 user 頁面）
    ============================================================ */
 function smacg_pp_render_meta_tags() {
     $user = smacg_get_public_profile_user();
@@ -186,8 +199,44 @@ function smacg_pp_render_meta_tags() {
     printf( "<meta name=\"twitter:title\" content=\"%s\">\n", esc_attr( $title ) );
     printf( "<meta name=\"twitter:description\" content=\"%s\">\n", esc_attr( wp_strip_all_tags( $desc ) ) );
     printf( "<meta name=\"twitter:image\" content=\"%s\">\n", esc_url( $avatar ) );
-    printf( "<link rel=\"canonical\" href=\"%s\">\n", esc_url( $url ) );
+
+    // v1.1.0：只有在沒裝 SEO 外掛時才自前發 canonical
+    if ( ! smacg_pp_has_seo_plugin() ) {
+        printf( "<link rel=\"canonical\" href=\"%s\">\n", esc_url( $url ) );
+    }
     echo "<!-- /SMACG Public Profile Meta -->\n\n";
+}
+
+/**
+ * v1.1.0 helper：偵測是否有主流 SEO 外掛
+ */
+function smacg_pp_has_seo_plugin() {
+    return defined( 'WPSEO_VERSION' )                 // Yoast
+        || defined( 'RANK_MATH_VERSION' )              // Rank Math
+        || defined( 'AIOSEO_VERSION' )                 // All in One SEO
+        || class_exists( 'WPSEO_Frontend' )
+        || class_exists( 'RankMath' );
+}
+
+/**
+ * v1.1.0 filter：覆寫 SEO 外掛的 canonical URL
+ */
+function smacg_pp_filter_seo_canonical( $canonical ) {
+    if ( ! smacg_is_public_profile_page() ) return $canonical;
+    $user = smacg_get_public_profile_user();
+    if ( ! $user ) return $canonical;
+    return smacg_get_public_profile_url( $user );
+}
+
+/**
+ * v1.1.0 filter：覆寫 SEO 外掛的 OG title
+ */
+function smacg_pp_filter_seo_title( $title ) {
+    if ( ! smacg_is_public_profile_page() ) return $title;
+    $user = smacg_get_public_profile_user();
+    if ( ! $user ) return $title;
+    $display = $user->display_name ?: $user->user_login;
+    return sprintf( '%s 的個人頁 - %s', $display, get_bloginfo( 'name' ) );
 }
 
 /* ============================================================
@@ -196,9 +245,6 @@ function smacg_pp_render_meta_tags() {
 
 /**
  * 取得任一使用者的公開頁 URL
- *
- * @param int|string|WP_User $user_id_or_login user ID / login / WP_User
- * @return string URL（永遠回 http(s)://...，找不到就回首頁）
  */
 function smacg_get_public_profile_url( $user_id_or_login ) {
     $user = null;
@@ -212,7 +258,6 @@ function smacg_get_public_profile_url( $user_id_or_login ) {
     if ( ! $user ) return home_url( '/' );
 
     $slug = SMACG_PUBLIC_PROFILE_SLUG;
-    // 優先用 user_nicename（permalink-safe），fallback user_login
     $name = $user->user_nicename ?: $user->user_login;
 
     return home_url( '/' . $slug . '/' . rawurlencode( $name ) . '/' );
@@ -220,8 +265,6 @@ function smacg_get_public_profile_url( $user_id_or_login ) {
 
 /**
  * 在公開頁內取得當前正在顯示的 user 物件
- *
- * @return WP_User|null
  */
 function smacg_get_public_profile_user() {
     return $GLOBALS['smacg_pp_user_obj'] ?? null;
@@ -229,8 +272,6 @@ function smacg_get_public_profile_user() {
 
 /**
  * 判斷當前頁面是否為公開個人頁
- *
- * @return bool
  */
 function smacg_is_public_profile_page() {
     return ! empty( $GLOBALS['smacg_pp_user_obj'] );
@@ -238,16 +279,11 @@ function smacg_is_public_profile_page() {
 
 /**
  * 判斷觀看者能否看到某使用者的某區塊
- *
- * @param int    $owner_id  個人頁所屬使用者
- * @param string $section   區塊名：profile / watchlist / ratings / activity / email
- * @return bool
  */
 function smacg_can_view_profile_section( $owner_id, $section ) {
     $owner_id = (int) $owner_id;
     if ( ! $owner_id ) return false;
 
-    // 自己看自己一律可以
     if ( get_current_user_id() === $owner_id ) {
         return true;
     }
@@ -278,8 +314,6 @@ function smacg_can_view_profile_section( $owner_id, $section ) {
 
 /**
  * 判斷觀看者是否為頁面擁有者本人
- *
- * @return bool
  */
 function smacg_pp_is_owner() {
     $user = smacg_get_public_profile_user();
@@ -289,19 +323,17 @@ function smacg_pp_is_owner() {
 
 /* ============================================================
    6. 新使用者預設隱私：public_profile = 1（開）
-   ------------------------------------------------------------
-   依使用者決定：新註冊預設「開」個人頁
    ============================================================ */
 add_action( 'user_register', 'smacg_pp_set_default_privacy', 20 );
 function smacg_pp_set_default_privacy( $user_id ) {
     $existing = get_user_meta( $user_id, 'smacg_privacy', true );
-    if ( ! empty( $existing ) ) return;  // 已有設定就不覆蓋
+    if ( ! empty( $existing ) ) return;
 
     update_user_meta( $user_id, 'smacg_privacy', [
-        'public_profile'         => 1,  // 公開個人頁（開）
-        'public_watchlist'       => 1,  // 公開清單（開）
-        'show_email'             => 0,  // 顯示 email（關，預設保護隱私）
-        'show_continue_watching' => 1,  // 繼續觀看（開）
+        'public_profile'         => 1,
+        'public_watchlist'       => 1,
+        'show_email'             => 0,
+        'show_continue_watching' => 1,
     ] );
 }
 
@@ -320,13 +352,9 @@ function smacg_pp_admin_bar_link( $wp_admin_bar ) {
         'meta'  => [ 'title' => '查看你的公開個人頁' ],
     ] );
 }
+
 /* ============================================================
    8. Hero 區等級徽章注入（Batch 2A-4）
-   ------------------------------------------------------------
-   page-public-profile.php 可在 hero 顯示名稱旁呼叫：
-       do_action( 'smacg_public_profile_hero_meta', $user->ID );
-
-   實作位於 inc/level-badge-display.php（在 functions.php 中後載入）
    ============================================================ */
 add_action( 'wp_footer', function () {
     if ( ! smacg_is_public_profile_page() ) return;
@@ -334,8 +362,6 @@ add_action( 'wp_footer', function () {
     $user = smacg_get_public_profile_user();
     if ( ! $user ) return;
 
-    // 若模板未在 hero 主動呼叫 hook，這裡用 JS 將徽章注入到名稱後方
-    // （fallback；推薦做法仍是直接在 page-public-profile.php 加入 do_action）
     $badge = function_exists( 'smacg_render_level_badge' )
         ? smacg_render_level_badge( $user->ID, 'lg', [ 'show_job' => true ] )
         : '';
