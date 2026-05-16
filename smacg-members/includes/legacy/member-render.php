@@ -1,7 +1,21 @@
 <?php
 /**
  * Member Center - Render Layer
+ *
  * 各 tab 的 HTML 輸出。清單先渲染前 N 筆，其餘 AJAX 載入（桌機 20 / 行動 12）。
+ *
+ * @package SMACG\Members
+ * @version 1.1.0
+ *
+ * Changelog:
+ *   1.1.0 (2026-05-16)
+ *     - smacg_render_notification_prefs_card()：fallback 預設值改呼叫
+ *       smacg_get_notification_prefs_defaults()，與後端 notifications-system.php
+ *       v1.1.0 完全對齊（email 預設全關、email_digest 預設 'off'），避免
+ *       UI 初次渲染與資料層不一致造成「看似已開但實際關閉」的錯覺。
+ *     - smacg_render_settings()：fallback 預設值改呼叫
+ *       smacg_get_user_privacy_defaults()，與 privacy.php v1.0.0 對齊。
+ *   1.0.0 (2026-05-15) 首版：從主題搬遷至 smacg-members 外掛。
  */
 
 if ( ! defined( 'ABSPATH' ) ) exit;
@@ -822,17 +836,25 @@ function smacg_render_career( $uid, $lvl_info = null, $job_title = null ) {
 }
 
 
-/* ===== Tab 7：設定 ===== */
+/* ===== Tab 7：設定（v1.1.0：fallback 預設值改呼叫 smacg_get_user_privacy_defaults）===== */
 function smacg_render_settings( $user, $privacy = null, $is_owner = true ) {
     if ( $privacy === null && function_exists( 'smacg_get_user_privacy' ) ) {
         $privacy = smacg_get_user_privacy( $user->ID );
     }
-    $privacy = wp_parse_args( (array) $privacy, [
-        'show_email'             => 0,
-        'public_profile'         => 1,
-        'public_watchlist'       => 1,
-        'show_continue_watching' => 1,
-    ] );
+
+    // v1.1.0：fallback 預設值改呼叫資料層的 defaults（與 privacy.php 對齊）
+    // 注意：show_continue_watching 預設為 1（顯示），與舊行為一致。
+    $fallback_defaults = function_exists( 'smacg_get_user_privacy_defaults' )
+        ? smacg_get_user_privacy_defaults()
+        : [
+            'show_email'             => '0',
+            'public_profile'         => '1',
+            'public_watchlist'       => '1',
+            'show_continue_watching' => '1',
+        ];
+
+    $privacy = wp_parse_args( (array) $privacy, $fallback_defaults );
+
     $nonce = wp_create_nonce( 'smacg_privacy' );
 
     $toggles = [
@@ -908,25 +930,31 @@ function smacg_render_settings( $user, $privacy = null, $is_owner = true ) {
     <?php
 }
 
-/* ===== 通知偏好卡片 ===== */
+/* ===== 通知偏好卡片（v1.1.0：fallback 預設值改呼叫資料層 defaults）===== */
 function smacg_render_notification_prefs_card( $uid ) {
     $uid = (int) $uid;
     if ( $uid <= 0 ) return;
+
+    // v1.1.0：fallback 預設值改呼叫 smacg_get_notification_prefs_defaults()，
+    // 與 notifications-system.php v1.1.0 完全對齊：email 預設全關、email_digest 'off'。
+    $fallback_defaults = function_exists( 'smacg_get_notification_prefs_defaults' )
+        ? smacg_get_notification_prefs_defaults()
+        : [
+            'follow_site'         => 1, 'follow_email'        => 0,
+            'comment_reply_site'  => 1, 'comment_reply_email' => 0,
+            'rating_site'         => 1, 'rating_email'        => 0,
+            'level_up_site'       => 1, 'level_up_email'      => 0,
+            'badge_site'          => 1, 'badge_email'         => 0,
+            'system_site'         => 1, 'system_email'        => 0,
+            'email_digest'        => 'off',
+        ];
 
     $prefs = function_exists( 'smacg_get_notification_prefs' )
         ? smacg_get_notification_prefs( $uid )
         : ( get_user_meta( $uid, 'smacg_notification_prefs', true ) ?: [] );
     if ( ! is_array( $prefs ) ) $prefs = [];
 
-    $prefs = wp_parse_args( $prefs, [
-        'follow_site'        => 1, 'follow_email'        => 1,
-        'comment_reply_site' => 1, 'comment_reply_email' => 1,
-        'rating_site'        => 1, 'rating_email'        => 0,
-        'level_up_site'      => 1, 'level_up_email'      => 0,
-        'badge_site'         => 1, 'badge_email'         => 0,
-        'system_site'        => 1, 'system_email'        => 1,
-        'email_digest'       => 'daily',
-    ] );
+    $prefs = wp_parse_args( $prefs, $fallback_defaults );
     $nonce = wp_create_nonce( 'smacg_notif_save_prefs' );
 
     $types = [
