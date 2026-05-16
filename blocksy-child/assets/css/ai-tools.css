@@ -1,0 +1,332 @@
+/**
+ * AI Tools page styles
+ * Path: blocksy-child/assets/css/ai-tools.css
+ *
+ * @version 1.0.0
+ * @since   2026-05-16
+ *
+ * 主視覺：綠色系（#10b981 / #34d399），呼應「AI / 創新 / 科技」氣質。
+ */
+
+/* ============ Hero ============ */
+.ai-hero {
+  background:
+    radial-gradient(ellipse at 20% 20%, rgba(16, 185, 129, 0.18), transparent 55%),
+    radial-gradient(ellipse at 80% 80%, rgba(59, 130, 246, 0.12), transparent 60%),
+    linear-gradient(135deg, rgba(16, 185, 129, 0.12) 0%, rgba(59, 130, 246, 0.08) 100%);
+  border-bottom: 1px solid var(--glass-border, rgba(255, 255, 255, 0.08));
+  padding: 56px 0 44px;
+  position: relative;
+  overflow: hidden;
+}
+
+.ai-hero::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(2px 2px at 20% 30%, rgba(52, 211, 153, 0.4), transparent),
+    radial-gradient(1.5px 1.5px at 70% 70%, rgba(59, 130, 246, 0.4), transparent),
+    radial-gradient(1px 1px at 40% 80%, rgba(255, 255, 255, 0.5), transparent);
+  background-size: 200px 200px;
+  opacity: 0.6;
+  pointer-events: none;
+}
+
+.ai-hero .container {
+  position: relative;
+  z-index: 1;
+}
+
+.ai-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(16, 185, 129, 0.15);
+  border: 1px solid rgba(16, 185, 129, 0.35);
+  color: #34d399;
+  border-radius: var(--radius-pill, 999px);
+  padding: 5px 14px;
+  font-size: 12px;
+  font-weight: 600;
+  margin-bottom: 16px;
+  letter-spacing: 0.05em;
+  box-shadow: 0 0 14px rgba(16, 185, 129, 0.2);
+}
+
+.ai-hero .page-title {
+  font-size: clamp(24px, 4vw, 36px);
+  font-weight: 800;
+  color: var(--text-primary, #f5f7fa);
+  margin: 0 0 10px;
+  letter-spacing: -0.01em;
+  background: linear-gradient(135deg, #ffffff 0%, #34d399 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.ai-hero .page-subtitle {
+  font-size: clamp(13px, 1.4vw, 15px);
+  color: var(--text-muted, #c2c8d2);
+  margin: 0;
+  font-weight: 500;
+}
+
+/* ============ Filter ============ */
+.tool-filter {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin: 28px 0 24px;
+  padding-top: 28px;
+}
+
+.tool-filter-btn {
+  padding: 7px 16px;
+  border-radius: var(--radius-pill, 999px);
+  font-size: 13px;
+  font-weight: 600;
+  background: var(--glass-bg, rgba(28, 32, 46, 0.6));
+  border: 1px solid var(--glass-border, rgba(255, 255, 255, 0.08));
+  color: var(--text-secondary, #c2c8d2);
+  cursor: pointer;
+  transition: all 0.22s ease;
+  font-family: inherit;
+  letter-spacing: 0.03em;
+}
+
+.tool-filter-btn:hover {
+  color: var(--text-primary, #fff);
+  background: var(--glass-bg-mid, rgba(28, 32, 46, 0.85));
+  transform: translateY(-1px);
+}
+
+.tool-filter-btn.active {
+  background: rgba(16, 185, 129, 0.2);
+  border-color: rgba(16, 185, 129, 0.5);
+  color: #34d399;
+  box-shadow: 0 0 16px rgba(16, 185, 129, 0.3);
+}
+
+/* ============ Tools Grid ============ */
+.tools-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 20px;
+  padding-bottom: 40px;
+}
+
+/* ============ Tool Card ============ */
+.tool-card {
+  border-radius: 20px;
+  padding: 24px;
+  background: var(--glass-bg, rgba(28, 32, 46, 0.6));
+  border: 1px solid var(--glass-border, rgba(255, 255, 255, 0.08));
+  transition: transform 0.3s ease, box-shadow 0.3s ease, border-color 0.3s ease;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  position: relative;
+  overflow: hidden;
+  animation: ai-card-in 0.5s ease both;
+}
+
+/* 卡片右上角微光（hover 才顯） */
+.tool-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 120px;
+  height: 120px;
+  background: radial-gradient(circle at top right, rgba(52, 211, 153, 0.18), transparent 70%);
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  pointer-events: none;
+}
+
+.tool-card:hover {
+  transform: translateY(-6px);
+  box-shadow: 0 14px 36px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(52, 211, 153, 0.25);
+  border-color: rgba(52, 211, 153, 0.25);
+}
+
+.tool-card:hover::before {
+  opacity: 1;
+}
+
+/* filter 隱藏 */
+.tool-card.is-hidden {
+  display: none;
+}
+
+.tool-card-header {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.tool-icon {
+  width: 52px;
+  height: 52px;
+  border-radius: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 26px;
+  flex-shrink: 0;
+  line-height: 1;
+  transition: transform 0.3s ease;
+}
+
+.tool-card:hover .tool-icon {
+  transform: scale(1.08) rotate(-3deg);
+}
+
+.tool-name {
+  font-size: 17px;
+  font-weight: 800;
+  color: var(--text-primary, #f5f7fa);
+  margin-bottom: 2px;
+  letter-spacing: 0.01em;
+}
+
+.tool-tag {
+  font-size: 11px;
+  color: var(--text-muted, #8a91a0);
+  font-weight: 600;
+  letter-spacing: 0.05em;
+}
+
+.tool-desc {
+  font-size: 13px;
+  color: var(--text-secondary, #c2c8d2);
+  line-height: 1.75;
+  flex: 1;
+}
+
+.tool-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: auto;
+  padding-top: 6px;
+}
+
+/* Badge */
+.tool-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 4px 12px;
+  border-radius: var(--radius-pill, 999px);
+  letter-spacing: 0.05em;
+}
+
+.tool-badge.free     { background: rgba(34, 197, 94, 0.15);  color: #22c55e; border: 1px solid rgba(34, 197, 94, 0.25); }
+.tool-badge.paid     { background: rgba(249, 115, 22, 0.15); color: #f97316; border: 1px solid rgba(249, 115, 22, 0.25); }
+.tool-badge.freemium { background: rgba(251, 191, 36, 0.15); color: #fbbf24; border: 1px solid rgba(251, 191, 36, 0.25); }
+
+/* 前往連結 */
+.tool-link {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--accent-blue, #5ee6ff);
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  text-decoration: none;
+  padding: 4px 10px;
+  border-radius: 8px;
+  transition: all 0.2s ease;
+}
+
+.tool-link:hover {
+  background: rgba(94, 230, 255, 0.12);
+  color: #87ecff;
+  transform: translateX(2px);
+}
+
+/* ============ Empty State ============ */
+.ai-empty {
+  text-align: center;
+  padding: 50px 28px;
+  border-radius: 16px;
+  margin: 20px 0;
+}
+
+.ai-empty i {
+  font-size: 42px;
+  color: var(--text-muted, #8a91a0);
+  margin-bottom: 14px;
+  display: block;
+}
+
+.ai-empty p {
+  font-size: 14px;
+  color: var(--text-secondary, #c2c8d2);
+  margin: 0;
+}
+
+/* ============ Disclaimer ============ */
+.ai-disclaimer {
+  display: flex;
+  gap: 14px;
+  align-items: flex-start;
+  padding: 18px 22px;
+  border-radius: 14px;
+  margin-top: 24px;
+  font-size: 13px;
+  line-height: 1.7;
+  color: var(--text-secondary, #c2c8d2);
+  border: 1px solid rgba(251, 191, 36, 0.2);
+  background: rgba(251, 191, 36, 0.05);
+}
+
+.ai-disclaimer i {
+  font-size: 18px;
+  color: #fbbf24;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.ai-disclaimer strong {
+  color: #fbbf24;
+  font-weight: 700;
+}
+
+/* ============ 進場動畫 ============ */
+@keyframes ai-card-in {
+  0%   { opacity: 0; transform: translateY(16px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+
+.tools-grid .tool-card:nth-child(1)  { animation-delay: 0.00s; }
+.tools-grid .tool-card:nth-child(2)  { animation-delay: 0.04s; }
+.tools-grid .tool-card:nth-child(3)  { animation-delay: 0.08s; }
+.tools-grid .tool-card:nth-child(4)  { animation-delay: 0.12s; }
+.tools-grid .tool-card:nth-child(5)  { animation-delay: 0.16s; }
+.tools-grid .tool-card:nth-child(6)  { animation-delay: 0.20s; }
+.tools-grid .tool-card:nth-child(7)  { animation-delay: 0.24s; }
+.tools-grid .tool-card:nth-child(8)  { animation-delay: 0.28s; }
+.tools-grid .tool-card:nth-child(9)  { animation-delay: 0.32s; }
+.tools-grid .tool-card:nth-child(n+10) { animation-delay: 0.36s; }
+
+/* ============ 響應式 ============ */
+@media (max-width: 768px) {
+  .ai-hero { padding: 40px 0 32px; }
+  .tools-grid { grid-template-columns: 1fr; gap: 14px; }
+  .tool-card { padding: 20px; }
+  .tool-filter { gap: 6px; }
+  .tool-filter-btn { padding: 6px 12px; font-size: 12px; }
+}
+
+/* ============ reduced-motion ============ */
+@media (prefers-reduced-motion: reduce) {
+  .tool-card { animation: none; }
+  .tool-card:hover { transform: none; }
+  .tool-card:hover .tool-icon { transform: none; }
+}
