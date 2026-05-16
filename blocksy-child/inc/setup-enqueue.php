@@ -615,6 +615,41 @@ add_action( 'wp_enqueue_scripts', function () {
 }, 29 );
 
 /* ============================================================
+   AI Tools 頁面（v2.9.0 - 2026-05-16）
+   ------------------------------------------------------------
+   - 條件：is_page_template( 'page-ai-tools.php' )
+   - CSS + JS（純前端 filter，無 localize）
+   ============================================================ */
+add_action( 'wp_enqueue_scripts', function () {
+    if ( ! is_page_template( 'page-ai-tools.php' ) ) return;
+
+    $base_dir = weixiaoacg_THEME_DIR;
+    $base_url = weixiaoacg_THEME_URL;
+
+    $css_path = $base_dir . '/assets/css/ai-tools.css';
+    if ( file_exists( $css_path ) ) {
+        wp_enqueue_style(
+            'smacg-ai-tools',
+            $base_url . '/assets/css/ai-tools.css',
+            [ 'weixiaoacg-style', 'weixiaoacg-fa6' ],
+            filemtime( $css_path )
+        );
+    }
+
+    $js_path = $base_dir . '/assets/js/ai-tools.js';
+    if ( file_exists( $js_path ) ) {
+        wp_enqueue_script(
+            'smacg-ai-tools',
+            $base_url . '/assets/js/ai-tools.js',
+            [],
+            filemtime( $js_path ),
+            true
+        );
+    }
+}, 22 );
+
+
+/* ============================================================
    wpForo 論壇樣式覆蓋（玻璃擬態主題對齊）
    ============================================================ */
 add_action( 'wp_enqueue_scripts', function () {
