@@ -1,11 +1,22 @@
 <?php
 /**
  * Category / Channel Archive Template
+ *
+ * Path: wp-content/themes/blocksy-child/category.php
+ * @version 2.0.0 (2026-05-16)
+ *
+ * Changelog:
+ *   2.0.0 (2026-05-16) AJAX 切換版：
+ *     - Filter Tabs 改用 AJAX 切換，不再整頁刷新
+ *     - 文章列表本體拆到 template-parts/news-list.php，PHP/AJAX 共用同一份
+ *     - 列表外層加 #news-list-root 容器，data-* 給 JS 用
+ *     - 直接訪問 URL（含外站連入、SEO）仍走完整 PHP 渲染（漸進增強）
+ *     - PHP 端會根據 channel query var 自動點亮對應 tab
+ *   1.0.0 初版（玻璃擬態 + Swiper 輪播 + 側欄）
+ *
  * 服務 URL：
  *   /news/  /review/  /feature/  /announcement/
  *   /news/anime/  /news/voice-actor/  /review/game/  ...
- *
- * Path: wp-content/themes/blocksy-child/category.php
  */
 
 if ( ! defined( 'ABSPATH' ) ) exit;
@@ -18,6 +29,9 @@ $current_term   = ( $queried instanceof WP_Term ) ? $queried : null;
 $current_tax    = $current_term ? $current_term->taxonomy : '';
 $current_termid = $current_term ? $current_term->term_id  : 0;
 $current_slug   = $current_term ? $current_term->slug     : '';
+
+// ── 取得目前 channel（若有，例如 /news/cosplay/） ──
+$current_channel = (string) get_query_var( 'channel' );
 
 // ── 頁面標題 / 副標題（依分類動態顯示） ──
 $page_titles = [
@@ -70,7 +84,7 @@ $popular_query = new WP_Query( [
     'tax_query'           => $archive_tax_query,
 ] );
 
-// ── 熱門標籤（全站）──
+// ── 熱門標籤（全站） ──
 $popular_tags = get_tags( [
     'orderby'    => 'count',
     'order'      => 'DESC',
@@ -78,20 +92,18 @@ $popular_tags = get_tags( [
     'hide_empty' => true,
 ] );
 
-// ── Filter Tabs：
+// ── Filter Tabs ──
 // 在 category 頁顯示 channel 列表；在 channel 頁顯示 category 列表
 $filter_label  = '';
 $filter_terms  = [];
 $filter_all_url = '';
 if ( 'category' === $current_tax ) {
-    // 例如在 /news/ 顯示所有 channel
-    $filter_label  = '頻道';
-    $filter_terms  = get_terms( [ 'taxonomy' => 'channel', 'hide_empty' => true ] );
+    $filter_label   = '頻道';
+    $filter_terms   = get_terms( [ 'taxonomy' => 'channel', 'hide_empty' => true ] );
     $filter_all_url = get_term_link( $current_term );
 } elseif ( 'channel' === $current_tax ) {
-    // 例如在 /news/anime/ 顯示「全部新聞 / 評論 / 專題」
-    $filter_label  = '類型';
-    $filter_terms  = get_categories( [
+    $filter_label   = '類型';
+    $filter_terms   = get_categories( [
         'slug'       => [ 'announcement', 'news', 'review', 'feature' ],
         'hide_empty' => false,
     ] );
@@ -101,7 +113,7 @@ if ( 'category' === $current_tax ) {
 
 <!-- 額外載入本頁專用 CSS / JS -->
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/swiper@11/swiper-bundle.min.css" />
-<link rel="stylesheet" href="<?php echo esc_url( get_stylesheet_directory_uri() . '/css/news.css' ); ?>" />
+<link rel="stylesheet" href="<?php echo esc_url( get_stylesheet_directory_uri() . '/assets/css/news.css' ); ?>" />
 
 <!-- ===== PAGE HERO ===== -->
 <div class="page-hero">
@@ -166,20 +178,32 @@ if ( 'category' === $current_tax ) {
   </div>
   <?php endif; ?>
 
-  <!-- ── Filter Tabs（頻道 / 類型切換） ── -->
+  <!-- ── Filter Tabs（頻道 / 類型切換，AJAX） ── -->
   <?php if ( ! empty( $filter_terms ) ) : ?>
-  <div class="news-filter">
-    <a href="<?php echo esc_url( $filter_all_url ); ?>" class="news-filter-btn active">全部</a>
+  <div class="news-filter" id="news-filter-bar"
+       data-base-slug="<?php echo esc_attr( $current_slug ); ?>"
+       data-base-tax="<?php echo esc_attr( $current_tax ); ?>">
+
+    <a href="<?php echo esc_url( $filter_all_url ); ?>"
+       class="news-filter-btn<?php echo $current_channel === '' ? ' active' : ''; ?>"
+       data-ajax="1"
+       data-target="all">全部</a>
+
     <?php foreach ( $filter_terms as $t ) :
-      // 在 category 頁，這裡列出的是 channel：連到 /{current_cat}/{channel}/ 才符合 editorial routing
-      if ( 'category' === $current_tax ) {
-          $tab_url = home_url( '/' . $current_slug . '/' . $t->slug . '/' );
-      } else {
-          // 在 channel 頁，列的是 category：連到 /{cat}/{current_channel}/
-          $tab_url = home_url( '/' . $t->slug . '/' . $current_slug . '/' );
-      }
+        if ( 'category' === $current_tax ) {
+            $tab_url    = home_url( '/' . $current_slug . '/' . $t->slug . '/' );
+            $target_val = $t->slug;
+            $is_active  = ( $current_channel === $t->slug );
+        } else {
+            $tab_url    = home_url( '/' . $t->slug . '/' . $current_slug . '/' );
+            $target_val = $t->slug;
+            $is_active  = false; // channel 頁的 active 邏輯保留給未來擴充
+        }
     ?>
-      <a href="<?php echo esc_url( $tab_url ); ?>" class="news-filter-btn">
+      <a href="<?php echo esc_url( $tab_url ); ?>"
+         class="news-filter-btn<?php echo $is_active ? ' active' : ''; ?>"
+         data-ajax="1"
+         data-target="<?php echo esc_attr( $target_val ); ?>">
         <?php echo esc_html( $t->name ); ?>
       </a>
     <?php endforeach; ?>
@@ -188,59 +212,17 @@ if ( 'category' === $current_tax ) {
 
   <div class="news-layout">
 
-    <!-- ── 主要新聞區（使用主迴圈，由 WordPress 自動篩文章） ── -->
-    <div class="news-main-grid">
+    <!-- ── 主要新聞區（AJAX 切換目標容器） ── -->
+    <div class="news-main-grid"
+         id="news-list-root"
+         data-content-type="<?php echo esc_attr( $current_slug ); ?>"
+         data-channel="<?php echo esc_attr( $current_channel ); ?>">
 
-      <?php if ( have_posts() ) : ?>
-        <div class="news-card-list">
-          <?php while ( have_posts() ) : the_post();
-            $cats      = get_the_category();
-            $cat_label = ! empty( $cats ) ? esc_html( $cats[0]->name ) : '文章';
-          ?>
-          <a href="<?php the_permalink(); ?>" class="news-card glass">
-            <div class="news-card-img">
-              <?php if ( has_post_thumbnail() ) : ?>
-                <?php the_post_thumbnail( 'medium', [ 'alt' => get_the_title(), 'loading' => 'lazy' ] ); ?>
-              <?php else :
-                preg_match( '/<img[^>]+src=["\']([^"\']+)["\']/', get_the_content(), $cm );
-                if ( ! empty( $cm[1] ) ) : ?>
-                  <img src="<?php echo esc_url( $cm[1] ); ?>"
-                       alt="<?php echo esc_attr( get_the_title() ); ?>"
-                       loading="lazy" />
-                <?php else : ?>
-                  <span class="news-card-placeholder">📰</span>
-                <?php endif; ?>
-              <?php endif; ?>
-            </div>
-            <div class="news-card-body">
-              <div class="news-card-tag"><?php echo $cat_label; ?></div>
-              <div class="news-card-title"><?php the_title(); ?></div>
-              <div class="news-card-meta">
-                <i class="fa-regular fa-clock"></i> <?php echo get_the_date( 'Y-m-d' ); ?>
-              </div>
-            </div>
-          </a>
-          <?php endwhile; ?>
-        </div>
-
-        <!-- ── 分頁（自動跟主查詢） ── -->
-        <div class="news-pagination">
-          <?php
-          the_posts_pagination( [
-              'prev_text' => '<i class="fa-solid fa-chevron-left"></i>',
-              'next_text' => '<i class="fa-solid fa-chevron-right"></i>',
-              'end_size'  => 2,
-              'mid_size'  => 1,
-          ] );
-          ?>
-        </div>
-
-      <?php else : ?>
-        <div class="news-empty glass">
-          <i class="fa-regular fa-newspaper"></i>
-          <p>目前沒有文章，請稍後再來查看。</p>
-        </div>
-      <?php endif; ?>
+      <?php
+      // 列表本體拆成 partial，AJAX 也回傳同一份內容
+      set_query_var( 'news_main_query', $wp_query );
+      get_template_part( 'template-parts/news-list' );
+      ?>
 
     </div>
 
