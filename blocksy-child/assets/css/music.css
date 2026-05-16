@@ -429,3 +429,32 @@
     animation-duration:.01ms!important;transition-duration:.01ms!important;
   }
 }
+/* === Fix：右欄溢出靠右問題 === */
+.music-layout{
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);  /* 兩欄都允許收縮 */
+  width: 100%;
+  box-sizing: border-box;
+}
+
+/* 兩欄都不能超過自己的格子 */
+.music-left,
+.music-right{
+  min-width: 0;     /* 關鍵：解開 grid item 預設 min-width:auto，避免子內容把欄撐爆 */
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+/* 內部所有卡片也統一不能爆寬 */
+.music-section-card,
+.music-hero,
+.coming-soon-card{
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+/* 水平捲動列：限制不超過父寬 */
+.ost-carousel,
+.playlist-row{
+  max-width: 100%;
+  min-width: 0;
+}
