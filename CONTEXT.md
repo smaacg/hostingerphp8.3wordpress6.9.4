@@ -415,3 +415,22 @@ GamiPress 自有表不在此列。
 - 主 repo：https://github.com/smaacg/hostingerphp8.3wordpress6.9.4
 - 舊主 repo（已併入）：https://github.com/smaacg/anime-sync-pro-2-
 - 線上站：https://dev.weisianacg.com/
+
+## 2026-05-16 修正紀錄（Batch P1‑P2 render bug）
+
+- public-profile.php → v1.2.1 (hot-fix #1 已部署於前述版本)
+- page-public-profile.php → 修正 hero args key
+- public-profile-render.php → v1.2.1 修正 5 個 key mismatch
+- public-profile.js → v1.1.0 修正 4 個 selector mismatch
+
+### 已驗證無需修改
+- follow-system.php v1.1.0
+- notifications-system.php v1.1.0
+- member-stats.php v2.1.0
+- member-render.php v1.1.0
+- member.js v2.2.0
+
+### Known low‑risk / defensive‑coding TODO（不修）
+- deleted_user 不清持久 object cache（TTL 自然失效）
+- smacg_create_notification 未驗 user 存在（cron 30 天清理）
+- daily follow counter 非原子（cooldown 已防護）
