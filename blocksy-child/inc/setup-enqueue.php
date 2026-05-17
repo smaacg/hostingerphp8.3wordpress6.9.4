@@ -4,7 +4,16 @@
  *
  * @package weixiaoacg
  * @subpackage Enqueue
- * @version 2.9.1 (2026-05-16)
+ * @version 2.9.2 (2026-05-17)
+ *
+ * v2.9.2 變更 — Public Profile 跑版修復（2026-05-17）：
+ *   - smacg_is_public_profile_page() 單一條件改為三重防護：
+ *       1) function_exists + smacg_is_public_profile_page()（外掛載入正常時）
+ *       2) get_query_var('smacg_pp_user')（rewrite 已 parse 但全域變數未設）
+ *       3) preg_match /u/{username}/（rewrite 失效時的最後保險）
+ *   - 補載 member.css 作為 public-profile.css 的 --mc-* CSS 變數來源
+ *     並把 weixiaoacg-member 設為 smacg-public-profile 的依賴，
+ *     確保載入順序正確。
  *
  * v2.9.1 變更 — Pilgrimage 頁面：
  *   - 新增 page-pilgrimage.php 範本的條件式 CSS 載入
@@ -330,22 +339,63 @@ add_filter( 'litespeed_optimize_css_excludes', function ( $excludes ) {
 } );
 
 /* ============================================================
-   Public Profile 公開個人頁（v2.3.0 - 2026-05-13）
+   Public Profile 公開個人頁（v2.9.2 - 2026-05-17）
+   ------------------------------------------------------------
+   v2.9.2 跑版修復：
+     - 改用三重判斷，避免 smacg-social 外掛載入時序 / rewrite flush
+       時序問題導致 CSS 完全沒載入。
+     - 補載 member.css（提供 --mc-* CSS 變數），並將其設為
+       public-profile.css 的依賴，確保載入順序。
    ============================================================ */
 add_action( 'wp_enqueue_scripts', function () {
-    if ( ! function_exists( 'smacg_is_public_profile_page' ) || ! smacg_is_public_profile_page() ) {
-        return;
+
+    /* ---------- 三重判斷：任一通過即視為公開個人頁 ---------- */
+    $is_pp = false;
+
+    // 1) 標準判斷：外掛 helper 函式（最可靠，外掛正常載入時用此）
+    if ( function_exists( 'smacg_is_public_profile_page' )
+         && smacg_is_public_profile_page() ) {
+        $is_pp = true;
     }
+
+    // 2) Query var 判斷：rewrite 已解析但 dispatch 尚未設定全域變數時用此
+    if ( ! $is_pp && get_query_var( 'smacg_pp_user' ) ) {
+        $is_pp = true;
+    }
+
+    // 3) URL pattern 判斷：rewrite rule 失效 / 尚未 flush 時的最後保險
+    if ( ! $is_pp && isset( $_SERVER['REQUEST_URI'] ) ) {
+        $uri = wp_parse_url( $_SERVER['REQUEST_URI'], PHP_URL_PATH );
+        if ( $uri && preg_match( '#^/u/[^/]+/?#', $uri ) ) {
+            $is_pp = true;
+        }
+    }
+
+    if ( ! $is_pp ) return;
 
     $base_dir = weixiaoacg_THEME_DIR;
     $base_url = weixiaoacg_THEME_URL;
 
+    /* ---------- 先載 member.css（提供 --mc-* CSS 變數） ---------- */
+    if ( ! wp_style_is( 'weixiaoacg-member', 'enqueued' ) ) {
+        $member_css = $base_dir . '/assets/css/member.css';
+        if ( file_exists( $member_css ) ) {
+            wp_enqueue_style(
+                'weixiaoacg-member',
+                $base_url . '/assets/css/member.css',
+                [ 'weixiaoacg-fa6' ],
+                filemtime( $member_css )
+            );
+        }
+    }
+
+    /* ---------- public-profile.css（依賴 member.css） ---------- */
     $css_path = $base_dir . '/assets/css/public-profile.css';
     if ( file_exists( $css_path ) ) {
         wp_enqueue_style(
             'smacg-public-profile',
             $base_url . '/assets/css/public-profile.css',
-            [ 'weixiaoacg-fa6' ],
+            [ 'weixiaoacg-fa6', 'weixiaoacg-member' ],
             filemtime( $css_path )
         );
 
@@ -372,6 +422,7 @@ add_action( 'wp_enqueue_scripts', function () {
         ' );
     }
 
+    /* ---------- public-profile.js ---------- */
     $js_path = $base_dir . '/assets/js/public-profile.js';
     if ( file_exists( $js_path ) ) {
         wp_enqueue_script(
@@ -494,7 +545,6 @@ add_action( 'wp_enqueue_scripts', function () {
         );
     }
 }, 25 );
-
 /* ============================================================
    Career Selection 職業選擇（v2.6.1 - 2026-05-14）
    ============================================================ */
