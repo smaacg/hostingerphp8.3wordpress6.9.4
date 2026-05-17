@@ -2,9 +2,16 @@
 /**
  * 微笑動漫 Child Theme — footer.php
  *
+ * v1.2.0 (2026-05-17)
+ *  - Footer brand logo 由「微」字方塊改為與 header 一致的 PNG logo
+ *  - Schema.org Organization.logo 同步改為 PNG URL
+ *
  * v1.1.0 (2026-05-15)
  *  - 站內欄目新增「等級指南」連結 → /level-guide/
  */
+
+/* ── Logo URL（與 header.php 一致）── */
+$brand_logo_url = 'https://darkcyan-alpaca-757238.hostingersite.com/wp-content/uploads/2026/05/DHBdKsLa.png';
 
 /* ── 社群連結 ── */
 $social = [
@@ -40,7 +47,13 @@ foreach ( $social as [ $url ] ) {
         <a href="<?php echo esc_url( home_url('/') ); ?>"
            class="site-logo footer-logo"
            aria-label="<?php echo esc_attr( $site_name ); ?> 首頁">
-          <span class="logo-icon-box" aria-hidden="true">微</span>
+          <span class="logo-icon-box" aria-hidden="true">
+            <img src="<?php echo esc_url( $brand_logo_url ); ?>"
+                 alt="<?php echo esc_attr( $site_name ); ?>"
+                 style="height:38px;width:auto;vertical-align:middle;display:inline-block;"
+                 loading="lazy"
+                 decoding="async" />
+          </span>
           <span class="logo-text">
             <?php echo esc_html( $site_name ); ?><span class="logo-plus" aria-hidden="true">+</span>
           </span>
@@ -180,7 +193,7 @@ foreach ( $social as [ $url ] ) {
   "name": "微笑動漫",
   "alternateName": "weixiaoacg",
   "url": "<?php echo esc_js( home_url('/') ); ?>",
-  "logo": "<?php echo esc_js( get_stylesheet_directory_uri() . '/assets/images/logo.png' ); ?>",
+  "logo": "<?php echo esc_js( $brand_logo_url ); ?>",
   "sameAs": <?php echo wp_json_encode( $schema_same_as, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE ); ?>,
   "contactPoint": {
     "@type": "ContactPoint",
