@@ -9,6 +9,15 @@
  * 流程：取得 user → 隱私檢查 → 準備資料 → render
  *
  * @package weixiaoacg
+ *
+ * Changelog:
+ * - 2026-05-16 Bug #10 修正：
+ *   smacg_pp_render_hero() args key 與 render 端對齊
+ *     avatar         → avatar_url
+ *     display        → display_name
+ *     plan           → plan_label
+ *     email_display  → email
+ *   （can_view_email / stats / is_logged_in 為 render 端不讀取的多餘 key，已移除）
  */
 
 if ( ! defined( 'ABSPATH' ) ) exit;
@@ -126,19 +135,21 @@ get_header(); ?>
 
     <?php else : ?>
 
-        <?php smacg_pp_render_hero( $user, [
-            'avatar'         => $avatar_url,
-            'display'        => $display,
-            'bio'            => $bio,
-            'plan'           => $plan,
-            'lvl_info'       => $lvl_info,
-            'points'         => $points,
-            'reg_date'       => $reg_date,
-            'email_display'  => $email_display,
-            'can_view_email' => $can_view_email,
-            'stats'          => $stats,
-            'is_owner'       => $is_owner,
-            'is_logged_in'   => $is_logged_in,
+        <?php
+        /**
+         * Bug #10 修正：args key 對齊 smacg_pp_render_hero() 期待的鍵名
+         *   avatar_url / display_name / plan_label / email
+         */
+        smacg_pp_render_hero( $user, [
+            'avatar_url'   => $avatar_url,
+            'display_name' => $display,
+            'bio'          => $bio,
+            'plan_label'   => $plan,
+            'lvl_info'     => $lvl_info,
+            'points'       => $points,
+            'reg_date'     => $reg_date,
+            'email'        => $email_display,
+            'is_owner'     => $is_owner,
         ] ); ?>
 
         <nav class="pp-tabs" role="tablist">
