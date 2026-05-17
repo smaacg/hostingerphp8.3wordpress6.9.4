@@ -6,10 +6,24 @@
  *
  * @package    weixiaoacg
  * @subpackage smacg-social
- * @version    1.2.0
+ * @version    1.2.1
  * @since      1.0.0
  *
  * Changelog:
+ * - 1.2.1 (2026-05-16) — Bug fix release
+ *   * Bug #11：smacg_pp_render_activity() 讀取 $ev['time_human']（資料層 key），
+ *     若缺則 fallback 用 $ev['time'] 算 human_time_diff；移除錯誤的 'timestamp' key。
+ *   * Bug #12 + #14：smacg_pp_render_watchlist() 統一使用 'favorited' 鍵
+ *     （資料層 smacg_build_watchlist 實際輸出）。
+ *     - $counts['favorited'] 取代 $counts['favorite']
+ *     - filter button data-filter="favorited" 對齊卡片 data-status / data-favorited
+ *     - 計入純收藏項目（status='favorited' 由資料層產出）
+ *   * Bug #13：smacg_pp_render_ratings() 用 $r['post_id'] ?? $r['anime_id']
+ *     兼容資料層實際輸出（smacg_get_user_ratings 回傳 anime_id）。
+ *   * Bug #15：smacg_pp_render_overview() 讀 $stats['genres']
+ *     （資料層 smacg_calc_member_stats 實際輸出 key，非 top_genres）。
+ *   * smacg_pp_render_anime_card()：$is_favorite 改讀 $extra['favorited']，
+ *     data-favorited 屬性對齊；保留 $extra['favorite'] fallback 以防其他呼叫端傳舊 key。
  * - 1.2.0 (2026-05-16)
  *   * Hero 區粉絲/追蹤中數字改為 <a> 連結，指向 /u/{username}/followers/ 與 /following/。
  *   * 追蹤按鈕右側新增互追膠囊（🤝 互相追蹤），透過 smacg_is_mutual_follow() 判定。
@@ -148,7 +162,7 @@ function smacg_pp_render_hero( $user, $args ) {
 endif;
 
 /* ========================================================================
- * 一次性 inline CSS（v1.2.0 新增元素）
+ * 一次性 inline CSS
  * ====================================================================== */
 
 if ( ! function_exists( 'smacg_pp_render_inline_css' ) ) :
@@ -157,7 +171,7 @@ function smacg_pp_render_inline_css() {
     if ( $printed ) return;
     $printed = true;
     ?>
-    <style id="smacg-pp-inline-v120">
+    <style id="smacg-pp-inline-v121">
         .pp-count-link{text-decoration:none;color:inherit;transition:color .15s ease, transform .15s ease;display:inline-flex;align-items:center;gap:4px}
         .pp-count-link:hover{color:var(--theme-palette-color-1,#4a6cf7);transform:translateY(-1px)}
         .pp-count-link strong{font-weight:700}
@@ -203,7 +217,18 @@ function smacg_pp_render_overview( $user, $watchlist, $stats, $can_w, $can_r ) {
             <div class="pp-card">
                 <h2 class="pp-card-title">🏷️ 喜愛類型</h2>
                 <?php
-                $top_genres = ! empty( $stats['top_genres'] ) ? array_slice( (array) $stats['top_genres'], 0, 10 ) : [];
+                /**
+                 * Bug #15：資料層 smacg_calc_member_stats() 實際輸出 key 為 'genres'
+                 * （結構：[ ['name'=>..,'count'=>..,'percent'=>..], ... ]）。
+                 * 保留 'top_genres' fallback 以防其他資料來源沿用舊 key。
+                 */
+                $genres_src = [];
+                if ( ! empty( $stats['genres'] ) ) {
+                    $genres_src = (array) $stats['genres'];
+                } elseif ( ! empty( $stats['top_genres'] ) ) {
+                    $genres_src = (array) $stats['top_genres'];
+                }
+                $top_genres = $genres_src ? array_slice( $genres_src, 0, 10 ) : [];
                 if ( $top_genres ) :
                 ?>
                     <div class="pp-tag-cloud">
@@ -236,12 +261,23 @@ function smacg_pp_render_watchlist( $watchlist ) {
         echo '<section class="pp-section"><p class="pp-empty">尚未加入任何作品</p></section>';
         return;
     }
-    $counts = [ 'all' => 0, 'watching' => 0, 'completed' => 0, 'favorite' => 0, 'want' => 0 ];
+
+    /**
+     * Bug #12 + #14：
+     *  - 資料層 smacg_build_watchlist() 寫入 'favorited' (bool) 與
+     *    純收藏項目的 status='favorited'。
+     *  - 此處 counts/filter/data 屬性全部統一改為 'favorited'。
+     *  - 'favorited' 計入：status==='favorited' OR favorited===true。
+     */
+    $counts = [ 'all' => 0, 'watching' => 0, 'completed' => 0, 'favorited' => 0, 'want' => 0, 'dropped' => 0 ];
     foreach ( $watchlist as $w ) {
         $counts['all']++;
         $s = is_array( $w ) ? ( $w['status'] ?? '' ) : '';
         if ( isset( $counts[ $s ] ) ) $counts[ $s ]++;
-        if ( ! empty( $w['favorite'] ) ) $counts['favorite']++;
+        // 額外把 favorited flag 為 true 但 status 不是 'favorited' 的也計入
+        if ( ! empty( $w['favorited'] ) && $s !== 'favorited' ) {
+            $counts['favorited']++;
+        }
     }
     ?>
     <section class="pp-section pp-watchlist">
@@ -249,7 +285,7 @@ function smacg_pp_render_watchlist( $watchlist ) {
             <button class="pp-filter pp-filter-active" data-filter="all">全部 <em><?php echo (int) $counts['all']; ?></em></button>
             <button class="pp-filter" data-filter="watching">👀 觀看中 <em><?php echo (int) $counts['watching']; ?></em></button>
             <button class="pp-filter" data-filter="completed">✅ 已完結 <em><?php echo (int) $counts['completed']; ?></em></button>
-            <button class="pp-filter" data-filter="favorite">❤️ 收藏 <em><?php echo (int) $counts['favorite']; ?></em></button>
+            <button class="pp-filter" data-filter="favorited">❤️ 收藏 <em><?php echo (int) $counts['favorited']; ?></em></button>
             <button class="pp-filter" data-filter="want">📌 想看 <em><?php echo (int) $counts['want']; ?></em></button>
         </div>
         <div class="pp-anime-grid">
@@ -283,7 +319,11 @@ function smacg_pp_render_ratings( $ratings ) {
         <p class="pp-section-info">共評分 <strong><?php echo count( $ratings ); ?></strong> 部作品</p>
         <div class="pp-anime-grid">
             <?php foreach ( $ratings as $r ) {
-                $pid = (int) ( $r['post_id'] ?? 0 );
+                /**
+                 * Bug #13：資料層 smacg_get_user_ratings() 輸出 key 為 'anime_id'，
+                 * 不是 'post_id'。保留 post_id 優先以兼容其他資料來源。
+                 */
+                $pid = (int) ( $r['post_id'] ?? $r['anime_id'] ?? 0 );
                 if ( $pid ) smacg_pp_render_anime_card( $pid, $r );
             } ?>
         </div>
@@ -358,9 +398,23 @@ function smacg_pp_render_activity( $activity ) {
                 $icon  = $ev['icon']  ?? '📝';
                 $title = $ev['title'] ?? '';
                 $meta  = $ev['meta']  ?? '';
-                $url   = $ev['url']   ?? '';
-                $ts    = (int) ( $ev['timestamp'] ?? 0 );
-                $diff  = $ts ? human_time_diff( $ts, current_time( 'timestamp' ) ) . '前' : '';
+                $url   = $ev['url']   ?? ( $ev['link'] ?? '' );
+
+                /**
+                 * Bug #11：資料層 smacg_get_recent_activity() 輸出 'time' (unix int)
+                 * 與 'time_human' (string)，無 'timestamp' 鍵。
+                 * 優先用 time_human（已含「剛剛 / X 天前 / Y‑M‑D」邏輯），
+                 * 若缺再 fallback 用 time 即時計算。
+                 */
+                $diff = '';
+                if ( ! empty( $ev['time_human'] ) ) {
+                    $diff = (string) $ev['time_human'];
+                } else {
+                    $ts = (int) ( $ev['time'] ?? $ev['timestamp'] ?? 0 );
+                    if ( $ts ) {
+                        $diff = human_time_diff( $ts, current_time( 'timestamp' ) ) . '前';
+                    }
+                }
             ?>
                 <li class="pp-timeline-item">
                     <span class="pp-timeline-icon"><?php echo esc_html( $icon ); ?></span>
@@ -411,15 +465,24 @@ function smacg_pp_render_anime_card( $pid, $extra = [] ) {
         $thumb = get_stylesheet_directory_uri() . '/assets/images/placeholder.svg';
     }
 
-    $status      = is_array( $extra ) ? ( $extra['status'] ?? '' ) : '';
-    $is_favorite = is_array( $extra ) ? ! empty( $extra['favorite'] ) : false;
-    $score       = is_array( $extra ) ? (float) ( $extra['overall_score'] ?? 0 ) : 0;
-    $watched_ep  = is_array( $extra ) ? (int) ( $extra['watched_ep'] ?? 0 ) : 0;
-    $total_ep    = is_array( $extra ) ? (int) ( $extra['total_ep'] ?? 0 ) : 0;
+    $status = is_array( $extra ) ? ( $extra['status'] ?? '' ) : '';
+
+    /**
+     * Bug #12：資料層使用 'favorited' 鍵，保留舊 'favorite' fallback。
+     */
+    $is_favorite = false;
+    if ( is_array( $extra ) ) {
+        $is_favorite = ! empty( $extra['favorited'] ) || ! empty( $extra['favorite'] );
+    }
+
+    $score      = is_array( $extra ) ? (float) ( $extra['overall_score'] ?? 0 ) : 0;
+    $watched_ep = is_array( $extra ) ? (int) ( $extra['watched_ep'] ?? 0 ) : 0;
+    $total_ep   = is_array( $extra ) ? (int) ( $extra['total_ep'] ?? 0 ) : 0;
 
     $status_labels = [
         'watching'  => '👀 觀看中',
         'completed' => '✅ 已完結',
+        'favorited' => '❤️ 收藏',
         'want'      => '📌 想看',
         'dropped'   => '⛔ 棄追',
     ];
@@ -427,7 +490,7 @@ function smacg_pp_render_anime_card( $pid, $extra = [] ) {
     ?>
     <article class="pp-anime-card"
              data-status="<?php echo esc_attr( $status ); ?>"
-             data-favorite="<?php echo $is_favorite ? '1' : '0'; ?>">
+             data-favorited="<?php echo $is_favorite ? '1' : '0'; ?>">
         <a class="pp-anime-thumb" href="<?php echo esc_url( $url ); ?>">
             <img src="<?php echo esc_url( $thumb ); ?>" alt="<?php echo esc_attr( $title ); ?>" loading="lazy" decoding="async">
             <?php if ( $is_favorite ) : ?>
