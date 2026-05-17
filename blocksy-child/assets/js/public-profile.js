@@ -1,12 +1,21 @@
 /**
  * Public Profile JS - /u/{username}/
- * Version: 1.0.0 (2026-05-13)
+ * Version: 1.1.0 (2026-05-16)
  *
  * 功能：
  *  - Tab 切換 + URL hash 同步
  *  - 清單篩選（沿用 member.js 風格）
  *  - 分享按鈕（Web Share API + 複製連結 fallback）
- *  - 預留：載入更多、追蹤按鈕（Batch 1B 啟用）
+ *
+ * Changelog:
+ * - 1.1.0 (2026-05-16) Bug #18 修正：selector 與 PHP render 端對齊
+ *   * .pp-filter-btn          → .pp-filter
+ *   * active class 'active'   → 'pp-filter-active'（與 PHP 端一致）
+ *   * #pp-watchlist-grid      → .pp-watchlist .pp-anime-grid
+ *   * .pp-btn-share           → .pp-share-btn
+ *   * 移除 .pp-btn-follow（追蹤按鈕已由 follow.js 接管 .smacg-follow-btn）
+ *   * 'favorited' 篩選同時匹配 data-favorited="1" 或 data-status="favorited"
+ * - 1.0.0 (2026-05-13) 初始版本
  */
 (function () {
   'use strict';
@@ -44,7 +53,6 @@
   (function initFromHash() {
     const hash = (window.location.hash || '').replace('#', '');
     if (hash) {
-      // 等版面就緒
       setTimeout(() => switchTab(hash, false), 30);
     }
   })();
@@ -56,34 +64,45 @@
 
   /* =========================================================
    * Watchlist 篩選
+   *  - selector 對齊 PHP：.pp-filter / .pp-filter-active
+   *  - 卡片容器：.pp-watchlist .pp-anime-grid
+   *  - 卡片屬性：data-status / data-favorited
    * ========================================================= */
-  const filterBtns = wrap.querySelectorAll('.pp-filter-btn');
-  const cards      = wrap.querySelectorAll('#pp-watchlist-grid .pp-anime-card');
+  const filterBtns = wrap.querySelectorAll('.pp-watchlist .pp-filter');
+  const watchlistGrid = wrap.querySelector('.pp-watchlist .pp-anime-grid');
+
+  function applyFilter(filter) {
+    if (!watchlistGrid) return;
+    const cards = watchlistGrid.querySelectorAll('.pp-anime-card');
+    cards.forEach(card => {
+      const status = card.dataset.status || '';
+      const fav    = card.dataset.favorited === '1';
+      let show     = false;
+
+      if (filter === 'all') {
+        show = true;
+      } else if (filter === 'favorited') {
+        // 同時匹配 data-status="favorited" 或 data-favorited="1"
+        show = fav || status === 'favorited';
+      } else {
+        show = (status === filter);
+      }
+      card.style.display = show ? '' : 'none';
+    });
+  }
 
   filterBtns.forEach(btn => {
     btn.addEventListener('click', () => {
-      const filter = btn.dataset.filter;
-
-      filterBtns.forEach(b => b.classList.toggle('active', b === btn));
-
-      cards.forEach(card => {
-        const status = card.dataset.status || '';
-        const fav    = card.dataset.favorited === '1';
-        let show     = false;
-
-        if (filter === 'all')           show = true;
-        else if (filter === 'favorited') show = fav;
-        else                             show = (status === filter);
-
-        card.style.display = show ? '' : 'none';
-      });
+      const filter = btn.dataset.filter || 'all';
+      filterBtns.forEach(b => b.classList.toggle('pp-filter-active', b === btn));
+      applyFilter(filter);
     });
   });
 
   /* =========================================================
-   * 分享按鈕
+   * 分享按鈕（PHP class: .pp-share-btn）
    * ========================================================= */
-  const shareBtn = wrap.querySelector('.pp-btn-share');
+  const shareBtn = wrap.querySelector('.pp-share-btn');
   if (shareBtn) {
     shareBtn.addEventListener('click', async () => {
       const url   = shareBtn.dataset.url   || window.location.href;
@@ -95,7 +114,6 @@
           await navigator.share({ title, url });
           return;
         } catch (e) {
-          // 使用者取消分享 → 不做事
           if (e.name === 'AbortError') return;
         }
       }
@@ -105,7 +123,6 @@
         await navigator.clipboard.writeText(url);
         toast('連結已複製 ✓', true);
       } catch (e) {
-        // 再 fallback：用 input 選取
         const input = document.createElement('input');
         input.value = url;
         document.body.appendChild(input);
@@ -122,7 +139,7 @@
   }
 
   /* =========================================================
-   * Toast（公開頁專用，避免污染 member.js 的 toast）
+   * Toast（公開頁專用）
    * ========================================================= */
   function toast(text, ok) {
     let el = document.getElementById('pp-toast');
@@ -142,14 +159,9 @@
   }
 
   /* =========================================================
-   * 追蹤按鈕（Batch 1B 啟用，目前 disabled）
+   * 追蹤按鈕：由 follow.js 統一接管 .smacg-follow-btn
+   * 此處不再處理。
    * ========================================================= */
-  const followBtn = wrap.querySelector('.pp-btn-follow');
-  if (followBtn && !followBtn.disabled) {
-    followBtn.addEventListener('click', () => {
-      toast('追蹤功能即將推出', true);
-    });
-  }
 
   /* =========================================================
    * 平滑滾動到 tab（從 URL hash 進來時）
