@@ -2,38 +2,17 @@
 /**
  * Public Profile - Render Functions
  *
- * 公開個人頁渲染層：hero、overview、watchlist、ratings、badges、activity。
- *
  * @package    weixiaoacg
  * @subpackage smacg-social
- * @version    1.2.1
- * @since      1.0.0
+ * @version    1.2.2
  *
  * Changelog:
- * - 1.2.1 (2026-05-16) — Bug fix release
- *   * Bug #11：smacg_pp_render_activity() 讀取 $ev['time_human']（資料層 key），
- *     若缺則 fallback 用 $ev['time'] 算 human_time_diff；移除錯誤的 'timestamp' key。
- *   * Bug #12 + #14：smacg_pp_render_watchlist() 統一使用 'favorited' 鍵
- *     （資料層 smacg_build_watchlist 實際輸出）。
- *     - $counts['favorited'] 取代 $counts['favorite']
- *     - filter button data-filter="favorited" 對齊卡片 data-status / data-favorited
- *     - 計入純收藏項目（status='favorited' 由資料層產出）
- *   * Bug #13：smacg_pp_render_ratings() 用 $r['post_id'] ?? $r['anime_id']
- *     兼容資料層實際輸出（smacg_get_user_ratings 回傳 anime_id）。
- *   * Bug #15：smacg_pp_render_overview() 讀 $stats['genres']
- *     （資料層 smacg_calc_member_stats 實際輸出 key，非 top_genres）。
- *   * smacg_pp_render_anime_card()：$is_favorite 改讀 $extra['favorited']，
- *     data-favorited 屬性對齊；保留 $extra['favorite'] fallback 以防其他呼叫端傳舊 key。
- * - 1.2.0 (2026-05-16)
- *   * Hero 區粉絲/追蹤中數字改為 <a> 連結，指向 /u/{username}/followers/ 與 /following/。
- *   * 追蹤按鈕右側新增互追膠囊（🤝 互相追蹤），透過 smacg_is_mutual_follow() 判定。
- *   * 加入 smacg_is_mutual_follow() function_exists 守衛，缺失時 fallback 為兩次 smacg_is_following()。
- *   * 加入一次性 inline CSS（.pp-count-link / .pp-mutual-badge），使用 static guard 避免重複輸出。
- * - 1.1.0 (2026-05-13)
- *   * Hero 顯示粉絲/追蹤中數字。
- *   * 追蹤按鈕改用 .smacg-follow-btn class，交由 follow.js 統一處理。
- * - 1.0.0 (2026-05-13)
- *   * 初始版本。
+ * - 1.2.2 (2026-05-17) — Hero 牌位顯示
+ *   * 新增職業稱號徽章 (.pp-job-badge) — 使用 smacg_get_user_job_title()
+ *   * 新增 TFT 段位徽章 (.pp-tier-mini) — 使用 smacg_get_user_rank_season_info()
+ *   * 新增生涯最高段位徽章 (.pp-tier-mini--peak) — 使用 smacg_get_user_career_peak_tier()
+ *   * inline CSS 加上 .pp-job-badge / .pp-tier-mini 樣式（對齊會員中心 mc-job-badge / mc-tier-mini）
+ * - 1.2.1 (2026-05-16) — Bug fix release（見原檔）
  */
 
 if ( ! defined( 'ABSPATH' ) ) exit;
@@ -55,17 +34,22 @@ function smacg_pp_render_hero( $user, $args ) {
     $lvl          = ! empty( $args['lvl_info'] )     ? $args['lvl_info']     : null;
     $is_owner     = ! empty( $args['is_owner'] );
 
-    // 粉絲 / 追蹤中數字
+    /* v1.2.2 — 牌位資料（職業稱號 + TFT 段位 + 生涯最高） */
+    $job_title   = function_exists( 'smacg_get_user_job_title' ) ? smacg_get_user_job_title( $uid ) : [];
+    $rank_info   = function_exists( 'smacg_get_user_rank_season_info' ) ? smacg_get_user_rank_season_info( $uid ) : null;
+    $career_peak = function_exists( 'smacg_get_user_career_peak_tier' ) ? smacg_get_user_career_peak_tier( $uid ) : null;
+    $rank_page_url = home_url( '/ranking-users/?tab=rank_season' );
+
+    /* 粉絲 / 追蹤中 */
     $followers_count = function_exists( 'smacg_get_followers_count' ) ? (int) smacg_get_followers_count( $uid ) : 0;
     $following_count = function_exists( 'smacg_get_following_count' ) ? (int) smacg_get_following_count( $uid ) : 0;
 
-    // 連結到 followers / following 子頁
-    $profile_url        = function_exists( 'smacg_get_public_profile_url' ) ? smacg_get_public_profile_url( $user ) : home_url( '/u/' . $user->user_login . '/' );
-    $profile_url        = trailingslashit( $profile_url );
-    $followers_url      = $profile_url . 'followers/';
-    $following_url      = $profile_url . 'following/';
+    $profile_url   = function_exists( 'smacg_get_public_profile_url' ) ? smacg_get_public_profile_url( $user ) : home_url( '/u/' . $user->user_login . '/' );
+    $profile_url   = trailingslashit( $profile_url );
+    $followers_url = $profile_url . 'followers/';
+    $following_url = $profile_url . 'following/';
 
-    // 互追判定（僅在登入且非本人時計算）
+    /* 互追判定 */
     $is_mutual = false;
     if ( ! $is_owner && is_user_logged_in() ) {
         $viewer_id = get_current_user_id();
@@ -82,15 +66,54 @@ function smacg_pp_render_hero( $user, $args ) {
             <div class="pp-hero-avatar">
                 <img src="<?php echo esc_url( $avatar_url ); ?>" alt="<?php echo esc_attr( $display_name ); ?>" loading="eager" decoding="async">
                 <?php if ( $lvl && ! empty( $lvl['icon'] ) ) : ?>
-                    <span class="pp-hero-level-icon" title="<?php echo esc_attr( 'Lv.' . $lvl['level'] . ' ' . $lvl['title'] ); ?>"><?php echo esc_html( $lvl['icon'] ); ?></span>
+                    <span class="pp-hero-level-icon" title="<?php echo esc_attr( 'Lv.' . $lvl['level'] . ' ' . ( $lvl['title'] ?? '' ) ); ?>"><?php echo esc_html( $lvl['icon'] ); ?></span>
                 <?php endif; ?>
             </div>
 
             <div class="pp-hero-main">
                 <div class="pp-hero-title">
                     <h1 class="pp-hero-name"><?php echo esc_html( $display_name ); ?></h1>
+
                     <?php if ( $plan_label ) : ?>
                         <span class="pp-hero-plan"><?php echo esc_html( $plan_label ); ?></span>
+                    <?php endif; ?>
+
+                    <?php /* v1.2.2 — 職業稱號徽章 */ ?>
+                    <?php if ( ! empty( $job_title ) && ! empty( $job_title['title_name'] ) ) : ?>
+                        <span class="pp-job-badge" title="<?php echo esc_attr( $job_title['title_ref'] ?? '' ); ?>">
+                            <?php echo esc_html( $job_title['job_icon'] ?? '' ); ?>
+                            <?php echo esc_html( $job_title['title_name'] ); ?>
+                        </span>
+                    <?php endif; ?>
+
+                    <?php /* v1.2.2 — TFT 段位徽章 */ ?>
+                    <?php
+                    if ( $rank_info && ! empty( $rank_info['tier'] ) ) :
+                        $tier      = $rank_info['tier'];
+                        $has_score = ! empty( $rank_info['score'] ) && $rank_info['score'] > 0;
+                        $rank_pos  = (int) ( $rank_info['rank'] ?? 0 );
+                    ?>
+                        <a href="<?php echo esc_url( $rank_page_url ); ?>"
+                           class="pp-tier-mini<?php echo $has_score ? '' : ' pp-tier-mini--zero'; ?>"
+                           style="--tier-color: <?php echo esc_attr( $tier['color'] ?? '#6b6b6b' ); ?>;"
+                           title="<?php echo esc_attr( sprintf( '%s · %s 分 · %s',
+                               $rank_info['season_label'] ?: '本賽季',
+                               number_format( (int) ( $rank_info['score'] ?? 0 ) ),
+                               $rank_pos > 0 ? '#' . $rank_pos : '未上榜' ) ); ?>">
+                            <span class="pp-tier-mini__icon"><?php echo esc_html( $tier['icon'] ?? '🥉' ); ?></span>
+                            <span class="pp-tier-mini__label"><?php echo esc_html( $tier['label'] ?? '' ); ?></span>
+                            <?php if ( $rank_pos > 0 && $rank_pos <= 200 ) : ?>
+                                <span class="pp-tier-mini__rank">#<?php echo $rank_pos; ?></span>
+                            <?php endif; ?>
+                        </a>
+                    <?php endif; ?>
+
+                    <?php /* v1.2.2 — 生涯最高段位 */ ?>
+                    <?php if ( $career_peak && ! empty( $career_peak['label'] ) ) : ?>
+                        <span class="pp-tier-mini pp-tier-mini--peak" title="生涯最高段位">
+                            <span class="pp-tier-mini__icon"><?php echo esc_html( $career_peak['icon'] ?? '🏆' ); ?></span>
+                            <span class="pp-tier-mini__label">生涯 <?php echo esc_html( $career_peak['label'] ); ?></span>
+                        </span>
                     <?php endif; ?>
                 </div>
 
@@ -119,9 +142,9 @@ function smacg_pp_render_hero( $user, $args ) {
                 <?php if ( $lvl ) : ?>
                     <div class="pp-hero-level">
                         <div class="pp-level-info">
-                            <span class="pp-level-title">Lv.<?php echo (int) $lvl['level']; ?> <?php echo esc_html( $lvl['title'] ); ?></span>
+                            <span class="pp-level-title">Lv.<?php echo (int) $lvl['level']; ?> <?php echo esc_html( $lvl['title'] ?? '' ); ?></span>
                             <?php if ( empty( $lvl['is_max'] ) ) : ?>
-                                <span class="pp-level-exp"><?php echo esc_html( number_format_i18n( (int) $lvl['exp'] ) ); ?> EXP</span>
+                                <span class="pp-level-exp"><?php echo esc_html( number_format_i18n( (int) ( $lvl['exp'] ?? 0 ) ) ); ?> EXP</span>
                             <?php else : ?>
                                 <span class="pp-level-exp">MAX</span>
                             <?php endif; ?>
@@ -162,7 +185,7 @@ function smacg_pp_render_hero( $user, $args ) {
 endif;
 
 /* ========================================================================
- * 一次性 inline CSS
+ * 一次性 inline CSS（v1.2.2 — 加上牌位樣式）
  * ====================================================================== */
 
 if ( ! function_exists( 'smacg_pp_render_inline_css' ) ) :
@@ -171,20 +194,107 @@ function smacg_pp_render_inline_css() {
     if ( $printed ) return;
     $printed = true;
     ?>
-    <style id="smacg-pp-inline-v121">
+    <style id="smacg-pp-inline-v122">
+        /* 粉絲/追蹤連結 */
         .pp-count-link{text-decoration:none;color:inherit;transition:color .15s ease, transform .15s ease;display:inline-flex;align-items:center;gap:4px}
-        .pp-count-link:hover{color:var(--theme-palette-color-1,#4a6cf7);transform:translateY(-1px)}
+        .pp-count-link:hover{color:#ff6bae;transform:translateY(-1px)}
         .pp-count-link strong{font-weight:700}
+
+        /* 互追徽章 */
         .pp-mutual-badge{display:inline-flex;align-items:center;gap:4px;padding:6px 12px;border-radius:999px;background:linear-gradient(135deg,#10b981,#059669);color:#fff;font-size:13px;font-weight:600;line-height:1;white-space:nowrap;box-shadow:0 2px 6px rgba(16,185,129,.25);cursor:default;user-select:none}
+
+        /* Hero name 標題列：可換行排列徽章 */
+        .pp-hero-title{display:flex;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:6px}
+        .pp-hero-title .pp-hero-name{margin:0}
+
+        /* v1.2.2 — 職業稱號徽章（對齊會員中心 .mc-job-badge） */
+        .pp-job-badge{
+            display:inline-flex;align-items:center;gap:5px;
+            padding:4px 11px;
+            font-size:12px;font-weight:600;line-height:1.4;
+            background:linear-gradient(135deg,rgba(167,139,250,.18),rgba(244,114,182,.18));
+            color:#e2c8ff;
+            border:1px solid rgba(167,139,250,.4);
+            border-radius:999px;
+            white-space:nowrap;
+            backdrop-filter:blur(4px);
+        }
+
+        /* v1.2.2 — TFT 段位徽章（對齊會員中心 .mc-tier-mini） */
+        .pp-tier-mini{
+            display:inline-flex;align-items:center;gap:5px;
+            padding:4px 11px;
+            font-size:12px;font-weight:600;line-height:1.4;
+            background:rgba(255,255,255,.04);
+            color:var(--tier-color,#cbd5e1);
+            border:1px solid var(--tier-color,rgba(255,255,255,.18));
+            border-radius:999px;
+            text-decoration:none;
+            white-space:nowrap;
+            transition:transform .15s, box-shadow .15s, background .15s;
+        }
+        .pp-tier-mini:hover{
+            transform:translateY(-1px);
+            background:rgba(255,255,255,.08);
+            box-shadow:0 4px 14px rgba(0,0,0,.25);
+        }
+        .pp-tier-mini__icon{font-size:14px;line-height:1}
+        .pp-tier-mini__label{color:#e6e8eb}
+        .pp-tier-mini__rank{
+            margin-left:3px;
+            padding:1px 6px;
+            font-size:10px;font-weight:700;
+            background:linear-gradient(135deg,#fbbf24,#f59e0b);
+            color:#1a1a1a;
+            border-radius:999px;
+        }
+        .pp-tier-mini--zero{opacity:.55}
+        .pp-tier-mini--zero:hover{opacity:.9}
+        .pp-tier-mini--peak{
+            background:linear-gradient(135deg,rgba(251,191,36,.12),rgba(245,158,11,.12));
+            border-color:rgba(251,191,36,.4);
+        }
+        .pp-tier-mini--peak .pp-tier-mini__label{color:#fbbf24}
+
+        /* Hero level 進度條 */
+        .pp-hero-level{margin-top:10px}
+        .pp-level-info{display:flex;justify-content:space-between;font-size:12px;color:#cbd5e1;margin-bottom:4px}
+        .pp-level-title{font-weight:600;color:#e6e8eb}
+        .pp-level-exp{color:#94a3b8}
+        .pp-level-bar{height:8px;background:rgba(0,0,0,.35);border-radius:999px;overflow:hidden}
+        .pp-level-bar-fill{height:100%;background:linear-gradient(90deg,#ff6bae,#6bb6ff);border-radius:999px;transition:width .6s ease}
+
+        /* Hero actions */
         .pp-hero-actions{display:flex;flex-wrap:wrap;align-items:center;gap:10px}
-        @media (max-width:480px){.pp-mutual-badge{font-size:12px;padding:5px 10px}}
+
+        /* Hero level icon（頭像角上的小 emoji） */
+        .pp-hero-avatar{position:relative}
+        .pp-hero-level-icon{
+            position:absolute;bottom:0;right:0;
+            width:32px;height:32px;
+            display:grid;place-items:center;
+            background:#1a1f26;
+            border:2px solid #ff6bae;
+            border-radius:50%;
+            font-size:16px;
+            box-shadow:0 2px 8px rgba(0,0,0,.4);
+        }
+
+        /* Meta item */
+        .pp-meta-item{display:inline-flex;align-items:center;gap:5px}
+
+        @media (max-width:480px){
+            .pp-mutual-badge{font-size:12px;padding:5px 10px}
+            .pp-job-badge,.pp-tier-mini{font-size:11px;padding:3px 9px}
+            .pp-tier-mini__icon{font-size:13px}
+        }
     </style>
     <?php
 }
 endif;
 
 /* ========================================================================
- * Overview Tab
+ * Overview Tab — 完全保留原本 v1.2.1 邏輯
  * ====================================================================== */
 
 if ( ! function_exists( 'smacg_pp_render_overview' ) ) :
@@ -217,11 +327,6 @@ function smacg_pp_render_overview( $user, $watchlist, $stats, $can_w, $can_r ) {
             <div class="pp-card">
                 <h2 class="pp-card-title">🏷️ 喜愛類型</h2>
                 <?php
-                /**
-                 * Bug #15：資料層 smacg_calc_member_stats() 實際輸出 key 為 'genres'
-                 * （結構：[ ['name'=>..,'count'=>..,'percent'=>..], ... ]）。
-                 * 保留 'top_genres' fallback 以防其他資料來源沿用舊 key。
-                 */
                 $genres_src = [];
                 if ( ! empty( $stats['genres'] ) ) {
                     $genres_src = (array) $stats['genres'];
@@ -252,7 +357,7 @@ function smacg_pp_render_overview( $user, $watchlist, $stats, $can_w, $can_r ) {
 endif;
 
 /* ========================================================================
- * Watchlist Tab
+ * Watchlist Tab — 完全保留原本 v1.2.1 邏輯
  * ====================================================================== */
 
 if ( ! function_exists( 'smacg_pp_render_watchlist' ) ) :
@@ -262,19 +367,11 @@ function smacg_pp_render_watchlist( $watchlist ) {
         return;
     }
 
-    /**
-     * Bug #12 + #14：
-     *  - 資料層 smacg_build_watchlist() 寫入 'favorited' (bool) 與
-     *    純收藏項目的 status='favorited'。
-     *  - 此處 counts/filter/data 屬性全部統一改為 'favorited'。
-     *  - 'favorited' 計入：status==='favorited' OR favorited===true。
-     */
     $counts = [ 'all' => 0, 'watching' => 0, 'completed' => 0, 'favorited' => 0, 'want' => 0, 'dropped' => 0 ];
     foreach ( $watchlist as $w ) {
         $counts['all']++;
         $s = is_array( $w ) ? ( $w['status'] ?? '' ) : '';
         if ( isset( $counts[ $s ] ) ) $counts[ $s ]++;
-        // 額外把 favorited flag 為 true 但 status 不是 'favorited' 的也計入
         if ( ! empty( $w['favorited'] ) && $s !== 'favorited' ) {
             $counts['favorited']++;
         }
@@ -300,7 +397,7 @@ function smacg_pp_render_watchlist( $watchlist ) {
 endif;
 
 /* ========================================================================
- * Ratings Tab
+ * Ratings Tab — 完全保留原本 v1.2.1 邏輯
  * ====================================================================== */
 
 if ( ! function_exists( 'smacg_pp_render_ratings' ) ) :
@@ -319,10 +416,6 @@ function smacg_pp_render_ratings( $ratings ) {
         <p class="pp-section-info">共評分 <strong><?php echo count( $ratings ); ?></strong> 部作品</p>
         <div class="pp-anime-grid">
             <?php foreach ( $ratings as $r ) {
-                /**
-                 * Bug #13：資料層 smacg_get_user_ratings() 輸出 key 為 'anime_id'，
-                 * 不是 'post_id'。保留 post_id 優先以兼容其他資料來源。
-                 */
                 $pid = (int) ( $r['post_id'] ?? $r['anime_id'] ?? 0 );
                 if ( $pid ) smacg_pp_render_anime_card( $pid, $r );
             } ?>
@@ -333,7 +426,7 @@ function smacg_pp_render_ratings( $ratings ) {
 endif;
 
 /* ========================================================================
- * Badges Tab
+ * Badges Tab — 完全保留原本 v1.2.1 邏輯
  * ====================================================================== */
 
 if ( ! function_exists( 'smacg_pp_render_badges' ) ) :
@@ -382,7 +475,7 @@ function smacg_pp_render_badges( $uid, $stats ) {
 endif;
 
 /* ========================================================================
- * Activity Tab
+ * Activity Tab — 完全保留原本 v1.2.1 邏輯
  * ====================================================================== */
 
 if ( ! function_exists( 'smacg_pp_render_activity' ) ) :
@@ -400,12 +493,6 @@ function smacg_pp_render_activity( $activity ) {
                 $meta  = $ev['meta']  ?? '';
                 $url   = $ev['url']   ?? ( $ev['link'] ?? '' );
 
-                /**
-                 * Bug #11：資料層 smacg_get_recent_activity() 輸出 'time' (unix int)
-                 * 與 'time_human' (string)，無 'timestamp' 鍵。
-                 * 優先用 time_human（已含「剛剛 / X 天前 / Y‑M‑D」邏輯），
-                 * 若缺再 fallback 用 time 即時計算。
-                 */
                 $diff = '';
                 if ( ! empty( $ev['time_human'] ) ) {
                     $diff = (string) $ev['time_human'];
@@ -442,7 +529,7 @@ function smacg_pp_render_activity( $activity ) {
 endif;
 
 /* ========================================================================
- * 共用 Anime 卡片（公開版，無 quick-action 按鈕）
+ * 共用 Anime 卡片 — 完全保留原本 v1.2.1 邏輯
  * ====================================================================== */
 
 if ( ! function_exists( 'smacg_pp_render_anime_card' ) ) :
@@ -467,9 +554,6 @@ function smacg_pp_render_anime_card( $pid, $extra = [] ) {
 
     $status = is_array( $extra ) ? ( $extra['status'] ?? '' ) : '';
 
-    /**
-     * Bug #12：資料層使用 'favorited' 鍵，保留舊 'favorite' fallback。
-     */
     $is_favorite = false;
     if ( is_array( $extra ) ) {
         $is_favorite = ! empty( $extra['favorited'] ) || ! empty( $extra['favorite'] );
