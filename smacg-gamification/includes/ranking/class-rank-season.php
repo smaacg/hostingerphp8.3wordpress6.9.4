@@ -13,6 +13,12 @@ defined( 'ABSPATH' ) || exit;
  *   2. 寫入 wp_smacg_rank_season（user_id + season_code 為 PK）
  *   3. cron smacg_rank_season_check（每小時）檢查當前 season_code
  *      與 option smacg_rank_current_season 不一致 → 觸發結算
+ *
+ * v1.1.0 (2026-05-17)
+ *   - 新增 get_last_settled_season_code() : 取得 archive 內最近一個結算過的賽季 code
+ *   - 新增 get_archive_leaderboard()      : 讀取上季 / 任意已結算賽季的 Top N 排行
+ *   - 新增 get_archive_user_position()    : 查單一使用者在上季的最終名次
+ *   - 新增 archive_total()                : 查上季 archive 總人數（給 pagination 用）
  */
 class Rank_Season {
 
@@ -68,7 +74,7 @@ class Rank_Season {
     }
 
     /* ==========================================================
-     * 讀取：個人賽季積分 + 名次 + 段位
+     * 讀取：個人賽季積分 + 名次 + 段位（當季）
      * ========================================================== */
     public static function get_user_info( $uid, $season_code = null ) {
         global $wpdb;
@@ -101,7 +107,7 @@ class Rank_Season {
     }
 
     /* ==========================================================
-     * Top N 排行（給排行榜 tab 用）
+     * Top N 排行（當季，給 rank_season tab 用）
      * ========================================================== */
     public static function get_leaderboard( $limit = 100, $offset = 0, $season_code = null ) {
         global $wpdb;
@@ -130,6 +136,138 @@ class Rank_Season {
             ];
         }
         return $out;
+    }
+
+    /* ==========================================================
+     * v1.1.0：上季 / 任意已結算賽季的 archive 排行
+     * ========================================================== */
+
+    /**
+     * 取得 archive 內最近一個結算過的賽季 code（依 settled_at desc）
+     * 若 archive 為空（系統還沒經歷過換季）→ 回傳空字串
+     */
+    public static function get_last_settled_season_code() {
+        global $wpdb;
+        $arc = self::table_archive();
+
+        // 表本身不存在（升級流程未跑） → 直接視為無資料
+        if ( $wpdb->get_var( "SHOW TABLES LIKE '$arc'" ) !== $arc ) return '';
+
+        $code = $wpdb->get_var(
+            "SELECT season_code FROM {$arc}
+             ORDER BY settled_at DESC, season_code DESC
+             LIMIT 1"
+        );
+        return $code ?: '';
+    }
+
+    /**
+     * 讀取 archive 排行（Top N）
+     *
+     * @param string|null $season_code  null → 自動取最近一季
+     * @return array {
+     *   season_code: string,
+     *   season_label: string,
+     *   items: list of [rank, user_id, score, tier],
+     *   total: int,
+     * }
+     */
+    public static function get_archive_leaderboard( $season_code = null, $limit = 100, $offset = 0 ) {
+        global $wpdb;
+
+        $code = $season_code ?: self::get_last_settled_season_code();
+        if ( ! $code ) {
+            return [
+                'season_code'  => '',
+                'season_label' => '',
+                'items'        => [],
+                'total'        => 0,
+            ];
+        }
+
+        $arc    = self::table_archive();
+        $limit  = max( 1, min( 500, (int) $limit ) );
+        $offset = max( 0, (int) $offset );
+
+        $rows = $wpdb->get_results( $wpdb->prepare(
+            "SELECT user_id, final_rank, final_score, tier_key, tier_label
+             FROM {$arc}
+             WHERE season_code = %s
+             ORDER BY final_rank ASC
+             LIMIT %d OFFSET %d",
+            $code, $limit, $offset
+        ), ARRAY_A );
+
+        $items = [];
+        foreach ( $rows as $r ) {
+            $tier_icon = Rank_Tier::ICONS[ $r['tier_key'] ] ?? '🎖️';
+            $items[] = [
+                'rank'    => (int) $r['final_rank'],
+                'user_id' => (int) $r['user_id'],
+                'score'   => (int) $r['final_score'],
+                'tier'    => [
+                    'key'   => (string) $r['tier_key'],
+                    'label' => (string) $r['tier_label'],
+                    'icon'  => $tier_icon,
+                    'color' => self::tier_color_from_key( $r['tier_key'] ),
+                ],
+            ];
+        }
+
+        return [
+            'season_code'  => $code,
+            'season_label' => Rank_Tier::season_label( $code ),
+            'items'        => $items,
+            'total'        => self::archive_total( $code ),
+        ];
+    }
+
+    /**
+     * 上季 / 任意賽季 archive 的總人數
+     */
+    public static function archive_total( $season_code ) {
+        global $wpdb;
+        if ( ! $season_code ) return 0;
+        $arc = self::table_archive();
+        if ( $wpdb->get_var( "SHOW TABLES LIKE '$arc'" ) !== $arc ) return 0;
+        return (int) $wpdb->get_var( $wpdb->prepare(
+            "SELECT COUNT(*) FROM {$arc} WHERE season_code = %s",
+            $season_code
+        ) );
+    }
+
+    /**
+     * 查單一使用者在 archive 內某季的最終名次
+     */
+    public static function get_archive_user_position( $uid, $season_code = null ) {
+        global $wpdb;
+        $uid = (int) $uid;
+        if ( $uid <= 0 ) return null;
+
+        $code = $season_code ?: self::get_last_settled_season_code();
+        if ( ! $code ) return null;
+
+        $arc = self::table_archive();
+        $row = $wpdb->get_var( $wpdb->prepare(
+            "SELECT final_rank FROM {$arc}
+             WHERE user_id = %d AND season_code = %s",
+            $uid, $code
+        ) );
+        return $row ? (int) $row : null;
+    }
+
+    /**
+     * 由 tier_key 反查顏色（archive 表沒存 color 欄位，需從 TIERS 內反查）
+     */
+    private static function tier_color_from_key( $key ) {
+        // 菁英 / 宗師（不在 TIERS 列表中，獨立給色）
+        if ( $key === 'challenger' )  return '#ff6b6b';
+        if ( $key === 'grandmaster' ) return '#ff9f43';
+
+        foreach ( Rank_Tier::TIERS as $row ) {
+            if ( $row[0] === $key ) return $row[4];
+        }
+        return '#888888';
     }
 
     /* ==========================================================
