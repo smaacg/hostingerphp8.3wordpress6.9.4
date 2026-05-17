@@ -4,13 +4,33 @@
  * Plugin: Anime Sync Pro
  * Path: wp-content/plugins/anime-sync-pro/public/templates/archive-anime.php
  *
- * ACG v2 – 修正毛玻璃效果：改用 .aaa-wrap::before 偽元素背景，繞過 Elementor body 覆蓋
- *          卡片背景加深，確保 backdrop-filter 有視覺對比
- *          強制 .aaa-wrap 文字顏色，避免主題干擾
+ * ACG v2.4 (2026-05-17)
+ *   1. 頁首上方插入寬圖橫幅，下緣漸層融入背景（hero 風格）
+ *   2. 季度改為年份手風琴折疊
+ *   3. 每頁 15 部（pre_get_posts）
+ *   4. 其他區塊（搜尋、格式、類型、卡片）維持原本玻璃框設計
  */
 if ( ! defined( 'ABSPATH' ) ) exit;
 
+/* ── 每頁 15 部 ── */
+if ( ! function_exists( 'aaa_set_anime_per_page' ) ) {
+    function aaa_set_anime_per_page( $q ) {
+        if ( is_admin() || ! $q->is_main_query() ) return;
+        if ( $q->is_post_type_archive( 'anime' ) ||
+             $q->is_tax( [ 'genre', 'anime_season_tax', 'anime_format_tax', 'anime_studio_tax' ] ) ||
+             ( $q->is_search() && $q->get( 'post_type' ) === 'anime' ) ) {
+            $q->set( 'posts_per_page', 15 );
+        }
+    }
+    add_action( 'pre_get_posts', 'aaa_set_anime_per_page', 5 );
+}
+
 get_header();
+
+/* ──────────────────────────────────────────────────────────
+   ★★★ 頁首橫幅圖片網址（要換圖改這行；留空 '' 則不顯示） ★★★
+   ────────────────────────────────────────────────────────── */
+$banner_image_url = 'https://your-cdn.com/path/to/banner.jpg';
 
 /* ── 頁面資訊 ─────────────────────────────────────────────── */
 $is_archive   = is_post_type_archive( 'anime' );
@@ -32,22 +52,25 @@ if ( $is_search ) {
 $total_posts  = (int) $GLOBALS['wp_query']->found_posts;
 $current_page = max( 1, get_query_var( 'paged' ) );
 
+/* 僅主動漫列表第 1 頁顯示橫幅 */
+$show_banner = $is_archive && ! $current_term && ! $is_search && $current_page === 1;
+
 /* ── 當前篩選狀態 ────────────────────────────────────────── */
 $active_genre  = $is_genre  ? $current_term->slug : '';
 $active_season = $is_season ? $current_term->slug : '';
 $active_format = $is_format ? $current_term->slug : '';
 
-/* ── 抓取 Taxonomy 選項 ───────────────────────────────────── */
+/* ── 抓取所有年份（不限數量） ───────────────────────────── */
 $season_terms = get_terms( [
     'taxonomy'   => 'anime_season_tax',
     'orderby'    => 'slug',
     'order'      => 'DESC',
     'hide_empty' => true,
     'parent'     => 0,
-    'number'     => 6,
 ] );
 
-$season_children = [];
+$season_children    = [];
+$active_season_year = '';
 if ( ! is_wp_error( $season_terms ) ) {
     foreach ( $season_terms as $year_term ) {
         $children = get_terms( [
@@ -58,9 +81,23 @@ if ( ! is_wp_error( $season_terms ) ) {
             'hide_empty' => true,
         ] );
         if ( ! is_wp_error( $children ) && ! empty( $children ) ) {
-            $season_children[ $year_term->slug ] = $children;
+            $season_children[ $year_term->name ] = [
+                'year_slug' => $year_term->slug,
+                'children'  => $children,
+            ];
+            if ( $is_season ) {
+                foreach ( $children as $c ) {
+                    if ( $c->slug === $active_season ) {
+                        $active_season_year = $year_term->name;
+                    }
+                }
+            }
         }
     }
+}
+// 沒選任何季度時，預設展開最新一年
+if ( ! $active_season_year && ! empty( $season_children ) ) {
+    $active_season_year = array_key_first( $season_children );
 }
 
 $format_terms = get_terms( [
@@ -83,7 +120,6 @@ $canonical_url = ( $is_genre || $is_season || $is_format ) && $current_term
     ? get_term_link( $current_term )
     : get_post_type_archive_link( 'anime' );
 
-/* ── Schema：CollectionPage ──────────────────────────────── */
 $schema = [
     '@context'    => 'https://schema.org',
     '@type'       => 'CollectionPage',
@@ -94,7 +130,6 @@ $schema = [
     'url'         => $canonical_url,
 ];
 
-/* ── Schema：麵包屑 ───────────────────────────────────────── */
 $breadcrumb_items = [
     [ '@type' => 'ListItem', 'position' => 1, 'name' => '首頁',     'item' => home_url( '/' ) ],
     [ '@type' => 'ListItem', 'position' => 2, 'name' => '動漫列表', 'item' => home_url( '/anime/' ) ],
@@ -124,6 +159,20 @@ $breadcrumb_schema = [
 <script type="application/ld+json"><?php echo wp_json_encode( $breadcrumb_schema, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES ); ?></script>
 
 <div class="aaa-wrap">
+
+    <?php /* ── 頁首寬圖（融入背景的 hero） ─────────────── */ ?>
+    <?php if ( $show_banner && $banner_image_url ) : ?>
+    <div class="aaa-hero" aria-hidden="true">
+        <img class="aaa-hero-img"
+             src="<?php echo esc_url( $banner_image_url ); ?>"
+             alt=""
+             loading="eager"
+             fetchpriority="high"
+             decoding="async"
+             referrerpolicy="no-referrer">
+        <div class="aaa-hero-fade"></div>
+    </div>
+    <?php endif; ?>
 
     <?php /* ── 麵包屑 ─────────────────────────────────────── */ ?>
     <nav class="aaa-breadcrumb" aria-label="麵包屑導航">
@@ -170,22 +219,50 @@ $breadcrumb_schema = [
     <?php if ( ! $is_search ) : ?>
     <div class="aaa-filter-wrap">
 
-        <?php /* 季度篩選 */ ?>
+        <?php /* 季度篩選：年份手風琴 */ ?>
+        <?php if ( ! empty( $season_children ) ) : ?>
         <div class="aaa-filter-group">
             <div class="aaa-filter-label">📅 播出季度</div>
             <div class="aaa-filter-row">
                 <a href="<?php echo esc_url( get_post_type_archive_link( 'anime' ) ); ?>"
-                   class="aaa-filter-btn <?php echo ( $is_archive && ! $active_season ) ? 'active' : ''; ?>">全部</a>
-                <?php foreach ( $season_children as $year_slug => $children ) : ?>
-                    <?php foreach ( $children as $child ) : ?>
-                        <a href="<?php echo esc_url( get_term_link( $child ) ); ?>"
-                           class="aaa-filter-btn <?php echo ( $active_season === $child->slug ) ? 'active' : ''; ?>">
-                            <?php echo esc_html( $child->name ); ?>
-                        </a>
-                    <?php endforeach; ?>
-                <?php endforeach; ?>
+                   class="aaa-filter-btn <?php echo ( $is_archive && ! $active_season ) ? 'active' : ''; ?>">全部季度</a>
+            </div>
+
+            <div class="aaa-year-accordion">
+            <?php foreach ( $season_children as $year_name => $data ) :
+                $is_open    = ( $active_season_year === $year_name );
+                $input_id   = 'aaa-year-' . sanitize_html_class( $data['year_slug'] );
+                $has_active = false;
+                foreach ( $data['children'] as $c ) {
+                    if ( $c->slug === $active_season ) { $has_active = true; break; }
+                }
+            ?>
+                <div class="aaa-year-item<?php echo $has_active ? ' has-active' : ''; ?>">
+                    <input type="checkbox"
+                           id="<?php echo esc_attr( $input_id ); ?>"
+                           class="aaa-year-toggle"
+                           <?php checked( $is_open ); ?>>
+                    <label for="<?php echo esc_attr( $input_id ); ?>" class="aaa-year-head">
+                        <span class="aaa-year-name"><?php echo esc_html( $year_name ); ?></span>
+                        <span class="aaa-year-count"><?php echo (int) count( $data['children'] ); ?> 季</span>
+                        <span class="aaa-year-arrow" aria-hidden="true">▾</span>
+                    </label>
+                    <div class="aaa-year-body">
+                        <?php foreach ( $data['children'] as $child ) :
+                            $is_active  = ( $active_season === $child->slug );
+                            $short_name = trim( str_replace( $year_name, '', $child->name ) );
+                        ?>
+                            <a href="<?php echo esc_url( get_term_link( $child ) ); ?>"
+                               class="aaa-filter-btn <?php echo $is_active ? 'active' : ''; ?>">
+                                <?php echo esc_html( $short_name ?: $child->name ); ?>
+                            </a>
+                        <?php endforeach; ?>
+                    </div>
+                </div>
+            <?php endforeach; ?>
             </div>
         </div>
+        <?php endif; ?>
 
         <?php /* 格式篩選 */ ?>
         <?php if ( ! is_wp_error( $format_terms ) && $format_terms ) : ?>
@@ -380,7 +457,7 @@ $breadcrumb_schema = [
 
 <style>
 /* ============================================================
-   ACG v2：CSS 變數（對齊 anime-single.css 設計語言，獨立定義避免依賴）
+   ACG v2.4：CSS 變數
 ============================================================ */
 .aaa-wrap {
     --aaa-primary:       #7c5cff;
@@ -417,15 +494,11 @@ $breadcrumb_schema = [
 
     --aaa-transition:    .25s ease;
 
-    /* 強制文字顏色，避免 Elementor / 主題覆蓋 */
     color: #f7f9ff;
     position: relative;
 }
 
-/* ============================================================
-   ACG v2：背景光暈 — 用 ::before 偽元素 position:fixed
-   完全繞過 Elementor 的 body / #page 背景設定
-============================================================ */
+/* 背景光暈 */
 .aaa-wrap::before {
     content: '';
     position: fixed;
@@ -448,11 +521,37 @@ $breadcrumb_schema = [
     padding: 0 20px 80px;
     box-sizing: border-box;
 }
-
 .aaa-wrap *,
 .aaa-wrap *::before,
-.aaa-wrap *::after {
-    box-sizing: border-box;
+.aaa-wrap *::after { box-sizing: border-box; }
+
+/* ============================================================
+   頁首寬圖 hero（融入背景）
+   ★ 滿版延伸至容器邊緣 + 下緣 60% 漸層消失到背景色
+============================================================ */
+.aaa-hero {
+    position: relative;
+    margin: 0 -20px 0;     /* 抵銷 .aaa-wrap 的左右 padding，做出滿版效果 */
+    aspect-ratio: 1280 / 320;
+    overflow: hidden;
+    line-height: 0;
+    pointer-events: none;
+}
+.aaa-hero-img {
+    width: 100%; height: 100%;
+    object-fit: cover; display: block;
+}
+.aaa-hero-fade {
+    position: absolute;
+    inset: 0;
+    background:
+        linear-gradient(180deg,
+            rgba(7,17,31,0.00)  0%,
+            rgba(7,17,31,0.00) 35%,
+            rgba(7,17,31,0.55) 75%,
+            rgba(9,20,38,0.92) 95%,
+            #091426 100%);
+    pointer-events: none;
 }
 
 /* ============================================================
@@ -467,87 +566,52 @@ $breadcrumb_schema = [
     backdrop-filter: var(--aaa-blur);
     -webkit-backdrop-filter: var(--aaa-blur);
     display: inline-block;
+    position: relative;
+    z-index: 2;
 }
-
 .aaa-breadcrumb ol {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 6px;
-    list-style: none;
-    margin: 0;
-    padding: 0;
-    font-size: 13px;
-    color: var(--aaa-text-muted);
-    align-items: center;
+    display: flex; flex-wrap: wrap; gap: 6px;
+    list-style: none; margin: 0; padding: 0;
+    font-size: 13px; color: var(--aaa-text-muted); align-items: center;
 }
-
 .aaa-breadcrumb li + li::before {
-    content: '/';
-    margin-right: 6px;
-    color: var(--aaa-text-faint);
+    content: '/'; margin-right: 6px; color: var(--aaa-text-faint);
 }
-
 .aaa-breadcrumb a {
-    color: var(--aaa-text-soft);
-    text-decoration: none;
+    color: var(--aaa-text-soft); text-decoration: none;
     transition: color var(--aaa-transition);
 }
-
-.aaa-breadcrumb a:hover {
-    color: #fff;
-}
+.aaa-breadcrumb a:hover { color: #fff; }
 
 /* ============================================================
    頁首
 ============================================================ */
 .aaa-header {
     text-align: center;
-    padding: 48px 20px 28px;
+    padding: 28px 20px 28px;  /* 上方縮短，避免和 hero 距離過大 */
+    position: relative;
+    z-index: 2;
 }
-
 .aaa-title {
     font-size: clamp(1.7rem, 4vw, 2.6rem);
-    font-weight: 800;
-    margin: 0 0 10px;
-    color: #fff;
-    line-height: 1.2;
+    font-weight: 800; margin: 0 0 10px;
+    color: #fff; line-height: 1.2;
     letter-spacing: -0.01em;
 }
-
 .aaa-desc {
     color: var(--aaa-text-muted);
-    margin: 0 0 10px;
-    font-size: 1rem;
-    line-height: 1.7;
+    margin: 0 0 10px; font-size: 1rem; line-height: 1.7;
 }
-
-.aaa-count {
-    color: var(--aaa-text-faint);
-    font-size: 14px;
-    margin: 0;
-}
-
-.aaa-count strong {
-    color: var(--aaa-primary-2);
-    font-weight: 700;
-}
+.aaa-count { color: var(--aaa-text-faint); font-size: 14px; margin: 0; }
+.aaa-count strong { color: var(--aaa-primary-2); font-weight: 700; }
 
 /* ============================================================
    搜尋框
 ============================================================ */
-.aaa-search-wrap {
-    max-width: 620px;
-    margin: 0 auto 32px;
-}
-
-.aaa-search-form {
-    width: 100%;
-}
-
+.aaa-search-wrap { max-width: 620px; margin: 0 auto 32px; }
+.aaa-search-form { width: 100%; }
 .aaa-search-inner {
-    display: flex;
-    align-items: center;
-    gap: 10px;
+    display: flex; align-items: center; gap: 10px;
     padding: 10px 16px;
     border-radius: var(--aaa-radius-pill);
     background: var(--aaa-surface);
@@ -556,51 +620,25 @@ $breadcrumb_schema = [
     -webkit-backdrop-filter: var(--aaa-blur);
     transition: border-color var(--aaa-transition), box-shadow var(--aaa-transition);
 }
-
 .aaa-search-inner:focus-within {
     border-color: rgba(124,92,255,0.55);
     box-shadow: 0 0 0 3px rgba(124,92,255,0.14);
 }
-
-.aaa-search-icon {
-    font-size: 16px;
-    flex-shrink: 0;
-    opacity: 0.7;
-}
-
+.aaa-search-icon { font-size: 16px; flex-shrink: 0; opacity: 0.7; }
 .aaa-search-input {
-    flex: 1;
-    background: transparent;
-    border: none;
-    outline: none;
-    color: var(--aaa-text);
-    font-size: 15px;
-    min-width: 0;
-    padding: 0;
+    flex: 1; background: transparent; border: none; outline: none;
+    color: var(--aaa-text); font-size: 15px; min-width: 0; padding: 0;
 }
-
-.aaa-search-input::placeholder {
-    color: var(--aaa-text-faint);
-}
-
+.aaa-search-input::placeholder { color: var(--aaa-text-faint); }
 .aaa-search-btn {
-    flex-shrink: 0;
-    padding: 6px 18px;
-    border-radius: var(--aaa-radius-pill);
-    border: none;
+    flex-shrink: 0; padding: 6px 18px;
+    border-radius: var(--aaa-radius-pill); border: none;
     background: linear-gradient(135deg, var(--aaa-primary), #9d6bff);
-    color: #fff;
-    font-size: 13px;
-    font-weight: 700;
-    cursor: pointer;
+    color: #fff; font-size: 13px; font-weight: 700; cursor: pointer;
     transition: transform var(--aaa-transition), opacity var(--aaa-transition);
     box-shadow: 0 6px 18px rgba(124,92,255,0.28);
 }
-
-.aaa-search-btn:hover {
-    transform: translateY(-1px);
-    opacity: 0.92;
-}
+.aaa-search-btn:hover { transform: translateY(-1px); opacity: 0.92; }
 
 /* ============================================================
    篩選列（glass card）
@@ -614,52 +652,31 @@ $breadcrumb_schema = [
     box-shadow: var(--aaa-shadow-sm);
     padding: 22px;
     margin-bottom: 36px;
-    display: flex;
-    flex-direction: column;
-    gap: 18px;
+    display: flex; flex-direction: column; gap: 18px;
 }
-
-.aaa-filter-group {
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-}
-
+.aaa-filter-group { display: flex; flex-direction: column; gap: 10px; }
 .aaa-filter-label {
-    font-size: 12px;
-    color: var(--aaa-text-muted);
-    font-weight: 700;
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
+    font-size: 12px; color: var(--aaa-text-muted);
+    font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase;
 }
-
-.aaa-filter-row {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 7px;
-}
+.aaa-filter-row { display: flex; flex-wrap: wrap; gap: 7px; align-items: center; }
 
 .aaa-filter-btn {
-    display: inline-flex;
-    align-items: center;
-    min-height: 32px;
-    padding: 0 14px;
+    display: inline-flex; align-items: center;
+    min-height: 32px; padding: 0 14px;
     border-radius: var(--aaa-radius-pill);
-    font-size: 13px;
-    text-decoration: none;
+    font-size: 13px; text-decoration: none;
     color: var(--aaa-text-muted);
     background: rgba(255,255,255,0.05);
     border: 1px solid var(--aaa-border);
     transition: all var(--aaa-transition);
     white-space: nowrap;
 }
-
 .aaa-filter-btn:hover {
     color: #fff;
     background: rgba(124,92,255,0.18);
     border-color: rgba(124,92,255,0.42);
 }
-
 .aaa-filter-btn.active {
     color: #fff;
     background: rgba(124,92,255,0.28);
@@ -668,7 +685,60 @@ $breadcrumb_schema = [
 }
 
 /* ============================================================
-   卡片網格
+   季度年份手風琴
+============================================================ */
+.aaa-year-accordion {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+    gap: 10px;
+    margin-top: 4px;
+}
+.aaa-year-item {
+    border-radius: var(--aaa-radius-md);
+    border: 1px solid var(--aaa-border);
+    background: rgba(255,255,255,0.03);
+    overflow: hidden;
+    transition: border-color var(--aaa-transition), background var(--aaa-transition);
+}
+.aaa-year-item.has-active {
+    border-color: rgba(124,92,255,0.55);
+    background: rgba(124,92,255,0.08);
+    box-shadow: 0 0 16px rgba(124,92,255,0.18);
+}
+.aaa-year-toggle { display: none; }
+
+.aaa-year-head {
+    display: flex; align-items: center; gap: 10px;
+    padding: 10px 14px;
+    cursor: pointer; user-select: none;
+    transition: background var(--aaa-transition);
+}
+.aaa-year-head:hover { background: rgba(124,92,255,0.10); }
+.aaa-year-name { font-size: 14px; font-weight: 700; color: #fff; flex: 1; }
+.aaa-year-count {
+    font-size: 11px; color: var(--aaa-text-faint);
+    padding: 2px 8px; border-radius: var(--aaa-radius-pill);
+    background: rgba(255,255,255,0.06);
+}
+.aaa-year-arrow {
+    font-size: 14px; color: var(--aaa-text-muted);
+    transition: transform var(--aaa-transition);
+}
+.aaa-year-toggle:checked ~ .aaa-year-head .aaa-year-arrow {
+    transform: rotate(180deg);
+    color: var(--aaa-primary-2);
+}
+
+.aaa-year-body {
+    display: none;
+    flex-wrap: wrap;
+    gap: 6px;
+    padding: 0 14px 12px;
+}
+.aaa-year-toggle:checked ~ .aaa-year-body { display: flex; }
+
+/* ============================================================
+   卡片網格（每頁 15 部 = 5 欄 × 3 行）
 ============================================================ */
 .aaa-grid {
     display: grid;
@@ -676,18 +746,15 @@ $breadcrumb_schema = [
     gap: 20px;
     margin-bottom: 40px;
 }
-
 @media (min-width: 600px) {
     .aaa-grid { grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); }
 }
-
 @media (min-width: 1024px) {
-    .aaa-grid { grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); }
+    .aaa-grid { grid-template-columns: repeat(5, 1fr); }
 }
 
 /* ============================================================
-   卡片（glassmorphism）
-   ACG v2：background 改為半透明深色，讓 backdrop-filter 有對比
+   卡片
 ============================================================ */
 .aaa-card {
     border-radius: var(--aaa-radius-md);
@@ -699,289 +766,173 @@ $breadcrumb_schema = [
     box-shadow: var(--aaa-shadow-sm);
     transition: transform var(--aaa-transition), box-shadow var(--aaa-transition), border-color var(--aaa-transition);
 }
-
 .aaa-card:hover {
     transform: translateY(-6px);
     box-shadow: var(--aaa-shadow-md);
     border-color: rgba(124,92,255,0.35);
 }
+.aaa-card-link { display: block; text-decoration: none; color: inherit; }
 
-.aaa-card-link {
-    display: block;
-    text-decoration: none;
-    color: inherit;
-}
-
-/* ── 封面 ── */
 .aaa-card-cover-wrap {
-    position: relative;
-    aspect-ratio: 2 / 3;
-    overflow: hidden;
-    background: var(--aaa-bg-3);
+    position: relative; aspect-ratio: 2 / 3;
+    overflow: hidden; background: var(--aaa-bg-3);
 }
-
 .aaa-card-cover {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-    display: block;
+    width: 100%; height: 100%;
+    object-fit: cover; display: block;
     transition: transform .38s ease;
 }
-
-.aaa-card:hover .aaa-card-cover {
-    transform: scale(1.06);
-}
-
+.aaa-card:hover .aaa-card-cover { transform: scale(1.06); }
 .aaa-no-cover {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: var(--aaa-text-faint);
-    font-size: 13px;
-    height: 100%;
+    display: flex; align-items: center; justify-content: center;
+    color: var(--aaa-text-faint); font-size: 13px; height: 100%;
     background:
         radial-gradient(circle at 30% 20%, rgba(124,92,255,0.24), transparent 34%),
         linear-gradient(135deg, #0d1d38, #101d35);
 }
 
-/* ── 狀態 Badge ── */
 .aaa-status-badge {
-    position: absolute;
-    top: 10px;
-    left: 10px;
-    padding: 3px 10px;
-    border-radius: var(--aaa-radius-pill);
-    font-size: 11px;
-    font-weight: 700;
-    letter-spacing: 0.04em;
-    backdrop-filter: blur(8px);
-    -webkit-backdrop-filter: blur(8px);
+    position: absolute; top: 10px; left: 10px;
+    padding: 3px 10px; border-radius: var(--aaa-radius-pill);
+    font-size: 11px; font-weight: 700; letter-spacing: 0.04em;
+    backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
 }
-
 .s-fin { background: rgba(52,211,153,0.20);  color: #34d399; border: 1px solid rgba(52,211,153,0.36); }
 .s-rel { background: rgba(76,201,240,0.20);  color: #4cc9f0; border: 1px solid rgba(76,201,240,0.36); }
 .s-pre { background: rgba(251,191,36,0.20);  color: #fbbf24; border: 1px solid rgba(251,191,36,0.36); }
 .s-can { background: rgba(251,113,133,0.20); color: #fb7185; border: 1px solid rgba(251,113,133,0.36); }
 .s-hia { background: rgba(251,113,133,0.20); color: #fb7185; border: 1px solid rgba(251,113,133,0.36); }
 
-/* ── 評分 Badge ── */
 .aaa-score-badge {
-    position: absolute;
-    bottom: 10px;
-    right: 10px;
+    position: absolute; bottom: 10px; right: 10px;
     background: rgba(0,0,0,0.72);
-    backdrop-filter: blur(8px);
-    -webkit-backdrop-filter: blur(8px);
-    color: #fbbf24;
-    padding: 3px 9px;
+    backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+    color: #fbbf24; padding: 3px 9px;
     border-radius: var(--aaa-radius-pill);
-    font-size: 12px;
-    font-weight: 800;
+    font-size: 12px; font-weight: 800;
     border: 1px solid rgba(251,191,36,0.28);
 }
 
-/* ── 卡片內容 ── */
-.aaa-card-body {
-    padding: 12px 14px 14px;
-    background: var(--aaa-surface-2);
-}
-
+.aaa-card-body { padding: 12px 14px 14px; background: var(--aaa-surface-2); }
 .aaa-card-title {
-    font-size: 13px;
-    font-weight: 700;
-    margin: 0 0 5px;
-    line-height: 1.45;
-    color: #fff;
-    display: -webkit-box;
-    -webkit-line-clamp: 2;
-    -webkit-box-orient: vertical;
+    font-size: 13px; font-weight: 700;
+    margin: 0 0 5px; line-height: 1.45; color: #fff;
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
     overflow: hidden;
 }
-
 .aaa-card-romaji {
-    font-size: 11px;
-    color: var(--aaa-text-faint);
+    font-size: 11px; color: var(--aaa-text-faint);
     margin: 0 0 8px;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
-
-.aaa-card-meta {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 4px;
-    margin-bottom: 7px;
-}
-
+.aaa-card-meta { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 7px; }
 .aaa-meta-tag {
-    font-size: 11px;
-    padding: 2px 8px;
-    border-radius: var(--aaa-radius-pill);
-    font-weight: 600;
+    font-size: 11px; padding: 2px 8px;
+    border-radius: var(--aaa-radius-pill); font-weight: 600;
 }
-
 .aaa-meta-format { background: rgba(124,92,255,0.20); color: #b8a0ff; border: 1px solid rgba(124,92,255,0.34); }
 .aaa-meta-season { background: rgba(52,211,153,0.16); color: #34d399; border: 1px solid rgba(52,211,153,0.30); }
 .aaa-meta-ep     { background: rgba(76,201,240,0.16); color: #4cc9f0; border: 1px solid rgba(76,201,240,0.30); }
-
-.aaa-card-pop {
-    font-size: 11px;
-    color: var(--aaa-text-faint);
-}
+.aaa-card-pop { font-size: 11px; color: var(--aaa-text-faint); }
 
 /* ============================================================
-   分頁（pill + 紫色主色）
+   分頁
 ============================================================ */
-.aaa-pagination {
-    display: flex;
-    justify-content: center;
-    margin: 36px 0;
-}
-
+.aaa-pagination { display: flex; justify-content: center; margin: 36px 0; }
 .aaa-pagination ul {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 6px;
-    list-style: none;
-    margin: 0;
-    padding: 0;
-    justify-content: center;
+    display: flex; flex-wrap: wrap; gap: 6px;
+    list-style: none; margin: 0; padding: 0; justify-content: center;
 }
-
 .aaa-pagination .page-numbers {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    min-width: 38px;
-    height: 38px;
-    padding: 0 12px;
+    display: inline-flex; align-items: center; justify-content: center;
+    min-width: 38px; height: 38px; padding: 0 12px;
     border-radius: var(--aaa-radius-pill);
     background: var(--aaa-surface);
     color: var(--aaa-text-muted);
-    text-decoration: none;
-    font-size: 14px;
-    font-weight: 600;
+    text-decoration: none; font-size: 14px; font-weight: 600;
     border: 1px solid var(--aaa-border);
-    backdrop-filter: var(--aaa-blur);
-    -webkit-backdrop-filter: var(--aaa-blur);
+    backdrop-filter: var(--aaa-blur); -webkit-backdrop-filter: var(--aaa-blur);
     transition: all var(--aaa-transition);
 }
-
 .aaa-pagination .page-numbers:hover {
-    color: #fff;
-    background: rgba(124,92,255,0.22);
+    color: #fff; background: rgba(124,92,255,0.22);
     border-color: rgba(124,92,255,0.48);
 }
-
 .aaa-pagination .page-numbers.current {
     background: linear-gradient(135deg, var(--aaa-primary), #9d6bff);
-    color: #fff;
-    border-color: transparent;
+    color: #fff; border-color: transparent;
     box-shadow: 0 6px 20px rgba(124,92,255,0.38);
 }
-
 .aaa-pagination .page-numbers.dots {
-    background: none;
-    border: none;
-    backdrop-filter: none;
-    cursor: default;
-    color: var(--aaa-text-faint);
+    background: none; border: none; backdrop-filter: none;
+    cursor: default; color: var(--aaa-text-faint);
 }
 
 /* ============================================================
-   SEO 底部連結
+   SEO 底部
 ============================================================ */
 .aaa-seo-footer {
     border-top: 1px solid var(--aaa-border);
-    padding-top: 28px;
-    margin-top: 20px;
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
+    padding-top: 28px; margin-top: 20px;
+    display: flex; flex-direction: column; gap: 12px;
 }
-
-.aaa-seo-row {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 7px;
-    align-items: center;
-}
-
+.aaa-seo-row { display: flex; flex-wrap: wrap; gap: 7px; align-items: center; }
 .aaa-seo-label {
-    font-size: 12px;
-    color: var(--aaa-text-faint);
-    min-width: 68px;
-    font-weight: 600;
+    font-size: 12px; color: var(--aaa-text-faint);
+    min-width: 68px; font-weight: 600;
 }
-
 .aaa-seo-tag {
-    font-size: 12px;
-    color: var(--aaa-text-muted);
-    text-decoration: none;
-    padding: 3px 10px;
+    font-size: 12px; color: var(--aaa-text-muted);
+    text-decoration: none; padding: 3px 10px;
     border-radius: var(--aaa-radius-pill);
     border: 1px solid var(--aaa-border);
     transition: all var(--aaa-transition);
 }
-
 .aaa-seo-tag:hover {
-    color: #fff;
-    background: rgba(124,92,255,0.14);
+    color: #fff; background: rgba(124,92,255,0.14);
     border-color: rgba(124,92,255,0.36);
 }
 
 /* ============================================================
-   無結果 / 無資料
+   空狀態
 ============================================================ */
 .aaa-empty {
-    text-align: center;
-    padding: 100px 20px;
+    text-align: center; padding: 100px 20px;
     color: var(--aaa-text-muted);
 }
-
-.aaa-empty p {
-    font-size: 1.1rem;
-    margin: 0 0 20px;
-}
-
+.aaa-empty p { font-size: 1.1rem; margin: 0 0 20px; }
 .aaa-import-btn {
-    display: inline-flex;
-    align-items: center;
-    min-height: 44px;
-    padding: 0 24px;
+    display: inline-flex; align-items: center;
+    min-height: 44px; padding: 0 24px;
     background: linear-gradient(135deg, var(--aaa-primary), #9d6bff);
-    color: #fff;
-    border-radius: var(--aaa-radius-pill);
-    text-decoration: none;
-    font-weight: 700;
+    color: #fff; border-radius: var(--aaa-radius-pill);
+    text-decoration: none; font-weight: 700;
     box-shadow: 0 10px 26px rgba(124,92,255,0.32);
     transition: transform var(--aaa-transition), opacity var(--aaa-transition);
 }
-
-.aaa-import-btn:hover {
-    transform: translateY(-2px);
-    opacity: 0.92;
-    color: #fff;
-}
+.aaa-import-btn:hover { transform: translateY(-2px); opacity: 0.92; color: #fff; }
 
 /* ============================================================
-   手機版 RWD
+   RWD
 ============================================================ */
 @media (max-width: 720px) {
     .aaa-wrap { padding: 0 14px 60px; }
-    .aaa-header { padding: 32px 14px 20px; }
+    .aaa-hero { margin: 0 -14px 0; aspect-ratio: 16 / 7; }
+    .aaa-header { padding: 22px 14px 20px; }
     .aaa-filter-wrap { padding: 16px; gap: 14px; }
     .aaa-filter-btn { font-size: 12px; min-height: 28px; padding: 0 11px; }
+    .aaa-year-accordion { grid-template-columns: 1fr; gap: 8px; }
+    .aaa-year-head { padding: 9px 12px; }
+    .aaa-year-name { font-size: 13px; }
     .aaa-search-inner { padding: 8px 12px; }
     .aaa-search-btn { padding: 5px 14px; font-size: 12px; }
 }
-
 @media (max-width: 480px) {
     .aaa-grid { grid-template-columns: repeat(2, 1fr); gap: 12px; }
     .aaa-card-body { padding: 9px 10px 10px; }
     .aaa-card-title { font-size: 12px; }
     .aaa-breadcrumb { padding: 9px 14px; }
+    .aaa-hero { aspect-ratio: 16 / 8; }
 }
 </style>
 
