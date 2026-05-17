@@ -3,6 +3,13 @@
  * Template Name: 會員排行榜
  * Template Post Type: page
  * @package weixiaoacg
+ * @version 2.0.0 (2026-05-17)
+ *
+ * v2.0.0 變更：
+ *   - 精簡為 3 個 tab：等級排行 / 本季牌位排行 / 上季牌位排行
+ *   - 移除 exp_monthly / followers / badges 三個分頁
+ *   - 移除側欄「隱私設定」卡片
+ *   - 排行規則卡同步調整為 3 條
  */
 
 if ( ! defined( 'ABSPATH' ) ) exit;
@@ -11,20 +18,27 @@ get_header();
 $current_uid  = get_current_user_id();
 $is_logged_in = is_user_logged_in();
 $updated_at   = get_option( 'smacg_ranking_last_rebuild', '' );
-$privacy_data = function_exists( 'smacg_ranking_privacy_localize_data' )
-    ? smacg_ranking_privacy_localize_data()
-    : [ 'visible' => true ];
 
 $default_tab = isset( $_GET['tab'] ) ? sanitize_key( $_GET['tab'] ) : 'exp_total';
-$valid_tabs  = [ 'exp_total', 'exp_monthly', 'followers', 'badges', 'rank_season' ];
+$valid_tabs  = [ 'exp_total', 'rank_season', 'rank_last_season' ];
 if ( ! in_array( $default_tab, $valid_tabs, true ) ) $default_tab = 'exp_total';
 
 $season_info = null;
 if ( $is_logged_in && function_exists( 'smacg_get_user_rank_season_info' ) ) {
     $season_info = smacg_get_user_rank_season_info( $current_uid );
 }
-$season_label  = function_exists( 'smacg_get_season_label' ) ? smacg_get_season_label() : '';
-$guide_url     = home_url( '/level-guide/' );
+$season_label = function_exists( 'smacg_get_season_label' ) ? smacg_get_season_label() : '';
+$guide_url    = home_url( '/level-guide/' );
+
+/* 「上季」label：取 archive 最近一個 season_code 並轉成顯示名稱 */
+$last_season_label = '';
+if ( class_exists( '\SMACG\Gamification\Rank_Season' )
+  && method_exists( '\SMACG\Gamification\Rank_Season', 'get_last_settled_season_code' ) ) {
+    $code = \SMACG\Gamification\Rank_Season::get_last_settled_season_code();
+    if ( $code && class_exists( '\SMACG\Gamification\Rank_Tier' ) ) {
+        $last_season_label = \SMACG\Gamification\Rank_Tier::season_label( $code );
+    }
+}
 ?>
 
 <section class="ranku-hero">
@@ -95,11 +109,9 @@ $guide_url     = home_url( '/level-guide/' );
           <div class="ranku-tabs" id="ranku-tabs" role="tablist" aria-label="<?php esc_attr_e( '排行榜類別', 'weixiaoacg' ); ?>">
             <?php
             $tabs = [
-              'exp_total'   => [ 'fa-bolt',       __( '累計 EXP', 'weixiaoacg' ) ],
-              'exp_monthly' => [ 'fa-fire',       __( '本月 EXP', 'weixiaoacg' ) ],
-              'rank_season' => [ 'fa-trophy',     __( '賽季排位', 'weixiaoacg' ) ],
-              'followers'   => [ 'fa-user-group', __( '粉絲數', 'weixiaoacg' ) ],
-              'badges'      => [ 'fa-medal',      __( '徽章數', 'weixiaoacg' ) ],
+              'exp_total'        => [ 'fa-bolt',   __( '等級排行', 'weixiaoacg' ) ],
+              'rank_season'      => [ 'fa-trophy', __( '本季牌位排行', 'weixiaoacg' ) ],
+              'rank_last_season' => [ 'fa-scroll', __( '上季牌位排行', 'weixiaoacg' ) ],
             ];
             foreach ( $tabs as $key => $info ) {
                 [ $icon, $label ] = $info;
@@ -115,7 +127,7 @@ $guide_url     = home_url( '/level-guide/' );
           </div>
           <div class="ranku-tabs-meta">
             <span class="ranku-count-info" id="ranku-count-info">
-              <?php esc_html_e( '累計 EXP', 'weixiaoacg' ); ?> · Top 100
+              <?php esc_html_e( '等級排行', 'weixiaoacg' ); ?> · Top 100
             </span>
           </div>
         </div>
@@ -154,11 +166,26 @@ $guide_url     = home_url( '/level-guide/' );
             <?php esc_html_e( '排行規則', 'weixiaoacg' ); ?>
           </h3>
           <ul class="ranku-rules">
-            <li><i class="fa-solid fa-bolt"></i> <strong><?php esc_html_e( '累計 EXP', 'weixiaoacg' ); ?></strong> — <?php esc_html_e( '註冊以來累計獲得的全部 EXP', 'weixiaoacg' ); ?></li>
-            <li><i class="fa-solid fa-fire"></i> <strong><?php esc_html_e( '本月 EXP', 'weixiaoacg' ); ?></strong> — <?php esc_html_e( '本月新獲得的 EXP（每月 1 日歸零）', 'weixiaoacg' ); ?></li>
-            <li><i class="fa-solid fa-trophy"></i> <strong><?php esc_html_e( '賽季排位', 'weixiaoacg' ); ?></strong> — <?php esc_html_e( '本季活躍積分，按 TFT 段位制（鐵～菁英），每季結束結算並重置', 'weixiaoacg' ); ?></li>
-            <li><i class="fa-solid fa-user-group"></i> <strong><?php esc_html_e( '粉絲數', 'weixiaoacg' ); ?></strong> — <?php esc_html_e( '追蹤你的會員人數', 'weixiaoacg' ); ?></li>
-            <li><i class="fa-solid fa-medal"></i> <strong><?php esc_html_e( '徽章數', 'weixiaoacg' ); ?></strong> — <?php esc_html_e( '解鎖的成就徽章總數', 'weixiaoacg' ); ?></li>
+            <li>
+              <i class="fa-solid fa-bolt"></i>
+              <strong><?php esc_html_e( '等級排行', 'weixiaoacg' ); ?></strong>
+              — <?php esc_html_e( '依註冊以來累計獲得的全部 EXP 排序，反映整體活躍度', 'weixiaoacg' ); ?>
+            </li>
+            <li>
+              <i class="fa-solid fa-trophy"></i>
+              <strong><?php esc_html_e( '本季牌位排行', 'weixiaoacg' ); ?></strong>
+              — <?php esc_html_e( '當季活躍積分，按 TFT 段位制（鐵～菁英），每季結束結算並重置', 'weixiaoacg' ); ?>
+            </li>
+            <li>
+              <i class="fa-solid fa-scroll"></i>
+              <strong><?php esc_html_e( '上季牌位排行', 'weixiaoacg' ); ?></strong>
+              —
+              <?php if ( $last_season_label ) :
+                  echo esc_html( sprintf( __( '%s 結算後的最終排名與段位', 'weixiaoacg' ), $last_season_label ) );
+              else :
+                  esc_html_e( '上一賽季結算後的最終排名快照', 'weixiaoacg' );
+              endif; ?>
+            </li>
           </ul>
           <a href="<?php echo esc_url( $guide_url ); ?>" class="ranku-guide-link">
             <i class="fa-solid fa-book"></i>
@@ -166,30 +193,6 @@ $guide_url     = home_url( '/level-guide/' );
             <i class="fa-solid fa-arrow-right"></i>
           </a>
         </div>
-
-        <?php if ( $is_logged_in ) : ?>
-        <div class="ranku-sidebar-card glass-mid">
-          <h3 class="ranku-sidebar-title">
-            <i class="fa-solid fa-user-shield" style="color:var(--accent-violet);"></i>
-            <?php esc_html_e( '隱私設定', 'weixiaoacg' ); ?>
-          </h3>
-          <p class="ranku-priv-desc"><?php esc_html_e( '是否要讓自己出現在排行榜？', 'weixiaoacg' ); ?></p>
-          <label class="ranku-toggle">
-            <input type="checkbox" id="ranku-visibility-toggle"
-                   <?php checked( ! empty( $privacy_data['visible'] ) ); ?>>
-            <span class="ranku-toggle-slider"></span>
-            <span class="ranku-toggle-label" id="ranku-toggle-label">
-              <?php echo ! empty( $privacy_data['visible'] )
-                  ? esc_html__( '顯示於排行榜', 'weixiaoacg' )
-                  : esc_html__( '已隱藏', 'weixiaoacg' ); ?>
-            </span>
-          </label>
-          <p class="ranku-priv-hint">
-            <i class="fa-solid fa-circle-info"></i>
-            <?php esc_html_e( '隱藏後立即從排行榜移除；下次重算才會重新計入', 'weixiaoacg' ); ?>
-          </p>
-        </div>
-        <?php endif; ?>
 
         <?php if ( ! $is_logged_in ) : ?>
         <div class="ranku-sidebar-card glass-mid ranku-cta">
