@@ -2,40 +2,44 @@
 /**
  * Plugin Name: Anime Sync Pro
  * Description: 從 AniList、Bangumi 自動同步動畫資料。
- * Version:     1.1.0
+ * Version:     1.1.1
  * Author:      weixiaoacg
  * Requires PHP: 8.0
  * Text Domain: anime-sync-pro
  *
  * Changelog:
+ *   1.1.1 — YourAnimes Fetcher 修復
+ *           - [修正] plugins_loaded 內未實例化 Anime_Sync_YourAnimes_Fetcher,
+ *                   導致 ACF「YourAnimes 網址」欄位下方的同步按鈕從未出現。
+ *                   現於 ACF 偵測通過後 new 此類別,並掛上對應的 admin AJAX。
  *   1.1.0 — 圖片尺寸最佳化 + image-handler 強化
- *           - [新增] 第 3.5 段：關閉 WordPress 預設不需要的圖片尺寸
- *                   （medium_large 768 / 1536 / 2048）
- *                   動畫封面 460x651 用不到，避免媒體庫膨脹（省約 60% 空間）。
+ *           - [新增] 第 3.5 段:關閉 WordPress 預設不需要的圖片尺寸
+ *                   (medium_large 768 / 1536 / 2048)
+ *                   動畫封面 460x651 用不到,避免媒體庫膨脹(省約 60% 空間)。
  *                   可由常數 ANIME_SYNC_DISABLE_LARGE_SIZES 關閉。
- *           - [配合] includes/class-image-handler.php 升至 1.1.0：
+ *           - [配合] includes/class-image-handler.php 升至 1.1.0:
  *                   resize 改為 atomic write、timeout 收斂、logger 統一。
  *   1.0.9 — Taxonomy seeder 內建化
  *           - [新增] init priority 99 觸發 Anime_Sync_Installer::run_pending_seed()
  *                   啟用 / 升級時自動建立 category / channel / genre /
  *                   anime_format_tax / anime_season_tax 種子 term
- *                   （取代舊的 setup-taxonomy.php，該檔案可從外掛根目錄刪除）
- *           - [改進] 配合 class-installer.php 1.3.0：
- *                   季度年份範圍動態計算（當年-3 ~ 當年+1，N=5），
- *                   每次升級自動往後滑動，不再寫死 2000–2035
+ *                   (取代舊的 setup-taxonomy.php,該檔案可從外掛根目錄刪除)
+ *           - [改進] 配合 class-installer.php 1.3.0:
+ *                   季度年份範圍動態計算(當年-3 ~ 當年+1,N=5),
+ *                   每次升級自動往後滑動,不再寫死 2000–2035
  *   1.0.8 — 主檔優化
- *           - [修正] 啟用時 flush_rewrite_rules() 時機過早（CPT 還沒註冊）
- *                   改用 anime_sync_flush_rewrite option 標記，由 init priority 99 處理
+ *           - [修正] 啟用時 flush_rewrite_rules() 時機過早(CPT 還沒註冊)
+ *                   改用 anime_sync_flush_rewrite option 標記,由 init priority 99 處理
  *           - [修正] genre taxonomy 不再註冊到不存在的 manga / novel CPT
- *           - [修正] save_post_anime 與 ACF 同步衝突：priority 改 20，
- *                   且只在 meta 為空時才用 post_title 回填，避免覆蓋人工編輯
+ *           - [修正] save_post_anime 與 ACF 同步衝突:priority 改 20,
+ *                   且只在 meta 為空時才用 post_title 回填,避免覆蓋人工編輯
  *           - [修正] save_post_anime 補上 wp_is_post_revision() 與 REST 自動草稿過濾
- *           - [改進] 拆分 ACF-依賴 與 非 ACF-依賴 的初始化，
+ *           - [改進] 拆分 ACF-依賴 與 非 ACF-依賴 的初始化,
  *                   讓評分系統與使用者狀態系統在 ACF 缺失時仍可運作
- *           - [改進] anime_sync_enrich_post 加入錯誤處理與指數退避重試（最多 3 次）
- *   1.0.7 — 新增使用者追蹤狀態系統（巴哈級規模）
- *           - wp_anime_user_status 主表（取代 user_meta JSON）
- *           - wp_anime_user_status_stats 彙總表（排行榜預計算）
+ *           - [改進] anime_sync_enrich_post 加入錯誤處理與指數退避重試(最多 3 次)
+ *   1.0.7 — 新增使用者追蹤狀態系統(巴哈級規模)
+ *           - wp_anime_user_status 主表(取代 user_meta JSON)
+ *           - wp_anime_user_status_stats 彙總表(排行榜預計算)
  *           - REST API: /weixiaoacg/v1/user-status/{anime_id}
  *           - Cron: 每 15 分鐘重算彙總表
  *   1.0.6 — 系列分類、ACF 欄位擴充、Editorial Routing
@@ -48,7 +52,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 // ============================================================
 // 1. 常數定義
 // ============================================================
-define( 'ANIME_SYNC_PRO_VERSION',  '1.1.0' );
+define( 'ANIME_SYNC_PRO_VERSION',  '1.1.1' );
 define( 'ANIME_SYNC_PRO_DIR',      plugin_dir_path( __FILE__ ) );
 define( 'ANIME_SYNC_PRO_URL',      plugin_dir_url( __FILE__ ) );
 define( 'ANIME_SYNC_PRO_BASENAME', plugin_basename( __FILE__ ) );
@@ -66,7 +70,7 @@ spl_autoload_register( function ( $class ) {
 		str_replace( [ 'Anime_Sync_', '_' ], [ '', '-' ], $class )
 	) . '.php';
 
-	// 防呆：避免連續底線產生連續連字號
+	// 防呆:避免連續底線產生連續連字號
 	$file_name = preg_replace( '/-+/', '-', $file_name );
 
 	$sources = [
@@ -221,16 +225,16 @@ add_action( 'init', function () {
 }, 10 );
 
 // ============================================================
-// 3.5. 圖片尺寸最佳化（針對動畫封面 460×651 不需要的大尺寸）
+// 3.5. 圖片尺寸最佳化(針對動畫封面 460×651 不需要的大尺寸)
 //
-// WordPress 預設會為每張上傳圖產生 6 個副本：
+// WordPress 預設會為每張上傳圖產生 6 個副本:
 //   thumbnail (150) / medium (300) / medium_large (768) / large (1024)
 //   / 1536x1536 / 2048x2048
 //
-// 動畫封面原圖只有 460×651，後三個尺寸（768/1536/2048）完全用不到，
-// 只會浪費磁碟空間（每張多 ~500KB；1000 部累積約 500MB）。
+// 動畫封面原圖只有 460×651,後三個尺寸(768/1536/2048)完全用不到,
+// 只會浪費磁碟空間(每張多 ~500KB;1000 部累積約 500MB)。
 //
-// 若需停用此最佳化，在 wp-config.php 加：
+// 若需停用此最佳化,在 wp-config.php 加:
 //   define( 'ANIME_SYNC_DISABLE_LARGE_SIZES', false );
 // ============================================================
 if ( ! defined( 'ANIME_SYNC_DISABLE_LARGE_SIZES' ) ) {
@@ -249,7 +253,7 @@ if ( ANIME_SYNC_DISABLE_LARGE_SIZES ) {
 		return $sizes;
 	}, 10, 1 );
 
-	// 2. 從 srcset 候選清單移除（避免 <img srcset> 引用不存在的尺寸）
+	// 2. 從 srcset 候選清單移除(避免 <img srcset> 引用不存在的尺寸)
 	add_filter( 'wp_calculate_image_srcset', function ( $sources ) {
 		if ( ! is_array( $sources ) ) {
 			return $sources;
@@ -320,7 +324,7 @@ register_deactivation_hook( __FILE__, function () {
 } );
 
 // ============================================================
-// 6. 載入外掛核心（plugins_loaded）
+// 6. 載入外掛核心(plugins_loaded)
 // ============================================================
 add_action( 'plugins_loaded', function () {
 
@@ -371,14 +375,23 @@ add_action( 'plugins_loaded', function () {
 		new Anime_Sync_ACF_Fields();
 	}
 
+	// ----------------------------------------------------------
+	// ★ 1.1.1 修正:YourAnimes 串流連結爬蟲(後台同步按鈕)
+	// 必須在 ACF 偵測通過後實例化,因為它依賴 acf/render_field/name=... hook
+	// ----------------------------------------------------------
+	if ( class_exists( 'Anime_Sync_YourAnimes_Fetcher' ) ) {
+		new Anime_Sync_YourAnimes_Fetcher();
+	}
+
 	if ( class_exists( 'Anime_Sync_Frontend' ) ) {
 		new Anime_Sync_Frontend();
 	}
 
 	if ( is_admin() || ( defined( 'DOING_CRON' ) && DOING_CRON ) ) {
 
-$rate_limiter = class_exists('Anime_Sync_Rate_Limiter') ? Anime_Sync_Rate_Limiter::get_instance() : null;
-
+		$rate_limiter = class_exists( 'Anime_Sync_Rate_Limiter' )
+			? Anime_Sync_Rate_Limiter::get_instance()
+			: null;
 
 		$id_mapper = class_exists( 'Anime_Sync_ID_Mapper' )
 			? new Anime_Sync_ID_Mapper( $rate_limiter )
@@ -462,7 +475,7 @@ $rate_limiter = class_exists('Anime_Sync_Rate_Limiter') ? Anime_Sync_Rate_Limite
 } );
 
 // ============================================================
-// 7. Init priority 99：rewrite flush + taxonomy seed
+// 7. Init priority 99:rewrite flush + taxonomy seed
 // ============================================================
 add_action( 'init', function () {
 
