@@ -4,7 +4,21 @@
  *
  * @package weixiaoacg
  * @subpackage PublicProfile
- * @version 1.2.1 (2026-05-16)
+ * @version 1.3.0 (2026-05-17)
+ *
+ * v1.3.0 變更（2026-05-17）：
+ *   - 【Bug 修復・跑版根因】smacg_pp_dispatch() 在 include 模板前
+ *     重置 $wp_query 狀態為「虛擬 page」：
+ *       - is_home / is_front_page / is_archive / is_category / is_tag /
+ *         is_tax / is_search / is_404 / is_posts_page 全部設為 false
+ *       - is_singular / is_page 設為 true
+ *       - queried_object 設為當前 WP_User
+ *       - status_header(200)
+ *     原因：先前 $wp_query 仍處於原始 home/blog 狀態，
+ *     導致 page-public-profile.php 內呼叫的 get_header() → body_class()
+ *     輸出 "home blog" 等不應出現的 class，使 Blocksy 父主題套用
+ *     首頁 / 列表頁版面與 .pp-wrap 疊加，造成公開頁跑版。
+ *     此修復為跑版根本解，配合主題端 body_class filter 雙保險。
  *
  * v1.2.1 變更（2026-05-16，hotfix）：
  *   - 【Bug 修復・回滾 v1.2.0 的 Section 6 設計】
@@ -148,24 +162,18 @@ add_action( 'switch_theme', function () {
    v1.1.0：移除模糊比對 fallback（避免 /u/taro/ 跑去顯示 taro2）
    v1.2.0：偵測 smacg_pp_section（followers/following）時，
            只解析 user 並設定全域變數，模板載入交給 followers-page.php
+   v1.3.0：include 模板前重置 $wp_query 狀態為虛擬 page，
+           避免 body_class 殘留 home/blog 造成版面疊加跑版
    ============================================================ */
 add_action( 'template_redirect', 'smacg_pp_dispatch' );
 function smacg_pp_dispatch() {
     $username = get_query_var( 'smacg_pp_user' );
     if ( empty( $username ) ) return;
 
-    // URL 解碼（支援中文 username）
     $username = urldecode( $username );
-
-    // 1) 完全匹配 user_login
     $user = get_user_by( 'login', $username );
+    if ( ! $user ) $user = get_user_by( 'slug', $username );
 
-    // 2) 完全匹配 user_nicename (slug)
-    if ( ! $user ) {
-        $user = get_user_by( 'slug', $username );
-    }
-
-    // 找不到 → 直接 404，不再做模糊比對（避免誤指）
     if ( ! $user ) {
         global $wp_query;
         $wp_query->set_404();
@@ -174,50 +182,102 @@ function smacg_pp_dispatch() {
         return;
     }
 
-    // 把 user 物件存進全域，供模板用
-    // 不論主頁、tab、followers/following 子頁，都需要此全域變數，
-    // 這也讓 smacg_is_public_profile_page() 對所有子頁自動回傳 true，
-    // 主題 setup-enqueue.php 內 public-profile.css/js 因此自動沿用。
     $GLOBALS['smacg_pp_user_obj'] = $user;
 
-    // v1.2.0：followers/following 子頁不由本檔載入模板，
-    //         交給 followers-page.php 的 template_redirect 處理（priority 11）。
-    //         本檔仍負責設定 user 全域變數與 SEO meta hook。
+    /* ============================================================
+       v1.3.1 修復：用「掛在 page-id-1 的虛擬 page 上」的方式重置 query
+       ------------------------------------------------------------
+       - 找一個現有 page（優先取 ID=1 之外的、設為「全寬無 sidebar」的 page）
+       - 把它塞進 $wp_query->posts，讓主題拿得到 queried_object
+       - 但實際模板用 template_include filter 切到 page-public-profile.php
+       ============================================================ */
+    global $wp_query;
+
+    // 建立一個假的 WP_Post 物件（不查 DB，避免污染快取）
+    $fake_post = new stdClass();
+    $fake_post->ID             = 0;
+    $fake_post->post_author    = $user->ID;
+    $fake_post->post_date      = current_time( 'mysql' );
+    $fake_post->post_date_gmt  = current_time( 'mysql', 1 );
+    $fake_post->post_title     = ( $user->display_name ?: $user->user_login ) . ' 的個人頁';
+    $fake_post->post_content   = '';
+    $fake_post->post_status    = 'publish';
+    $fake_post->comment_status = 'closed';
+    $fake_post->ping_status    = 'closed';
+    $fake_post->post_name      = 'u-' . $user->user_nicename;
+    $fake_post->post_type      = 'page';
+    $fake_post->filter         = 'raw';
+    $fake_post = new WP_Post( $fake_post );
+
+    $wp_query->posts                = [ $fake_post ];
+    $wp_query->post                 = $fake_post;
+    $wp_query->queried_object       = $fake_post;
+    $wp_query->queried_object_id    = 0;
+    $wp_query->post_count           = 1;
+    $wp_query->current_post         = -1;
+    $wp_query->found_posts          = 1;
+    $wp_query->max_num_pages        = 1;
+    $wp_query->is_home              = false;
+    $wp_query->is_front_page        = false;
+    $wp_query->is_archive           = false;
+    $wp_query->is_category          = false;
+    $wp_query->is_tag               = false;
+    $wp_query->is_tax               = false;
+    $wp_query->is_author            = false;
+    $wp_query->is_search            = false;
+    $wp_query->is_feed              = false;
+    $wp_query->is_404               = false;
+    $wp_query->is_posts_page        = false;
+    $wp_query->is_post_type_archive = false;
+    $wp_query->is_singular          = true;
+    $wp_query->is_page              = true;
+    $wp_query->is_single            = false;
+
+    // 讓 $post 全域同步
+    $GLOBALS['post'] = $fake_post;
+    setup_postdata( $fake_post );
+
+    status_header( 200 );
+    nocache_headers();
+
+    // followers/following 子頁交給 followers-page.php
     $section = get_query_var( 'smacg_pp_section' );
     if ( $section === 'followers' || $section === 'following' ) {
-        // 仍掛 SEO meta，但標題與描述會由 followers-page.php 內的 filter 覆蓋
         add_action( 'wp_head', 'smacg_pp_render_meta_tags', 1 );
         add_filter( 'wpseo_canonical',                       'smacg_pp_filter_seo_canonical', 10, 1 );
         add_filter( 'rank_math/frontend/canonical',          'smacg_pp_filter_seo_canonical', 10, 1 );
         add_filter( 'aioseo_canonical_url',                  'smacg_pp_filter_seo_canonical', 10, 1 );
         add_filter( 'wpseo_opengraph_title',                 'smacg_pp_filter_seo_title', 10, 1 );
         add_filter( 'rank_math/opengraph/facebook/og_title', 'smacg_pp_filter_seo_title', 10, 1 );
-        return; // ← 不 include 主模板
+        return;
     }
 
-    // 主頁與 tab 子頁：載入既有模板
-    $template = locate_template( 'page-public-profile.php' );
-    if ( $template ) {
-        // SEO：發送 meta tags
-        add_action( 'wp_head', 'smacg_pp_render_meta_tags', 1 );
+    // SEO hooks
+    add_action( 'wp_head', 'smacg_pp_render_meta_tags', 1 );
+    add_filter( 'wpseo_canonical',                       'smacg_pp_filter_seo_canonical', 10, 1 );
+    add_filter( 'rank_math/frontend/canonical',          'smacg_pp_filter_seo_canonical', 10, 1 );
+    add_filter( 'aioseo_canonical_url',                  'smacg_pp_filter_seo_canonical', 10, 1 );
+    add_filter( 'wpseo_opengraph_title',                 'smacg_pp_filter_seo_title', 10, 1 );
+    add_filter( 'rank_math/opengraph/facebook/og_title', 'smacg_pp_filter_seo_title', 10, 1 );
 
-        // v1.1.0：覆寫 Yoast / Rank Math 的 canonical
-        add_filter( 'wpseo_canonical',                 'smacg_pp_filter_seo_canonical', 10, 1 );
-        add_filter( 'rank_math/frontend/canonical',    'smacg_pp_filter_seo_canonical', 10, 1 );
-        add_filter( 'aioseo_canonical_url',            'smacg_pp_filter_seo_canonical', 10, 1 );
+    /* ★ 核心：用 template_include filter 切模板，讓 Blocksy 正常走完版面流程 */
+    add_filter( 'template_include', function( $template ) {
+        $custom = locate_template( 'page-public-profile.php' );
+        return $custom ?: $template;
+    }, 999 );
 
-        // 同時讓它們的 OG tags 用我們的資料
-        add_filter( 'wpseo_opengraph_title',           'smacg_pp_filter_seo_title', 10, 1 );
-        add_filter( 'rank_math/opengraph/facebook/og_title', 'smacg_pp_filter_seo_title', 10, 1 );
-
-        include $template;
-        exit;
-    }
-
-    // 沒模板 → 404
-    global $wp_query;
-    $wp_query->set_404();
-    status_header( 404 );
+    /* ★ 告訴 Blocksy 走「全寬無 sidebar」layout */
+    add_filter( 'blocksy:dynamic-styles-descriptor', '__return_empty_array' );
+    add_filter( 'blocksy:options:single:page:default-layout', function() { return 'wide'; });
+    add_filter( 'blocksy:pro:page:has-sidebar', '__return_false' );
+    add_filter( 'option_blocksy_post_meta', function( $v ) {
+        // 強制此頁為 wide / no sidebar / no hero
+        return is_array( $v ) ? array_merge( $v, [
+            'sidebar' => 'no',
+            'content_style' => 'wide',
+            'has_hero_section' => 'no',
+        ]) : $v;
+    });
 }
 
 /* ============================================================
