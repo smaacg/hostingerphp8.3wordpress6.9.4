@@ -8,6 +8,10 @@ defined( 'ABSPATH' ) || exit;
  *
  * 監聽各種業務事件，依「進行中活動」的 action_type 將進度寫入 wp_smacg_event_progress 表；
  * 達標時即時觸發 settle_one()，並寫入 reached_at + awarded_at。
+ *
+ * @version 1.1.0 (2026-05-18)
+ *   - Fix #12：settle_one() 改用「先 UPDATE awarded_at WHERE awarded_at IS NULL」
+ *               搭配 $wpdb->rows_affected 判斷，避免極端並發下雙發獎勵。
  */
 class Event_Tracker {
 
@@ -98,6 +102,19 @@ class Event_Tracker {
 
     /* ==========================================================
      * 立即結算（達標瞬間）：發 EXP + Badge + Title + 通知
+     *
+     * ★ Fix #12 (2026-05-18)：
+     * 舊作法是「先 SELECT awarded_at 判斷是否為空 → 發獎 → UPDATE awarded_at」，
+     * 在極端並發（例如同一秒兩個 request 同時讓 user 達標）下，兩個 process 可能
+     * 都讀到 awarded_at = NULL，導致雙發獎勵。
+     *
+     * 新作法：先用「UPDATE awarded_at WHERE awarded_at IS NULL」做原子搶鎖，
+     * 用 $wpdb->rows_affected 判斷自己是不是真的拿到鎖，沒拿到就 return。
+     * 之後的 award_exp/award_badge/title/notification 都在搶到鎖後才執行。
+     *
+     * 副作用：如果之後 award_exp 失敗，awarded_at 已被寫入 → 這個 user 不會再
+     * 被結算。這是刻意取捨：寧可漏發也不要雙發（漏發可手動補；雙發要手動扣回，
+     * 而且使用者體感差）。
      * ========================================================== */
     public static function settle_one( $event_id, $uid, $ev = null ) {
         if ( ! $ev ) $ev = Event_CPT::get_meta( $event_id );
@@ -105,13 +122,24 @@ class Event_Tracker {
 
         global $wpdb;
         $tbl = $wpdb->prefix . 'smacg_event_progress';
+        $now = current_time( 'mysql' );
 
-        /* 防雙發 */
-        $row = $wpdb->get_row( $wpdb->prepare(
-            "SELECT awarded_at FROM {$tbl} WHERE event_id = %d AND user_id = %d",
-            $event_id, $uid
-        ), ARRAY_A );
-        if ( ! $row || ! empty( $row['awarded_at'] ) ) return false;
+        /* ── 原子搶鎖：只有第一個成功 UPDATE 的 process 會拿到 rows_affected = 1 ── */
+        $wpdb->query( $wpdb->prepare(
+            "UPDATE {$tbl}
+                SET awarded_at = %s
+              WHERE event_id = %d
+                AND user_id  = %d
+                AND awarded_at IS NULL
+                AND reached_at IS NOT NULL",
+            $now, (int) $event_id, (int) $uid
+        ) );
+
+        if ( (int) $wpdb->rows_affected !== 1 ) {
+            return false; // 已被另一個 process 結算 / 還沒達標 / 該列不存在
+        }
+
+        /* ── 以下為「我拿到鎖」之後才做的事 ── */
 
         /* EXP */
         if ( $ev['reward_exp'] > 0 ) {
@@ -130,13 +158,6 @@ class Event_Tracker {
                 update_user_meta( $uid, 'smacg_event_titles', $titles );
             }
         }
-
-        /* 標記 awarded */
-        $wpdb->update( $tbl,
-            [ 'awarded_at' => current_time( 'mysql' ) ],
-            [ 'event_id' => $event_id, 'user_id' => $uid ],
-            [ '%s' ], [ '%d', '%d' ]
-        );
 
         /* 通知 */
         if ( function_exists( 'smacg_create_notification' ) ) {
