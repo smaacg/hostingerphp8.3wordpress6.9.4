@@ -1,0 +1,225 @@
+/**
+ * Bangumi 模組樣式
+ * v1.0.0 (2026-05-18)
+ *
+ * 範圍：/bangumi/、/bangumi/{ym}/、/bangumi/archive/
+ * 由 bangumi-loader.php 條件式 enqueue
+ *
+ * 注意：season 頁（page-bangumi.php）目前仍 inline，本檔的 .bgm-* 與其重複的部分
+ *       是「容錯備援」+「archive 頁專用」。重複規則 cascade 同層，順序無關。
+ */
+
+/* ============================================================
+ * 共用：麵包屑（season + archive 共用）
+ * ============================================================ */
+.bangumi-breadcrumb {
+  max-width: 1200px;
+  margin: 16px auto 0;
+  padding: 0 16px;
+  font-size: 13px;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.bangumi-breadcrumb a { color: var(--text-secondary); text-decoration: none; }
+.bangumi-breadcrumb a:hover { color: var(--bgm-main, #8b5cf6); }
+.bangumi-breadcrumb .bc-current { color: var(--text-primary); font-weight: 600; }
+
+/* ============================================================
+ * Archive 頁 — Hero
+ * ============================================================ */
+.bgm-arc-hero {
+  background: linear-gradient(135deg, rgba(139,92,246,0.12) 0%, rgba(96,165,250,0.08) 100%);
+  border-bottom: 1px solid var(--glass-border);
+  padding: 36px 0 28px;
+}
+.bgm-arc-hero-inner {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 16px;
+}
+.bgm-arc-hero-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(167,139,250,0.15);
+  border: 1px solid rgba(167,139,250,0.4);
+  color: #a78bfa;
+  border-radius: 999px;
+  padding: 4px 14px;
+  font-size: 12px;
+  font-weight: 600;
+  margin-bottom: 12px;
+}
+.bgm-arc-hero-title {
+  font-size: 30px;
+  font-weight: 800;
+  color: var(--text-primary);
+  margin: 0 0 6px;
+}
+.bgm-arc-hero-sub {
+  font-size: 14px;
+  color: var(--text-muted);
+  margin: 0;
+}
+.bgm-arc-hero-sub strong {
+  color: var(--text-primary);
+  font-weight: 700;
+  margin: 0 2px;
+}
+.bgm-arc-back { margin-top: 16px; }
+.bgm-arc-back a {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 14px;
+  border-radius: 8px;
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 600;
+  text-decoration: none;
+  transition: all .2s;
+}
+.bgm-arc-back a:hover {
+  background: rgba(167,139,250,0.15);
+  border-color: rgba(167,139,250,0.4);
+  color: #a78bfa;
+}
+
+/* ============================================================
+ * Archive 頁 — 年份列表
+ * ============================================================ */
+.bgm-arc-main {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 28px 16px 60px;
+}
+.bgm-arc-empty {
+  text-align: center;
+  color: var(--text-muted);
+  padding: 80px 0;
+}
+.bgm-arc-empty i {
+  font-size: 40px;
+  display: block;
+  margin-bottom: 12px;
+  opacity: .5;
+}
+
+.bgm-arc-list {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.bgm-arc-year {
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  border-radius: 16px;
+  padding: 18px 20px 22px;
+  transition: border-color .2s, background .2s;
+}
+.bgm-arc-year:hover {
+  border-color: rgba(167,139,250,0.35);
+}
+.bgm-arc-year-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: 14px;
+}
+.bgm-arc-year-title {
+  margin: 0;
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+  color: var(--text-primary);
+}
+.bgm-arc-year-num {
+  font-size: 28px;
+  font-weight: 800;
+  letter-spacing: -0.5px;
+}
+.bgm-arc-year-suffix {
+  font-size: 14px;
+  color: var(--text-muted);
+  font-weight: 500;
+}
+.bgm-arc-year-count {
+  font-size: 12px;
+  color: var(--text-muted);
+  background: var(--glass-bg-mid, rgba(255,255,255,0.04));
+  border-radius: 999px;
+  padding: 3px 10px;
+}
+
+.bgm-arc-seasons {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+}
+
+.bgm-arc-season {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 16px 8px;
+  border-radius: 12px;
+  text-decoration: none;
+  background: color-mix(in srgb, var(--s-color) calc(var(--s-alpha) * 100%), transparent);
+  border: 1px solid color-mix(in srgb, var(--s-color) 35%, transparent);
+  color: var(--text-primary);
+  transition: transform .15s, border-color .15s, background .2s;
+  position: relative;
+  overflow: hidden;
+}
+.bgm-arc-season:hover {
+  transform: translateY(-2px);
+  border-color: var(--s-color);
+}
+.bgm-arc-season.is-empty {
+  background: rgba(255,255,255,0.03);
+  border-color: var(--glass-border);
+  color: var(--text-muted);
+  cursor: default;
+  pointer-events: none;
+  opacity: .5;
+}
+.bgm-arc-season-icon { font-size: 22px; line-height: 1; }
+.bgm-arc-season-name {
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+}
+.bgm-arc-season-cnt {
+  font-size: 18px;
+  font-weight: 800;
+  color: var(--s-color);
+  line-height: 1;
+}
+.bgm-arc-season.is-empty .bgm-arc-season-cnt {
+  color: var(--text-muted);
+}
+
+/* ============================================================
+ * 響應式
+ * ============================================================ */
+@media (max-width: 768px) {
+  .bgm-arc-hero-title { font-size: 22px; }
+  .bgm-arc-year { padding: 14px 14px 16px; }
+  .bgm-arc-year-num { font-size: 22px; }
+  .bgm-arc-seasons { gap: 8px; }
+  .bgm-arc-season { padding: 12px 4px; }
+  .bgm-arc-season-icon { font-size: 18px; }
+  .bgm-arc-season-cnt { font-size: 16px; }
+}
+
+@media (max-width: 480px) {
+  .bgm-arc-main { padding: 20px 12px 40px; }
+  .bgm-arc-year-head { margin-bottom: 10px; }
+}
