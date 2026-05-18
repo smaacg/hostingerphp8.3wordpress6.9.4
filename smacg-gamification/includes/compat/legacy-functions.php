@@ -6,6 +6,9 @@
  *   - 改採 sqrt(exp/5) 公式 + 6 階會員稱號 + 8 職業天命之路
  *   - 廢除舊 8 階轉職稱號 / 4 職業 Career_Ajax
  *
+ * v2.0.1 (2026-05-17)
+ *   - smacg_ranking_user_position() 新增 rank_last_season 支援
+ *
  * @package SMACG_Gamification
  */
 defined( 'ABSPATH' ) || exit;
@@ -50,7 +53,7 @@ if ( ! function_exists( 'smacg_award_badge' ) ) {
     function smacg_award_badge( $uid, $badge_post_id ) { return Gamipress_Bridge::award_badge( $uid, $badge_post_id ); }
 }
 
-/* ========================================================== Level（新版：sqrt + 6 階會員稱號）========================================================== */
+/* ========================================================== Level ========================================================== */
 if ( ! function_exists( 'smacg_calc_user_level' ) ) {
     function smacg_calc_user_level( $exp ) { return Level_System::calc_level_from_exp( $exp ); }
 }
@@ -79,7 +82,6 @@ if ( ! function_exists( 'smacg_get_level_title' ) ) {
     }
 }
 if ( ! function_exists( 'smacg_get_all_member_tiers' ) ) {
-    /** /level-guide/ 用：6 階會員稱號完整表 */
     function smacg_get_all_member_tiers() { return Level_System::get_all_tiers(); }
 }
 if ( ! function_exists( 'smacg_grant_exp' ) ) {
@@ -88,7 +90,7 @@ if ( ! function_exists( 'smacg_grant_exp' ) ) {
     }
 }
 
-/* ========================================================== Career Jobs（8 職業 × 4 階稱號）========================================================== */
+/* ========================================================== Career Jobs ========================================================== */
 if ( ! function_exists( 'smacg_get_jobs' ) ) {
     function smacg_get_jobs() { return Career_Jobs::all(); }
 }
@@ -122,10 +124,16 @@ if ( ! function_exists( 'smacg_ranking_get' ) ) {
     }
 }
 if ( ! function_exists( 'smacg_ranking_user_position' ) ) {
+    /**
+     * v2.0.1：新增 rank_last_season 支援
+     */
     function smacg_ranking_user_position( $type, $uid ) {
         if ( $type === 'rank_season' ) {
             $info = Rank_Season::get_user_info( (int) $uid );
             return $info['rank'] > 0 ? $info['rank'] : null;
+        }
+        if ( $type === 'rank_last_season' ) {
+            return Rank_Season::get_archive_user_position( (int) $uid );
         }
         return Ranking_System::user_position( $type, $uid );
     }
@@ -141,7 +149,7 @@ if ( ! function_exists( 'smacg_user_appears_in_ranking' ) ) {
     }
 }
 
-/* ========================================================== Rank Season（TFT 段位）========================================================== */
+/* ========================================================== Rank Season ========================================================== */
 if ( ! function_exists( 'smacg_get_user_rank_season_info' ) ) {
     function smacg_get_user_rank_season_info( $uid, $season_code = null ) {
         return Rank_Season::get_user_info( (int) $uid, $season_code );
@@ -235,7 +243,6 @@ if ( ! function_exists( 'smacg_describe_exp_cap' ) ) {
 }
 
 if ( ! function_exists( 'smacg_get_all_rank_tiers' ) ) {
-    /** /level-guide/ 用：TFT 段位完整表 */
     function smacg_get_all_rank_tiers() {
         $tiers = \SMACG\Gamification\Rank_Tier::TIERS;
         $out   = [];
