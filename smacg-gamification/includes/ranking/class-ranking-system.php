@@ -14,6 +14,11 @@ defined( 'ABSPATH' ) || exit;
  *
  * Hook：
  *   smacg_exp_awarded → record_monthly_exp()
+ *
+ * @since 1.0.0
+ * @version 1.1.0 (2026-05-18) Fix #4：改用 smacg_get_user_level_info()（舊函式已於
+ *                              smacg-members v1.3.0 移除，導致 level 永遠回傳 1、
+ *                              job_title 為空）。
  */
 class Ranking_System {
 
@@ -77,9 +82,15 @@ class Ranking_System {
 
         $items = [];
         foreach ( $rows as $r ) {
-            $uid  = (int) $r['user_id'];
-            $u    = get_userdata( $uid );
-            $info = function_exists( 'smacg_get_user_level' ) ? smacg_get_user_level( $uid ) : null;
+            $uid = (int) $r['user_id'];
+            $u   = get_userdata( $uid );
+
+            /* ★ Fix #4 (2026-05-18)：
+             * 舊版呼叫的 smacg_get_user_level() 已於 smacg-members v1.3.0 移除，
+             * 改用 smacg_get_user_level_info()。job_title 需另外取得。 */
+            $info      = function_exists( 'smacg_get_user_level_info' ) ? smacg_get_user_level_info( $uid ) : null;
+            $job_title = function_exists( 'smacg_get_user_job_title' )  ? (string) smacg_get_user_job_title( $uid ) : '';
+
             $items[] = [
                 'rank'         => (int) $r['rank_pos'],
                 'user_id'      => $uid,
@@ -87,8 +98,8 @@ class Ranking_System {
                 'display_name' => $u ? $u->display_name : '(已刪除)',
                 'avatar'       => get_avatar_url( $uid, [ 'size' => 96 ] ),
                 'profile_url'  => function_exists( 'smacg_get_public_profile_url' ) ? smacg_get_public_profile_url( $uid ) : '',
-                'level'        => $info['level'] ?? 1,
-                'job_title'    => $info['job_title'] ?? '',
+                'level'        => is_array( $info ) ? (int) ( $info['level'] ?? 1 ) : 1,
+                'job_title'    => $job_title,
                 'extra'        => $r['extra'] ? json_decode( $r['extra'], true ) : null,
             ];
         }
@@ -202,17 +213,8 @@ class Ranking_System {
                 return $rows ?: [];
 
             case 'badges':
-                $sql = $wpdb->prepare( "
-                    SELECT user_id, COUNT(*) AS score
-                    FROM {$wpdb->usermeta}
-                    WHERE meta_key = '_gamipress_achievements'
-                      AND user_id NOT IN ($excluded_in)
-                    GROUP BY user_id
-                    ORDER BY score DESC
-                    LIMIT %d
-                ", $limit );
-                /* 註：GamiPress 的徽章紀錄不在 usermeta，而在 wp_gamipress_user_earnings；
-                 *    如果該表存在則優先使用它。 */
+                /* GamiPress 的徽章紀錄在 wp_gamipress_user_earnings，如果該表存在則使用它；
+                 * 否則 fallback 到 usermeta（舊版相容）。 */
                 $earnings_tbl = $wpdb->prefix . 'gamipress_user_earnings';
                 if ( $wpdb->get_var( "SHOW TABLES LIKE '$earnings_tbl'" ) === $earnings_tbl ) {
                     $sql = $wpdb->prepare( "
@@ -224,6 +226,16 @@ class Ranking_System {
                         ORDER BY score DESC
                         LIMIT %d
                     ", SMACG_BADGE_SLUG, $limit );
+                } else {
+                    $sql = $wpdb->prepare( "
+                        SELECT user_id, COUNT(*) AS score
+                        FROM {$wpdb->usermeta}
+                        WHERE meta_key = '_gamipress_achievements'
+                          AND user_id NOT IN ($excluded_in)
+                        GROUP BY user_id
+                        ORDER BY score DESC
+                        LIMIT %d
+                    ", $limit );
                 }
                 $rows = $wpdb->get_results( $sql, ARRAY_A );
                 return $rows ?: [];
