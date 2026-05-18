@@ -263,28 +263,29 @@ add_action( 'wp_enqueue_scripts', function () {
     $req = isset( $_SERVER['REQUEST_URI'] ) ? trim( (string) wp_parse_url( $_SERVER['REQUEST_URI'], PHP_URL_PATH ), '/' ) : '';
     if ( $req !== 'bangumi' && strpos( $req, 'bangumi/' ) !== 0 ) return;
 
-    $base = get_stylesheet_directory_uri() . '/assets/';
-    $dir  = get_stylesheet_directory() . '/assets/';
+    $theme_url = get_stylesheet_directory_uri();
+    $theme_dir = get_stylesheet_directory();
 
-    $css = $dir . 'bangumi.css';
+    $css = $theme_dir . '/assets/css/bangumi.css';
     if ( file_exists( $css ) ) {
         wp_enqueue_style(
             'smacg-bangumi',
-            $base . 'bangumi.css',
+            $theme_url . '/assets/css/bangumi.css',
             [],
             filemtime( $css )
         );
     }
 
-    $js = $dir . 'bangumi.js';
+    $js = $theme_dir . '/assets/js/bangumi.js';
     if ( file_exists( $js ) ) {
         wp_enqueue_script(
             'smacg-bangumi',
-            $base . 'bangumi.js',
+            $theme_url . '/assets/js/bangumi.js',
             [],
             filemtime( $js ),
             true
         );
     }
 } );
+
 
