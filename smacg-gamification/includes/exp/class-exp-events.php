@@ -7,6 +7,8 @@ defined( 'ABSPATH' ) || exit;
  * EXP 事件監聽
  *
  * v2.6.0：award_with_cap() 在發放 EXP 後同步寫入 Rank_Season（賽季積分）
+ * v2.6.1 (2026-05-18)：Fix #11 — daily_reset() 改用單一 DELETE SQL，避免
+ *                       N 筆 usermeta 各跑一次 DELETE 造成 cron 拖時間。
  */
 class Exp_Events {
 
@@ -191,25 +193,33 @@ class Exp_Events {
         self::award_with_cap( $user_id, 'badge_unlock', $args );
     }
 
+    /**
+     * 每日清理：刪除 2 天前以上的 smacg_exp_daily_* usermeta
+     *
+     * ★ Fix #11 (2026-05-18)：
+     * 舊版作法是先 SELECT 所有 smacg_exp_daily_% 的 row，PHP 端逐筆 preg_match
+     * 抓出日期，再逐筆 DELETE。當會員 / 累積天數多時會放大成上千次 query。
+     * 改成單一 DELETE SQL，用 SUBSTRING 抽出 meta_key 結尾 8 位日期字串直接比較。
+     *
+     * meta_key 命名規則：smacg_exp_daily_{cap_key}_{YYYYMMDD}
+     * 故結尾 8 碼 = SUBSTRING(meta_key, LENGTH(meta_key) - 7)
+     */
     public static function daily_reset() {
         global $wpdb;
         $two_days_ago = date( 'Ymd', strtotime( '-2 days', current_time( 'timestamp' ) ) );
 
-        $rows = $wpdb->get_results( "
-            SELECT umeta_id, meta_key FROM {$wpdb->usermeta}
-            WHERE meta_key LIKE 'smacg_exp_daily_%'
-        " );
-
-        foreach ( $rows as $row ) {
-            if ( preg_match( '/_(\d{8})$/', $row->meta_key, $m ) ) {
-                if ( $m[1] < $two_days_ago ) {
-                    $wpdb->delete( $wpdb->usermeta, [ 'umeta_id' => $row->umeta_id ], [ '%d' ] );
-                }
-            }
-        }
+        $deleted = $wpdb->query( $wpdb->prepare(
+            "DELETE FROM {$wpdb->usermeta}
+             WHERE meta_key LIKE %s
+               AND LENGTH(meta_key) >= 8
+               AND SUBSTRING(meta_key, LENGTH(meta_key) - 7) REGEXP '^[0-9]{8}$'
+               AND SUBSTRING(meta_key, LENGTH(meta_key) - 7) < %s",
+            'smacg_exp_daily_%',
+            $two_days_ago
+        ) );
 
         if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
-            error_log( '[SMACG] Daily EXP reset complete' );
+            error_log( sprintf( '[SMACG] Daily EXP reset complete: %d rows deleted', (int) $deleted ) );
         }
     }
 }
