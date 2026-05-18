@@ -42,7 +42,7 @@
         const mode = this.value;
 
         groups.forEach(group => {
-          const cards = Array.from(group.querySelectorAll('.mc-anime-card, article'));
+          const cards = Array.from(group.querySelectorAll('.bgm-card'));
           cards.sort((a, b) => {
             const getScore = el => parseFloat(
               (el.querySelector('.mc-card-score')?.textContent || '').replace(/[^0-9.]/g, '')
