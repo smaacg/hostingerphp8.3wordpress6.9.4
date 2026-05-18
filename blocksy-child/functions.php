@@ -3,24 +3,24 @@
  * 微笑動漫 Child Theme — functions.php
  *
  * @package weixiaoacg
- * @version 2.14.0 (2026-05-15)
+ * @version 2.16.0 (2026-05-18)
  *
  * Changelog：
- *   2.14.0 (2026-05-15) Phase 3-A：會員核心模組搬遷至 smacg-members 外掛
- *                       移除主載入清單內 member-functions / member-stats / member-render /
- *                                       member-ajax / um-integration
- *   2.13.0 (2026-05-15) 整合 smacg-api 外掛
- *                       移除主載入清單內 api-rest / content-slug / external-links
- *   2.12.0 (2026-05-15) Phase 2：所有 gamification 模組搬遷至 smacg-gamification
- *   2.7.3  (2026-05-14) Batch 2B-5 — season-event 模組
+ *   2.16.0 (2026-05-18) Bangumi 模組：新增 inc/bangumi-loader.php
+ *                       提供 /bangumi/{YYYYMM}/ rewrite 與 SEO helpers
+ *   2.15.0 (2026-05-16) ajax-news-filter
+ *   2.14.0 (2026-05-15) Phase 3-A：會員核心搬遷至 smacg-members
+ *   2.13.0 (2026-05-15) 整合 smacg-api
+ *   2.12.0 (2026-05-15) Phase 2：gamification 模組搬遷
+ *   2.7.3  (2026-05-14) season-event 模組
  */
 defined( 'ABSPATH' ) || exit;
 
-define( 'weixiaoacg_VERSION',   '2.14.0' );
+define( 'weixiaoacg_VERSION',   '2.16.0' );
 define( 'weixiaoacg_THEME_URL', get_stylesheet_directory_uri() );
 define( 'weixiaoacg_THEME_DIR', get_stylesheet_directory() );
 
-/* === 點數常數（非 gamification，其他主題模組仍引用） === */
+/* === 點數常數 === */
 define( 'SMACG_POINT_FAVORITE',  5  );
 define( 'SMACG_POINT_WANT',      1  );
 define( 'SMACG_POINT_WATCHING',  3  );
@@ -34,46 +34,46 @@ define( 'SMACG_POINT_LOGIN',     1  );
 define( 'SMACG_FOLLOW_DAILY_LIMIT', 200 );
 define( 'SMACG_FOLLOW_COOLDOWN',    1   );
 
-/* === 內容分類常數（smacg-api 外掛會讀） === */
+/* === 內容分類常數 === */
 const WEIXIAOACG_ID_CATS  = [ 'announcement', 'news' ];
 const WEIXIAOACG_LLM_CATS = [ 'review', 'feature' ];
 
-/* === 保險常數（外掛未啟用時的 fallback） === */
+/* === 保險常數 === */
 if ( ! defined( 'SMACG_BADGE_SLUG' ) ) define( 'SMACG_BADGE_SLUG', 'badge' );
 if ( ! defined( 'SMACG_EVENT_CPT' ) )  define( 'SMACG_EVENT_CPT',  'smacg_season_event' );
 
 $inc = weixiaoacg_THEME_DIR . '/inc/';
 
-/* === 主載入：純主題層級（選單、enqueue、佈景設定） ===
-       注意：member-* 與 um-integration 已搬至 smacg-members 外掛
-*/
+/* === 主載入：主題層級核心 === */
 foreach ( [
     'setup-theme',
     'class-nav-walker',
     'setup-enqueue',
+    'bangumi-loader',  // ← v2.16.0 新增：Bangumi rewrite + SEO helpers
 ] as $f ) {
     require_once $inc . $f . '.php';
 }
 
-/* === 選擇性載入（仍在主題的非 gamification、非 members 模組） === */
+/* === 選擇性載入 === */
 $optional = [
     'image-optimizer',
     'public-profile','public-profile-render',
     'follow-system','follow-ajax',
-    'notifications-system','notifications-events','notifications-ajax','notifications-render','notifications-email', 'ajax-news-filter',  // ← 新增這行（v2.15.0 - 2026-05-16, News Filter AJAX endpoint）
+    'notifications-system','notifications-events','notifications-ajax','notifications-render','notifications-email',
+    'ajax-news-filter',
 ];
 
-/* === 已搬至 smacg-api 外掛（不再從主題載入） ===
+/* === 已搬至 smacg-api 外掛 ===
        api-rest, content-slug, external-links
 */
-/* === 已搬至 smacg-gamification 外掛（不再從主題載入） ===
+/* === 已搬至 smacg-gamification 外掛 ===
        gamipress-integration, gamipress-notif-bridge,
        level-system, exp-config, exp-events, career-ajax, level-badge-display,
        ranking-system, ranking-cron, ranking-privacy,
        leaderboard-ajax, leaderboard-widget,
        season-event-cpt, season-event-admin, season-event-tracker, season-event-settle
 */
-/* === 已搬至 smacg-members 外掛（不再從主題載入） ===
+/* === 已搬至 smacg-members 外掛 ===
        member-functions, member-stats, member-render, member-ajax, um-integration
 */
 
