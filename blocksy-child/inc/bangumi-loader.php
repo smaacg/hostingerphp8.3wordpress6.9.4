@@ -255,3 +255,36 @@ add_action( 'template_redirect', function () {
     echo '</urlset>';
     exit;
 } );
+
+/* ============================================================
+ * 7. 條件式 enqueue（只在 /bangumi/* 載入）
+ * ============================================================ */
+add_action( 'wp_enqueue_scripts', function () {
+    $req = isset( $_SERVER['REQUEST_URI'] ) ? trim( (string) wp_parse_url( $_SERVER['REQUEST_URI'], PHP_URL_PATH ), '/' ) : '';
+    if ( $req !== 'bangumi' && strpos( $req, 'bangumi/' ) !== 0 ) return;
+
+    $base = get_stylesheet_directory_uri() . '/assets/';
+    $dir  = get_stylesheet_directory() . '/assets/';
+
+    $css = $dir . 'bangumi.css';
+    if ( file_exists( $css ) ) {
+        wp_enqueue_style(
+            'smacg-bangumi',
+            $base . 'bangumi.css',
+            [],
+            filemtime( $css )
+        );
+    }
+
+    $js = $dir . 'bangumi.js';
+    if ( file_exists( $js ) ) {
+        wp_enqueue_script(
+            'smacg-bangumi',
+            $base . 'bangumi.js',
+            [],
+            filemtime( $js ),
+            true
+        );
+    }
+} );
+
