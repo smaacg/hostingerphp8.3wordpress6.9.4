@@ -1,16 +1,17 @@
 /**
  * Bangumi 模組樣式
- * v1.0.0 (2026-05-18)
+ * v1.1.0 (2026-05-18)
  *
  * 範圍：/bangumi/、/bangumi/{ym}/、/bangumi/archive/
- * 由 bangumi-loader.php 條件式 enqueue
  *
- * 注意：season 頁（page-bangumi.php）目前仍 inline，本檔的 .bgm-* 與其重複的部分
- *       是「容錯備援」+「archive 頁專用」。重複規則 cascade 同層，順序無關。
+ * 變更紀錄：
+ *   1.1.0 (2026-05-18) 收納 page-bangumi.php 抽出的全部 inline CSS
+ *                       動態色彩透過 body.is-bangumi-season 上的 --bgm-main / --bgm-soft 讀取
+ *   1.0.0 (2026-05-18) Archive 頁專屬樣式
  */
 
 /* ============================================================
- * 共用：麵包屑（season + archive 共用）
+ * 共用：麵包屑
  * ============================================================ */
 .bangumi-breadcrumb {
   max-width: 1200px;
@@ -27,6 +28,104 @@
 .bangumi-breadcrumb .bc-current { color: var(--text-primary); font-weight: 600; }
 
 /* ============================================================
+ * Season 頁 — Hero
+ * ============================================================ */
+.bgm-hero {
+  background: linear-gradient(135deg, var(--bgm-soft, rgba(139,92,246,0.12)) 0%, rgba(139,92,246,0.08) 100%);
+  border-bottom: 1px solid var(--glass-border);
+  padding: 36px 0 28px;
+}
+.bgm-hero-inner { max-width: 1200px; margin: 0 auto; padding: 0 16px; }
+.bgm-hero-icon { font-size: 32px; margin-right: 8px; vertical-align: middle; }
+.bgm-hero-badge {
+  display: inline-flex; align-items: center; gap: 6px;
+  background: rgba(255,255,255,0.08); border: 1px solid var(--bgm-main, #8b5cf6);
+  color: var(--bgm-main, #8b5cf6); border-radius: 999px;
+  padding: 4px 14px; font-size: 12px; font-weight: 600; margin-bottom: 12px;
+}
+.bgm-hero-title { font-size: 30px; font-weight: 800; color: var(--text-primary); margin: 0 0 6px; }
+.bgm-hero-sub { font-size: 14px; color: var(--text-muted); margin: 0; }
+
+.bgm-season-nav {
+  display: flex; gap: 8px; flex-wrap: wrap; margin-top: 20px;
+}
+.bgm-season-nav a {
+  padding: 8px 16px; border-radius: 8px; font-size: 13px; font-weight: 600;
+  background: var(--glass-bg); border: 1px solid var(--glass-border);
+  color: var(--text-secondary); text-decoration: none; transition: all .2s;
+  display: inline-flex; align-items: center; gap: 6px;
+}
+.bgm-season-nav a:hover {
+  background: var(--bgm-soft, rgba(139,92,246,0.12));
+  border-color: var(--bgm-main, #8b5cf6);
+  color: var(--bgm-main, #8b5cf6);
+  transform: translateY(-1px);
+}
+.bgm-season-nav a.bgm-archive {
+  background: rgba(139,92,246,0.1);
+  border-color: rgba(139,92,246,0.3);
+  color: #a78bfa;
+}
+
+/* ============================================================
+ * Season 頁 — 統計面板
+ * ============================================================ */
+.bgm-stats {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 12px; margin: 24px auto 0; max-width: 1200px; padding: 0 16px;
+}
+.bgm-stat {
+  background: var(--glass-bg); border: 1px solid var(--glass-border);
+  border-radius: 12px; padding: 14px 16px;
+}
+.bgm-stat-label { font-size: 11px; color: var(--text-muted); margin-bottom: 4px; }
+.bgm-stat-value { font-size: 22px; font-weight: 700; color: var(--text-primary); }
+.bgm-stat-value small { font-size: 12px; color: var(--text-muted); font-weight: 500; margin-left: 4px; }
+
+/* ============================================================
+ * Season 頁 — 主體
+ * ============================================================ */
+.bgm-main { max-width: 1200px; margin: 0 auto; padding: 28px 16px 60px; }
+
+.bgm-toolbar {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  flex-wrap: wrap; margin-bottom: 18px;
+}
+.bgm-weekday-bar { display: flex; gap: 6px; flex-wrap: wrap; }
+.bgm-day {
+  padding: 7px 16px; border-radius: 999px; font-size: 13px; font-weight: 600;
+  background: var(--glass-bg); border: 1px solid var(--glass-border);
+  color: var(--text-secondary); cursor: pointer; transition: all .2s; white-space: nowrap;
+}
+.bgm-day:hover { color: var(--text-primary); background: var(--glass-bg-mid, rgba(255,255,255,0.04)); }
+.bgm-day.active {
+  background: var(--bgm-main, #8b5cf6);
+  border-color: var(--bgm-main, #8b5cf6);
+  color: #fff;
+}
+.bgm-day-count { font-size: 11px; opacity: .75; margin-left: 4px; }
+
+.bgm-tools { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.bgm-sort {
+  background: var(--glass-bg); border: 1px solid var(--glass-border);
+  color: var(--text-secondary); border-radius: 999px;
+  padding: 6px 14px; font-size: 13px; cursor: pointer; outline: none;
+}
+
+.bgm-grid {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+  gap: 18px;
+}
+.bgm-group { display: contents; }
+.bgm-group[hidden] { display: none; }
+
+.bgm-empty {
+  grid-column: 1/-1; text-align: center; color: var(--text-muted);
+  padding: 60px 0; font-size: 14px;
+}
+.bgm-empty i { font-size: 32px; display: block; margin-bottom: 12px; }
+
+/* ============================================================
  * Archive 頁 — Hero
  * ============================================================ */
 .bgm-arc-hero {
@@ -34,54 +133,23 @@
   border-bottom: 1px solid var(--glass-border);
   padding: 36px 0 28px;
 }
-.bgm-arc-hero-inner {
-  max-width: 1200px;
-  margin: 0 auto;
-  padding: 0 16px;
-}
+.bgm-arc-hero-inner { max-width: 1200px; margin: 0 auto; padding: 0 16px; }
 .bgm-arc-hero-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  background: rgba(167,139,250,0.15);
-  border: 1px solid rgba(167,139,250,0.4);
-  color: #a78bfa;
-  border-radius: 999px;
-  padding: 4px 14px;
-  font-size: 12px;
-  font-weight: 600;
-  margin-bottom: 12px;
+  display: inline-flex; align-items: center; gap: 6px;
+  background: rgba(167,139,250,0.15); border: 1px solid rgba(167,139,250,0.4);
+  color: #a78bfa; border-radius: 999px;
+  padding: 4px 14px; font-size: 12px; font-weight: 600; margin-bottom: 12px;
 }
-.bgm-arc-hero-title {
-  font-size: 30px;
-  font-weight: 800;
-  color: var(--text-primary);
-  margin: 0 0 6px;
-}
-.bgm-arc-hero-sub {
-  font-size: 14px;
-  color: var(--text-muted);
-  margin: 0;
-}
-.bgm-arc-hero-sub strong {
-  color: var(--text-primary);
-  font-weight: 700;
-  margin: 0 2px;
-}
+.bgm-arc-hero-title { font-size: 30px; font-weight: 800; color: var(--text-primary); margin: 0 0 6px; }
+.bgm-arc-hero-sub { font-size: 14px; color: var(--text-muted); margin: 0; }
+.bgm-arc-hero-sub strong { color: var(--text-primary); font-weight: 700; margin: 0 2px; }
 .bgm-arc-back { margin-top: 16px; }
 .bgm-arc-back a {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 7px 14px;
-  border-radius: 8px;
-  background: var(--glass-bg);
-  border: 1px solid var(--glass-border);
-  color: var(--text-secondary);
-  font-size: 13px;
-  font-weight: 600;
-  text-decoration: none;
-  transition: all .2s;
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 7px 14px; border-radius: 8px;
+  background: var(--glass-bg); border: 1px solid var(--glass-border);
+  color: var(--text-secondary); font-size: 13px; font-weight: 600;
+  text-decoration: none; transition: all .2s;
 }
 .bgm-arc-back a:hover {
   background: rgba(167,139,250,0.15);
@@ -92,125 +160,62 @@
 /* ============================================================
  * Archive 頁 — 年份列表
  * ============================================================ */
-.bgm-arc-main {
-  max-width: 1200px;
-  margin: 0 auto;
-  padding: 28px 16px 60px;
-}
-.bgm-arc-empty {
-  text-align: center;
-  color: var(--text-muted);
-  padding: 80px 0;
-}
-.bgm-arc-empty i {
-  font-size: 40px;
-  display: block;
-  margin-bottom: 12px;
-  opacity: .5;
-}
+.bgm-arc-main { max-width: 1200px; margin: 0 auto; padding: 28px 16px 60px; }
+.bgm-arc-empty { text-align: center; color: var(--text-muted); padding: 80px 0; }
+.bgm-arc-empty i { font-size: 40px; display: block; margin-bottom: 12px; opacity: .5; }
 
-.bgm-arc-list {
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
-}
+.bgm-arc-list { display: flex; flex-direction: column; gap: 20px; }
 
 .bgm-arc-year {
-  background: var(--glass-bg);
-  border: 1px solid var(--glass-border);
-  border-radius: 16px;
-  padding: 18px 20px 22px;
+  background: var(--glass-bg); border: 1px solid var(--glass-border);
+  border-radius: 16px; padding: 18px 20px 22px;
   transition: border-color .2s, background .2s;
 }
-.bgm-arc-year:hover {
-  border-color: rgba(167,139,250,0.35);
-}
+.bgm-arc-year:hover { border-color: rgba(167,139,250,0.35); }
 .bgm-arc-year-head {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
+  display: flex; align-items: baseline; justify-content: space-between;
   margin-bottom: 14px;
 }
-.bgm-arc-year-title {
-  margin: 0;
-  display: flex;
-  align-items: baseline;
-  gap: 4px;
-  color: var(--text-primary);
-}
-.bgm-arc-year-num {
-  font-size: 28px;
-  font-weight: 800;
-  letter-spacing: -0.5px;
-}
-.bgm-arc-year-suffix {
-  font-size: 14px;
-  color: var(--text-muted);
-  font-weight: 500;
-}
+.bgm-arc-year-title { margin: 0; display: flex; align-items: baseline; gap: 4px; color: var(--text-primary); }
+.bgm-arc-year-num { font-size: 28px; font-weight: 800; letter-spacing: -0.5px; }
+.bgm-arc-year-suffix { font-size: 14px; color: var(--text-muted); font-weight: 500; }
 .bgm-arc-year-count {
-  font-size: 12px;
-  color: var(--text-muted);
+  font-size: 12px; color: var(--text-muted);
   background: var(--glass-bg-mid, rgba(255,255,255,0.04));
-  border-radius: 999px;
-  padding: 3px 10px;
+  border-radius: 999px; padding: 3px 10px;
 }
 
-.bgm-arc-seasons {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 10px;
-}
+.bgm-arc-seasons { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
 
 .bgm-arc-season {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 4px;
-  padding: 16px 8px;
-  border-radius: 12px;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 4px; padding: 16px 8px; border-radius: 12px;
   text-decoration: none;
   background: color-mix(in srgb, var(--s-color) calc(var(--s-alpha) * 100%), transparent);
   border: 1px solid color-mix(in srgb, var(--s-color) 35%, transparent);
   color: var(--text-primary);
   transition: transform .15s, border-color .15s, background .2s;
-  position: relative;
-  overflow: hidden;
+  position: relative; overflow: hidden;
 }
-.bgm-arc-season:hover {
-  transform: translateY(-2px);
-  border-color: var(--s-color);
-}
+.bgm-arc-season:hover { transform: translateY(-2px); border-color: var(--s-color); }
 .bgm-arc-season.is-empty {
   background: rgba(255,255,255,0.03);
   border-color: var(--glass-border);
   color: var(--text-muted);
-  cursor: default;
-  pointer-events: none;
-  opacity: .5;
+  cursor: default; pointer-events: none; opacity: .5;
 }
 .bgm-arc-season-icon { font-size: 22px; line-height: 1; }
-.bgm-arc-season-name {
-  font-size: 13px;
-  font-weight: 600;
-  letter-spacing: 0.5px;
-}
-.bgm-arc-season-cnt {
-  font-size: 18px;
-  font-weight: 800;
-  color: var(--s-color);
-  line-height: 1;
-}
-.bgm-arc-season.is-empty .bgm-arc-season-cnt {
-  color: var(--text-muted);
-}
+.bgm-arc-season-name { font-size: 13px; font-weight: 600; letter-spacing: 0.5px; }
+.bgm-arc-season-cnt { font-size: 18px; font-weight: 800; color: var(--s-color); line-height: 1; }
+.bgm-arc-season.is-empty .bgm-arc-season-cnt { color: var(--text-muted); }
 
 /* ============================================================
  * 響應式
  * ============================================================ */
 @media (max-width: 768px) {
+  .bgm-hero-title,
   .bgm-arc-hero-title { font-size: 22px; }
+  .bgm-grid { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 12px; }
   .bgm-arc-year { padding: 14px 14px 16px; }
   .bgm-arc-year-num { font-size: 22px; }
   .bgm-arc-seasons { gap: 8px; }
@@ -220,6 +225,8 @@
 }
 
 @media (max-width: 480px) {
+  .bgm-grid { grid-template-columns: repeat(3, 1fr); gap: 10px; }
+  .bgm-toolbar { flex-direction: column; align-items: stretch; }
   .bgm-arc-main { padding: 20px 12px 40px; }
   .bgm-arc-year-head { margin-bottom: 10px; }
 }
