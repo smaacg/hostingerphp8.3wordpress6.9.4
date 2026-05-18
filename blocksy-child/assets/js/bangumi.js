@@ -1,10 +1,11 @@
 /**
  * Bangumi 模組互動
- * v1.1.0 (2026-05-18)
+ * v1.2.0 (2026-05-18)
  *
  * 範圍：/bangumi/、/bangumi/{ym}/、/bangumi/archive/
  *
  * 變更紀錄：
+ *   1.2.0 (2026-05-18) 排序改用 .bgm-card + data-* 屬性（搭配 page-bangumi.php v1.2.0 專屬卡片）
  *   1.1.0 (2026-05-18) 收納 page-bangumi.php 抽出的星期切換 / 排序 JS
  *   1.0.0 (2026-05-18) Archive 頁滑入動畫 + 鍵盤導航
  */
@@ -34,26 +35,36 @@
     });
 
     /* ════════════════════════════════════════
-       Season 頁：排序
+       Season 頁：排序（依 data-score / data-ep / data-pop）
     ════════════════════════════════════════ */
     const sort = document.getElementById('bgm-sort');
     if (sort) {
+      // 記錄每組的預設順序，供「預設排序」還原
+      const originalOrder = new Map();
+      groups.forEach(group => {
+        originalOrder.set(group, Array.from(group.querySelectorAll('.bgm-card')));
+      });
+
       sort.addEventListener('change', function () {
         const mode = this.value;
 
         groups.forEach(group => {
+          if (mode === 'default') {
+            // 還原原始順序
+            const orig = originalOrder.get(group);
+            if (orig) orig.forEach(c => group.appendChild(c));
+            return;
+          }
+
+          const attr = mode === 'ep'         ? 'ep'
+                     : mode === 'popularity' ? 'pop'
+                     : 'score';
+
           const cards = Array.from(group.querySelectorAll('.bgm-card'));
           cards.sort((a, b) => {
-            const getScore = el => parseFloat(
-              (el.querySelector('.mc-card-score')?.textContent || '').replace(/[^0-9.]/g, '')
-            ) || 0;
-            const getEp = el => parseInt(
-              el.querySelector('.mc-card-meta span:nth-child(2)')?.textContent || '0',
-              10
-            ) || 0;
-            if (mode === 'score') return getScore(b) - getScore(a);
-            if (mode === 'ep')    return getEp(b) - getEp(a);
-            return 0;
+            const va = parseFloat(a.dataset[attr]) || 0;
+            const vb = parseFloat(b.dataset[attr]) || 0;
+            return vb - va;
           });
           cards.forEach(c => group.appendChild(c));
         });
@@ -85,7 +96,7 @@
   }
 
   /* ══════════════════════════════════════════
-     Archive 頁：鍵盤導航
+     Archive 頁：鍵盤導航（方向鍵在四季方塊間切換）
   ══════════════════════════════════════════ */
   document.querySelectorAll('.bgm-arc-seasons').forEach(group => {
     const seasons = Array.from(group.querySelectorAll('.bgm-arc-season:not(.is-empty)'));
