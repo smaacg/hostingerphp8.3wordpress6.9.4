@@ -30,9 +30,14 @@ $hero_posters = [
   <div class="container hero-content-wrap">
 
     <div class="hero-text">
-      <div class="hero-eyebrow">
-        <span class="chip active"><i class="fa-solid fa-fire-flame-curved"></i> 2026 春季焦點</span>
-      </div>
+<div class="hero-eyebrow">
+  <a href="<?php echo esc_url( home_url('/bangumi/') ); ?>" class="chip active chip-link">
+    <i class="fa-solid fa-calendar-days"></i> 動漫新番表
+  </a>
+  <a href="<?php echo esc_url( home_url('/about/') ); ?>" class="chip chip-link">
+    <i class="fa-solid fa-circle-info"></i> 關於微笑動漫
+  </a>
+</div>
       <h1 class="hero-title">
         成功不是<br>
         <span class="line-gradient">一蹴而就</span><br>
@@ -56,10 +61,12 @@ $hero_posters = [
 
       <div class="hero-actions">
         <a href="#season-section" class="btn btn-primary">
-          <i class="fa-solid fa-calendar-check"></i> 看本季新番
+          <i class="fa-solid fa-calendar-check"></i> 本季新番
         </a>
-        <a href="#wiki-section" class="btn btn-secondary">
-          <i class="fa-solid fa-book-open"></i> 瀏覽情報
+        <a href="<?php echo esc_url( home_url('/?smacg_random_anime=1') ); ?>"
+           class="btn btn-secondary"
+           rel="nofollow">
+          <i class="fa-solid fa-dice"></i> 抽一部動漫
         </a>
       </div>
     </div>
@@ -81,6 +88,30 @@ $hero_posters = [
 
   </div>
 </section>
+
+<style>
+/* ── chip 可點擊版本（關於微笑） ── */
+.hero-eyebrow {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+}
+.chip.chip-link {
+    text-decoration: none;
+    background: rgba(255,255,255,.06);
+    border: 1px solid rgba(255,255,255,.10);
+    color: rgba(220,230,245,.75);
+    transition: all .2s ease;
+    cursor: pointer;
+}
+.chip.chip-link:hover {
+    background: rgba(99,168,255,.18);
+    border-color: rgba(99,168,255,.45);
+    color: #63a8ff;
+    transform: translateY(-1px);
+}
+</style>
 
 <script>
 (function () {
@@ -241,7 +272,6 @@ $hero_posters = [
     .news-grid { grid-template-columns: 1fr; gap: 14px; }
 }
 
-/* 單張卡片 */
 .news-card {
     display: flex;
     flex-direction: column;
@@ -257,7 +287,6 @@ $hero_posters = [
     box-shadow: 0 8px 32px rgba(0,0,0,.45);
 }
 
-/* 封面圖 */
 .news-card__thumb {
     position: relative;
     width: 100%;
@@ -277,7 +306,6 @@ $hero_posters = [
     transform: scale(1.06);
 }
 
-/* 無圖佔位 */
 .news-card__placeholder {
     width: 100%;
     height: 100%;
@@ -289,7 +317,6 @@ $hero_posters = [
     font-size: 36px;
 }
 
-/* 分類角標 */
 .news-card__cat {
     position: absolute;
     top: 10px;
@@ -301,7 +328,6 @@ $hero_posters = [
     backdrop-filter: blur(6px);
 }
 
-/* 文字區 */
 .news-card__body {
     padding: 14px 16px 16px;
     display: flex;
@@ -331,7 +357,7 @@ $hero_posters = [
 </style>
 
 <!-- ============================================================
-     本季新番
+     動漫新番表（原「本季新番導航」）
      ============================================================ -->
 <?php
 /* ── 動態計算當前季度 ── */
@@ -438,7 +464,9 @@ $_season_total = count( $_by_weekday[0] );
 <section class="section season-section" id="season-section">
   <div class="container">
     <div class="section-header">
-      <h2 class="section-title">本季新番導航</h2>
+      <h2 class="section-title">
+        <i class="fa-solid fa-calendar-days" style="margin-right:8px;"></i> 本季新番
+      </h2>
 
       <!-- 星期 Tabs -->
       <div class="tab-switch weekday-tabs" id="weekday-tabs">
@@ -571,10 +599,10 @@ $_season_total = count( $_by_weekday[0] );
 </script>
 
 <!-- ============================================================
-     熱門作品（唯一一份，函式只定義一次）
+     熱門作品
      ============================================================ -->
 <?php
-/* ── 季度計算：下一季 ── */
+/* ── 動態計算：下一季 ── */
 $current_month = (int) date('n');
 $current_year  = (int) date('Y');
 
@@ -588,7 +616,6 @@ if ( $current_month >= 1 && $current_month <= 3 ) {
     $next_season = 'WINTER'; $next_year = $current_year + 1;
 }
 
-/* ── 查詢函式（只定義一次，加 function_exists 防呆）── */
 if ( ! function_exists( 'smacg_get_anime' ) ) {
     function smacg_get_anime( $orderby_meta, $order = 'DESC', $extra_meta = [] ) {
         $args = [
@@ -607,7 +634,6 @@ if ( ! function_exists( 'smacg_get_anime' ) ) {
     }
 }
 
-/* ── 卡片輸出函式（只定義一次，加 function_exists 防呆）── */
 if ( ! function_exists( 'smacg_anime_card' ) ) {
     function smacg_anime_card( $post ) {
         $id    = $post->ID;
@@ -660,7 +686,6 @@ if ( ! function_exists( 'smacg_anime_card' ) ) {
       </a>
     </div>
 
-    <?php /* ── 大家都在看 ── */ ?>
     <div class="smacg-anime-grid" id="smacg-tab-trending">
         <?php
         $q = smacg_get_anime( 'anime_score_site_count' );
@@ -672,7 +697,6 @@ if ( ! function_exists( 'smacg_anime_card' ) ) {
         <?php endif; ?>
     </div>
 
-    <?php /* ── 歷年神作 ── */ ?>
     <div class="smacg-anime-grid" id="smacg-tab-top" style="display:none">
         <?php
         $q = smacg_get_anime( 'anime_score_site' );
@@ -684,7 +708,6 @@ if ( ! function_exists( 'smacg_anime_card' ) ) {
         <?php endif; ?>
     </div>
 
-    <?php /* ── 即將開播 ── */ ?>
     <div class="smacg-anime-grid" id="smacg-tab-upcoming" style="display:none">
         <?php
         $q = new WP_Query( [
@@ -718,116 +741,23 @@ if ( ! function_exists( 'smacg_anime_card' ) ) {
     gap: 16px;
     margin-top: 20px;
 }
-@media (max-width: 1024px) {
-    .smacg-anime-grid { grid-template-columns: repeat(4, 1fr); }
-}
-@media (max-width: 768px) {
-    .smacg-anime-grid { grid-template-columns: repeat(3, 1fr); gap: 12px; }
-}
-@media (max-width: 480px) {
-    .smacg-anime-grid { grid-template-columns: repeat(2, 1fr); gap: 10px; }
-}
+@media (max-width: 1024px) { .smacg-anime-grid { grid-template-columns: repeat(4, 1fr); } }
+@media (max-width: 768px)  { .smacg-anime-grid { grid-template-columns: repeat(3, 1fr); gap: 12px; } }
+@media (max-width: 480px)  { .smacg-anime-grid { grid-template-columns: repeat(2, 1fr); gap: 10px; } }
 
-.smacg-anime-card {
-    display: flex;
-    flex-direction: column;
-    border-radius: 16px;
-    overflow: hidden;
-    background: rgba(255,255,255,.04);
-    border: 1px solid rgba(255,255,255,.07);
-    text-decoration: none;
-    transition: transform .2s ease, box-shadow .2s ease;
-}
-.smacg-anime-card:hover {
-    transform: translateY(-4px);
-    box-shadow: 0 8px 32px rgba(0,0,0,.4);
-}
-
-.smacg-card-thumb {
-    position: relative;
-    width: 100%;
-    aspect-ratio: 3/4;
-    overflow: hidden;
-    background: rgba(255,255,255,.06);
-}
-.smacg-card-thumb img {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-    display: block;
-    transition: transform .3s ease;
-}
-.smacg-anime-card:hover .smacg-card-thumb img {
-    transform: scale(1.05);
-}
-.smacg-card-fb {
-    width: 100%;
-    height: 100%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 28px;
-    font-weight: 800;
-    color: rgba(255,255,255,.3);
-    background: rgba(255,255,255,.04);
-}
-.smacg-card-score {
-    position: absolute;
-    top: 8px;
-    right: 8px;
-    background: rgba(0,0,0,.75);
-    color: #ffd60a;
-    font-size: 12px;
-    font-weight: 700;
-    padding: 3px 8px;
-    border-radius: 20px;
-    backdrop-filter: blur(6px);
-    display: flex;
-    align-items: center;
-    gap: 3px;
-}
-.smacg-card-body {
-    padding: 10px 12px 12px;
-}
-.smacg-card-title {
-    font-size: 13px;
-    font-weight: 600;
-    color: rgba(220,230,245,.85);
-    margin: 0;
-    line-height: 1.4;
-    display: -webkit-box;
-    -webkit-line-clamp: 2;
-    -webkit-box-orient: vertical;
-    overflow: hidden;
-}
-
-.smacg-tab-btn {
-    background: rgba(255,255,255,.06);
-    border: 1px solid rgba(255,255,255,.08);
-    color: rgba(220,230,245,.55);
-    padding: 6px 16px;
-    border-radius: 20px;
-    font-size: 13px;
-    font-weight: 600;
-    cursor: pointer;
-    transition: all .2s ease;
-}
-.smacg-tab-btn:hover {
-    background: rgba(255,255,255,.10);
-    color: rgba(220,230,245,.85);
-}
-.smacg-tab-btn.active {
-    background: rgba(99,168,255,.20);
-    border-color: rgba(99,168,255,.45);
-    color: #63a8ff;
-}
-.smacg-tab-empty {
-    color: rgba(220,230,245,.4);
-    font-size: 14px;
-    padding: 40px 0;
-    text-align: center;
-    grid-column: 1 / -1;
-}
+.smacg-anime-card { display: flex; flex-direction: column; border-radius: 16px; overflow: hidden; background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.07); text-decoration: none; transition: transform .2s ease, box-shadow .2s ease; }
+.smacg-anime-card:hover { transform: translateY(-4px); box-shadow: 0 8px 32px rgba(0,0,0,.4); }
+.smacg-card-thumb { position: relative; width: 100%; aspect-ratio: 3/4; overflow: hidden; background: rgba(255,255,255,.06); }
+.smacg-card-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; transition: transform .3s ease; }
+.smacg-anime-card:hover .smacg-card-thumb img { transform: scale(1.05); }
+.smacg-card-fb { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; font-size: 28px; font-weight: 800; color: rgba(255,255,255,.3); background: rgba(255,255,255,.04); }
+.smacg-card-score { position: absolute; top: 8px; right: 8px; background: rgba(0,0,0,.75); color: #ffd60a; font-size: 12px; font-weight: 700; padding: 3px 8px; border-radius: 20px; backdrop-filter: blur(6px); display: flex; align-items: center; gap: 3px; }
+.smacg-card-body { padding: 10px 12px 12px; }
+.smacg-card-title { font-size: 13px; font-weight: 600; color: rgba(220,230,245,.85); margin: 0; line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.smacg-tab-btn { background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.08); color: rgba(220,230,245,.55); padding: 6px 16px; border-radius: 20px; font-size: 13px; font-weight: 600; cursor: pointer; transition: all .2s ease; }
+.smacg-tab-btn:hover { background: rgba(255,255,255,.10); color: rgba(220,230,245,.85); }
+.smacg-tab-btn.active { background: rgba(99,168,255,.20); border-color: rgba(99,168,255,.45); color: #63a8ff; }
+.smacg-tab-empty { color: rgba(220,230,245,.4); font-size: 14px; padding: 40px 0; text-align: center; grid-column: 1 / -1; }
 </style>
 
 <script>
@@ -866,30 +796,30 @@ if ( ! function_exists( 'smacg_anime_card' ) ) {
     <div class="coming-cards-grid">
 
       <div class="coming-card glass">
-        <div class="coming-card-icon">🎮</div>
-        <div class="coming-card-title">遊戲情報</div>
-        <div class="coming-card-desc">ACG 改編遊戲・手遊攻略・玩法解析</div>
+        <div class="coming-card-icon">🎵</div>
+        <div class="coming-card-title">動漫音樂</div>
+        <div class="coming-card-desc">OP/ED 主題曲・OST 原聲帶・聲優演唱會情報</div>
         <span class="coming-card-btn"><i class="fa-solid fa-clock"></i> 敬請期待</span>
       </div>
 
       <div class="coming-card glass">
-        <div class="coming-card-icon">🏆</div>
-        <div class="coming-card-title">周邊收藏</div>
-        <div class="coming-card-desc">手辦・模型・排名商品・發售日期</div>
+        <div class="coming-card-icon">🎭</div>
+        <div class="coming-card-title">Cosplayer</div>
+        <div class="coming-card-desc">人氣 Coser 介紹・活動場照・作品妝造解析</div>
         <span class="coming-card-btn"><i class="fa-solid fa-clock"></i> 敬請期待</span>
       </div>
 
       <div class="coming-card glass">
-        <div class="coming-card-icon">🤖</div>
-        <div class="coming-card-title">AI 工具實驗室</div>
-        <div class="coming-card-desc">ACG 向 AI 生成工具與應用導覽</div>
+        <div class="coming-card-icon">📺</div>
+        <div class="coming-card-title">Vtuber</div>
+        <div class="coming-card-desc">主流 Vtuber 介紹・熱門剪輯・直播動態</div>
         <span class="coming-card-btn"><i class="fa-solid fa-clock"></i> 敬請期待</span>
       </div>
 
       <div class="coming-card glass">
-        <div class="coming-card-icon">🕹️</div>
-        <div class="coming-card-title">電競資訊</div>
-        <div class="coming-card-desc">日系電競賽事・選手資料・賽程播報</div>
+        <div class="coming-card-icon">📚</div>
+        <div class="coming-card-title">漫畫小說</div>
+        <div class="coming-card-desc">原作漫畫・輕小說・改編作品對照</div>
         <span class="coming-card-btn"><i class="fa-solid fa-clock"></i> 敬請期待</span>
       </div>
 
@@ -898,36 +828,207 @@ if ( ! function_exists( 'smacg_anime_card' ) ) {
 </section>
 
 <!-- ============================================================
-     會員 CTA
+     會員 CTA（v2.0 — 改用 level-guide 真實 6 階資料）
      ============================================================ -->
+<?php
+/* ── 6 階會員稱號（與 level-guide 同步） ── */
+$smacg_tiers = [
+    [ 'tier' => 1, 'key' => 'rookie',   'title' => '新進會員', 'icon' => '🌱', 'color' => '#8d99ae', 'min_level' => 1,   'min_exp' => 5,      'tag' => 'tag-cyan'   ],
+    [ 'tier' => 2, 'key' => 'newcomer', 'title' => '新客',     'icon' => '🌿', 'color' => '#06a77d', 'min_level' => 10,  'min_exp' => 500,    'tag' => 'tag-green'  ],
+    [ 'tier' => 3, 'key' => 'regular',  'title' => '常客',     'icon' => '📺', 'color' => '#3a86ff', 'min_level' => 30,  'min_exp' => 4500,   'tag' => 'tag-blue'   ],
+    [ 'tier' => 4, 'key' => 'expert',   'title' => '熟客',     'icon' => '🎬', 'color' => '#6a4c93', 'min_level' => 70,  'min_exp' => 24500,  'tag' => 'tag-purple' ],
+    [ 'tier' => 5, 'key' => 'vip',      'title' => 'VIP',      'icon' => '👑', 'color' => '#b8860b', 'min_level' => 120, 'min_exp' => 72000,  'tag' => 'tag-orange' ],
+    [ 'tier' => 6, 'key' => 'black',    'title' => '黑卡會員', 'icon' => '💎', 'color' => '#1a1a1a', 'min_level' => 200, 'min_exp' => 200000, 'tag' => 'tag-locked' ],
+];
+
+/* ── 已登入用戶：取得當前等級資訊 ── */
+$smacg_user_info = null;
+if ( is_user_logged_in() && function_exists( 'smacg_get_user_level_info' ) ) {
+    $smacg_user_info = smacg_get_user_level_info( get_current_user_id() );
+}
+$smacg_user_level    = is_array( $smacg_user_info ) ? (int) ( $smacg_user_info['level']    ?? 0 ) : 0;
+$smacg_user_exp      = is_array( $smacg_user_info ) ? (int) ( $smacg_user_info['exp']      ?? 0 ) : 0;
+$smacg_user_tier_key = is_array( $smacg_user_info ) ? (string) ( $smacg_user_info['tier_key'] ?? '' ) : '';
+$smacg_user_percent  = is_array( $smacg_user_info ) ? (int) ( $smacg_user_info['percent']  ?? 0 ) : 0;
+$smacg_to_next       = is_array( $smacg_user_info ) ? (int) ( $smacg_user_info['to_next']  ?? 0 ) : 0;
+?>
+
 <section class="section member-cta-section">
   <div class="container">
     <div class="member-cta-grid">
+
+      <!-- 左欄：CTA 文案 + 按鈕 -->
       <div class="member-cta-left">
         <span class="member-cta-badge"><i class="fa-solid fa-user-plus"></i> 免費加入會員</span>
         <h2 class="member-cta-title">打造你的玻璃收藏牆</h2>
         <p class="member-cta-desc">收藏作品・追番進度・私房清單・解鎖成就・展示頁面</p>
+
         <div class="member-cta-btns">
-          <a href="<?php echo esc_url( wp_registration_url() ); ?>" class="btn btn-primary">
-            <i class="fa-solid fa-user-plus"></i> 免費註冊
-          </a>
-          <a href="<?php echo esc_url( home_url('/about/') ); ?>" class="btn btn-secondary">
-            <i class="fa-solid fa-eye"></i> 探索功能
+          <?php if ( is_user_logged_in() ) : ?>
+            <a href="<?php echo esc_url( function_exists('smacg_get_member_center_url') ? smacg_get_member_center_url() : home_url('/') ); ?>"
+               class="btn btn-primary">
+              <i class="fa-solid fa-user"></i> 前往會員中心
+            </a>
+          <?php else : ?>
+            <button type="button" class="btn btn-primary" id="smacg-cta-register-btn">
+              <i class="fa-solid fa-user-plus"></i> 免費註冊
+            </button>
+          <?php endif; ?>
+
+          <a href="<?php echo esc_url( home_url('/level-guide/') ); ?>" class="btn btn-secondary">
+            <i class="fa-solid fa-compass"></i> 探索功能
           </a>
         </div>
       </div>
+
+      <!-- 右欄：會員成長路徑 -->
       <div class="member-level-panel glass-mid">
-        <div class="member-level-title">會員成長路徑</div>
-        <div class="member-level-list">
-          <div class="member-level-item"><div class="member-level-icon">🥤</div><div class="member-level-info"><div class="member-level-name">Lv.1 初入番坑</div></div><span class="member-level-tag tag-cyan">新手歡迎者</span></div>
-          <div class="member-level-item"><div class="member-level-icon">⭐</div><div class="member-level-info"><div class="member-level-name">Lv.2 收藏見習生</div></div><span class="member-level-tag tag-blue">見習收藏家</span></div>
-          <div class="member-level-item"><div class="member-level-icon">🔥</div><div class="member-level-info"><div class="member-level-name">Lv.3 追番達家</div></div><span class="member-level-tag tag-orange">頻道創作者</span></div>
-          <div class="member-level-item"><div class="member-level-icon">🏆</div><div class="member-level-info"><div class="member-level-name">Lv.5 動漫鑑賞家</div></div><span class="member-level-tag tag-blue">鑑賞家</span></div>
-          <div class="member-level-item member-level-locked"><div class="member-level-icon">👑</div><div class="member-level-info"><div class="member-level-name">Lv.7 微笑榮譽會員</div></div><span class="member-level-tag tag-locked"><i class="fa-solid fa-lock"></i></span></div>
+
+        <?php if ( $smacg_user_info ) : ?>
+          <!-- 已登入：顯示當前進度 -->
+          <div class="member-level-progress-card">
+            <div class="mlp-row1">
+              <span class="mlp-tier-icon" style="color: <?php echo esc_attr( $smacg_user_info['color'] ?? '#fff' ); ?>;">
+                <?php echo esc_html( $smacg_user_info['icon'] ?? '🌱' ); ?>
+              </span>
+              <div class="mlp-row1-text">
+                <div class="mlp-tier-name">
+                  <?php echo esc_html( $smacg_user_info['title'] ?? '會員' ); ?>
+                  <span class="mlp-lv">Lv.<?php echo esc_html( $smacg_user_level ); ?></span>
+                </div>
+                <div class="mlp-exp-line">
+                  EXP <strong><?php echo number_format( $smacg_user_exp ); ?></strong>
+                  <?php if ( ! ( $smacg_user_info['is_max'] ?? false ) ) : ?>
+                    ・距下一級還差 <strong><?php echo number_format( $smacg_to_next ); ?></strong>
+                  <?php else : ?>
+                    ・已達最高等級
+                  <?php endif; ?>
+                </div>
+              </div>
+            </div>
+            <div class="mlp-bar">
+              <div class="mlp-bar-fill" style="width: <?php echo (int) $smacg_user_percent; ?>%;"></div>
+            </div>
+            <div class="mlp-bar-percent"><?php echo (int) $smacg_user_percent; ?>%</div>
+          </div>
+        <?php endif; ?>
+
+        <div class="member-level-title">
+          <?php echo $smacg_user_info ? '會員成長路徑' : '6 階會員成長路徑'; ?>
         </div>
+
+        <div class="member-level-list">
+          <?php foreach ( $smacg_tiers as $tier ) :
+            $is_reached = $smacg_user_info && $smacg_user_level >= $tier['min_level'];
+            $is_current = $smacg_user_info && $smacg_user_tier_key === $tier['key'];
+            $is_locked  = in_array( $tier['key'], [ 'vip', 'black' ], true );
+
+            $item_class = 'member-level-item';
+            if ( $is_locked && ! $is_reached )           $item_class .= ' member-level-locked';
+            if ( $is_reached )                            $item_class .= ' member-level-reached';
+            if ( $is_current )                            $item_class .= ' member-level-current';
+          ?>
+          <div class="<?php echo esc_attr( $item_class ); ?>">
+            <div class="member-level-icon"><?php echo esc_html( $tier['icon'] ); ?></div>
+            <div class="member-level-info">
+              <div class="member-level-name">
+                Lv.<?php echo (int) $tier['min_level']; ?>
+                <?php if ( $is_current ) : ?>
+                  <span class="member-level-here">← 你在這裡</span>
+                <?php elseif ( $is_reached ) : ?>
+                  <i class="fa-solid fa-check member-level-check"></i>
+                <?php endif; ?>
+              </div>
+              <div class="member-level-sub">
+                <?php echo esc_html( $tier['title'] ); ?>
+                ・<?php echo number_format( $tier['min_exp'] ); ?> EXP
+              </div>
+            </div>
+            <span class="member-level-tag <?php echo esc_attr( $tier['tag'] ); ?>">
+              <?php if ( $is_locked && ! $is_reached ) : ?>
+                <i class="fa-solid fa-lock"></i>
+              <?php else : ?>
+                T<?php echo (int) $tier['tier']; ?>
+              <?php endif; ?>
+            </span>
+          </div>
+          <?php endforeach; ?>
+        </div>
+
+        <a href="<?php echo esc_url( home_url('/level-guide/') ); ?>" class="member-level-more">
+          查看完整等級指南 <i class="fa-solid fa-arrow-right"></i>
+        </a>
       </div>
+
     </div>
   </div>
 </section>
+
+<style>
+/* ── 會員 CTA 補強樣式 ── */
+.member-level-progress-card {
+    background: rgba(99,168,255,.06);
+    border: 1px solid rgba(99,168,255,.20);
+    border-radius: 12px;
+    padding: 14px 16px;
+    margin-bottom: 18px;
+}
+.mlp-row1 { display: flex; align-items: center; gap: 12px; }
+.mlp-tier-icon { font-size: 32px; line-height: 1; }
+.mlp-row1-text { flex: 1; }
+.mlp-tier-name { font-size: 15px; font-weight: 800; color: rgba(220,230,245,.95); }
+.mlp-lv { font-size: 12px; font-weight: 700; color: #63a8ff; margin-left: 6px; padding: 2px 8px; background: rgba(99,168,255,.15); border-radius: 10px; }
+.mlp-exp-line { font-size: 12px; color: rgba(220,230,245,.55); margin-top: 4px; }
+.mlp-exp-line strong { color: rgba(220,230,245,.90); }
+.mlp-bar { height: 6px; background: rgba(255,255,255,.06); border-radius: 6px; overflow: hidden; margin-top: 12px; position: relative; }
+.mlp-bar-fill { height: 100%; background: linear-gradient(90deg, #63a8ff, #a663ff); border-radius: 6px; transition: width .6s ease; }
+.mlp-bar-percent { font-size: 11px; color: rgba(220,230,245,.45); text-align: right; margin-top: 4px; }
+
+.member-level-item { transition: all .2s ease; }
+.member-level-item.member-level-current {
+    background: rgba(99,168,255,.10);
+    border-left: 3px solid #63a8ff;
+    padding-left: 12px;
+}
+.member-level-item.member-level-reached .member-level-icon { opacity: 1; }
+.member-level-item.member-level-locked .member-level-icon { opacity: .5; filter: grayscale(.4); }
+.member-level-check { color: #06a77d; margin-left: 6px; font-size: 12px; }
+.member-level-here { font-size: 11px; font-weight: 700; color: #63a8ff; margin-left: 6px; }
+.member-level-sub { font-size: 11px; color: rgba(220,230,245,.45); margin-top: 2px; }
+
+.member-level-tag.tag-green   { background: rgba(6,167,125,.18);  color: #06a77d; }
+.member-level-tag.tag-purple  { background: rgba(106,76,147,.20); color: #a98edd; }
+.member-level-tag.tag-orange  { background: rgba(184,134,11,.18); color: #d9a92a; }
+.member-level-tag.tag-locked  { background: rgba(255,255,255,.06); color: rgba(220,230,245,.45); }
+
+.member-level-more {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 14px;
+    font-size: 13px;
+    font-weight: 600;
+    color: #63a8ff;
+    text-decoration: none;
+    transition: gap .2s ease;
+}
+.member-level-more:hover { gap: 10px; color: #8ec0ff; }
+</style>
+
+<script>
+/* ── 免費註冊按鈕 → 觸發 header 的註冊彈窗 ── */
+(function () {
+    const btn = document.getElementById('smacg-cta-register-btn');
+    if (!btn) return;
+    btn.addEventListener('click', function () {
+        if (typeof window.smacgOpenLoginModal === 'function') {
+            window.smacgOpenLoginModal('register');
+        } else {
+            // fallback：彈窗 JS 還沒載入時退回原生註冊頁
+            window.location.href = '<?php echo esc_js( wp_registration_url() ); ?>';
+        }
+    });
+})();
+</script>
 
 <?php get_footer(); ?>
