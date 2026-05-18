@@ -25,6 +25,7 @@
 
 if ( ! defined( 'ABSPATH' ) ) { exit; }
 
+
 /* ============================================================
  * 區段 1：URL 解析、季節判定
  * ============================================================ */
@@ -69,110 +70,114 @@ $season_themes = [
 $theme = $season_themes[ $ctx['season_key'] ] ?? $season_themes['SPRING'];
 
 /* ============================================================
- * 區段 2：SQL 一次撈完（主資料 + tw_streaming_url LIKE 聚合）
+ * 區段 2（v1.3.2 重寫）：改用 WP_Query + 個別 get_post_meta
+ *   - 放棄複雜的 LEFT JOIN 聚合 SQL（在 MySQL 8 strict mode 會失敗）
+ *   - 用 WP_Query 確保跟 admin 列表行為一致
+ *   - 21 部 × ~25 個 meta 的查詢由 update_post_meta_cache 一次撈完
  * ============================================================ */
 global $wpdb;
 
-$current_uid = get_current_user_id();
-$status_table = $wpdb->prefix . 'anime_user_status';
-$has_status_table = (bool) $wpdb->get_var( $wpdb->prepare(
-    "SHOW TABLES LIKE %s", $status_table
-) );
-
-$season_key = $ctx['season_key'];
+$season_key = $ctx['season_key'] ?? $ctx['season'] ?? 'SPRING';
 $year       = (int) $ctx['year'];
 
-/* 主查詢：一次 LEFT JOIN 14 個 postmeta */
-$meta_keys = [
-    'cover'        => 'anime_cover_image',
-    'title_cn'     => 'anime_title_chinese',
-    'title_jp'     => 'anime_title_native',
-    'title_en'     => 'anime_title_english',
-    'title_romaji' => 'anime_title_romaji',
-    'synopsis'     => 'anime_synopsis_chinese',
-    'studios'      => 'anime_studios',
-    'staff'        => 'anime_staff_json',
-    'cast'         => 'anime_cast_json',
-    'episodes_json'=> 'anime_episodes_json',
-    'themes'       => 'anime_themes',
-    'streaming'    => 'anime_streaming',
-    'tw_platforms' => 'anime_tw_streaming',
-    'tw_other'     => 'anime_tw_streaming_other',
-    'tw_broadcast' => 'anime_tw_broadcast',
-    'trailer'      => 'anime_trailer_url',
-    'score'        => 'anime_score_anilist',
-    'popularity'   => 'anime_popularity',
-    'ep_total'     => 'anime_episodes',
-    'ep_aired'     => 'anime_episodes_aired',
-    'next_airing'  => 'anime_next_airing',
-    'start_date'   => 'anime_start_date',
-    'source'       => 'anime_source',
-    'format'       => 'anime_format',
-    'status'       => 'anime_status',
-    'official'     => 'anime_official_site',
-];
+$q = new WP_Query( [
+    'post_type'      => 'anime',
+    'post_status'    => 'publish',
+    'posts_per_page' => -1,
+    'no_found_rows'  => true,
+    'meta_query'     => [
+        'relation' => 'AND',
+        [ 'key' => 'anime_season',      'value' => $season_key, 'compare' => '=' ],
+        [ 'key' => 'anime_season_year', 'value' => $year,       'compare' => '=', 'type' => 'NUMERIC' ],
+    ],
+    'orderby'        => 'meta_value_num',
+    'meta_key'       => 'anime_popularity',
+    'order'          => 'DESC',
+] );
 
-$select_parts = [ 'p.ID', 'p.post_title', 'p.post_name', 'p.post_content', 'p.post_excerpt' ];
-$join_parts   = [];
-$i = 0;
-foreach ( $meta_keys as $alias => $mk ) {
-    $i++;
-    $a = 'm' . $i;
-    $select_parts[] = "MAX(CASE WHEN {$a}.meta_key='{$mk}' THEN {$a}.meta_value END) AS `{$alias}`";
-    $join_parts[]   = "LEFT JOIN {$wpdb->postmeta} {$a} ON {$a}.post_id=p.ID AND {$a}.meta_key='{$mk}'";
+$rows = [];
+if ( $q->have_posts() ) {
+    // 一次預熱所有 postmeta（WP_Query 已經幫我們做了 update_post_meta_cache）
+    foreach ( $q->posts as $post_obj ) {
+        $pid = (int) $post_obj->ID;
+        $m   = get_post_meta( $pid ); // 一次拿全部，已被 cache
+        $row = [
+            'ID'             => $pid,
+            'post_title'     => $post_obj->post_title,
+            'post_name'      => $post_obj->post_name,
+            'post_content'   => $post_obj->post_content,
+            'post_excerpt'   => $post_obj->post_excerpt,
+            'cover'          => $m['anime_cover_image'][0]      ?? '',
+            'title_cn'       => $m['anime_title_chinese'][0]    ?? '',
+            'title_jp'       => $m['anime_title_native'][0]     ?? '',
+            'title_en'       => $m['anime_title_english'][0]    ?? '',
+            'title_romaji'   => $m['anime_title_romaji'][0]     ?? '',
+            'synopsis'       => $m['anime_synopsis_chinese'][0] ?? '',
+            'studios'        => $m['anime_studios'][0]          ?? '',
+            'staff'          => $m['anime_staff_json'][0]       ?? '',
+            'cast'           => $m['anime_cast_json'][0]        ?? '',
+            'episodes_json'  => $m['anime_episodes_json'][0]    ?? '',
+            'themes'         => $m['anime_themes'][0]           ?? '',
+            'streaming'      => $m['anime_streaming'][0]        ?? '',
+            'tw_platforms'   => $m['anime_tw_streaming'][0]     ?? '',
+            'tw_other'       => $m['anime_tw_streaming_other'][0] ?? '',
+            'tw_broadcast'   => $m['anime_tw_broadcast'][0]     ?? '',
+            'trailer'        => $m['anime_trailer_url'][0]      ?? '',
+            'score'          => $m['anime_score_anilist'][0]    ?? null,
+            'popularity'     => $m['anime_popularity'][0]       ?? 0,
+            'ep_total'       => $m['anime_episodes'][0]         ?? 0,
+            'ep_aired'       => $m['anime_episodes_aired'][0]   ?? 0,
+            'next_airing'    => $m['anime_next_airing'][0]      ?? '',
+            'start_date'     => $m['anime_start_date'][0]       ?? '',
+            'source'         => $m['anime_source'][0]           ?? '',
+            'format'         => $m['anime_format'][0]           ?? '',
+            'status'         => $m['anime_status'][0]           ?? '',
+            'official'       => $m['anime_official_site'][0]    ?? '',
+            'user_status'    => '',
+            'user_progress'  => 0,
+        ];
+        // tw_streaming_url_*（從同一個 $m 過濾，不用再查 DB）
+        $tw_urls = [];
+        foreach ( $m as $mk => $mv ) {
+            if ( strpos( $mk, 'anime_tw_streaming_url_' ) === 0 && ! empty( $mv[0] ) ) {
+                $platform = substr( $mk, strlen( 'anime_tw_streaming_url_' ) );
+                $tw_urls[ $platform ] = $mv[0];
+            }
+        }
+        $row['_tw_urls'] = $tw_urls;
+        $rows[] = $row;
+    }
 }
+wp_reset_postdata();
 
-/* season 條件用 postmeta（anime_season + anime_season_year） */
-$select_sql = implode( ', ', $select_parts );
-$join_sql   = implode( "\n", $join_parts );
-
-/* user_status JOIN（可選） */
-$us_select = '';
-$us_join   = '';
-if ( $has_status_table && $current_uid > 0 ) {
-    $us_select = ", us.status AS user_status, us.progress AS user_progress, us.score AS user_score";
-    $us_join   = $wpdb->prepare(
-        "LEFT JOIN {$status_table} us ON us.anime_id=p.ID AND us.user_id=%d",
-        $current_uid
-    );
-}
-
-$sql = "
-    SELECT {$select_sql}
-        , ms.meta_value AS season_key
-        , msy.meta_value AS season_year
-        {$us_select}
-    FROM {$wpdb->posts} p
-    INNER JOIN {$wpdb->postmeta} ms  ON ms.post_id=p.ID  AND ms.meta_key='anime_season'
-    INNER JOIN {$wpdb->postmeta} msy ON msy.post_id=p.ID AND msy.meta_key='anime_season_year'
-    {$join_sql}
-    {$us_join}
-    WHERE p.post_type='anime'
-      AND p.post_status='publish'
-      AND ms.meta_value=%s
-      AND msy.meta_value=%d
-    GROUP BY p.ID
-    ORDER BY CAST(MAX(CASE WHEN m18.meta_key='anime_popularity' THEN m18.meta_value END) AS UNSIGNED) DESC, p.ID DESC
-";
-$rows = $wpdb->get_results( $wpdb->prepare( $sql, $season_key, $year ), ARRAY_A );
-if ( ! $rows ) { $rows = []; }
-
-/* 補抓 tw_streaming_url_* （所有勾選平台的直達 URL，一次 LIKE 查詢） */
+// user_status 表（如果有）
 $tw_urls_by_post = [];
-if ( $rows ) {
+$current_uid     = get_current_user_id();
+$status_table    = $wpdb->prefix . 'anime_user_status';
+$has_status_table = (bool) $wpdb->get_var( $wpdb->prepare( "SHOW TABLES LIKE %s", $status_table ) );
+
+foreach ( $rows as $idx => $r ) {
+    $tw_urls_by_post[ $r['ID'] ] = $r['_tw_urls'];
+    unset( $rows[ $idx ]['_tw_urls'] );
+}
+
+if ( $has_status_table && $current_uid > 0 && $rows ) {
     $ids = array_map( 'intval', wp_list_pluck( $rows, 'ID' ) );
     $in  = implode( ',', $ids );
-    $tw_url_rows = $wpdb->get_results(
-        "SELECT post_id, meta_key, meta_value
-         FROM {$wpdb->postmeta}
-         WHERE post_id IN ({$in})
-           AND meta_key LIKE 'anime_tw_streaming_url_%'
-           AND meta_value != ''",
-        ARRAY_A
-    );
-    foreach ( $tw_url_rows as $r ) {
-        $platform = substr( $r['meta_key'], strlen( 'anime_tw_streaming_url_' ) );
-        $tw_urls_by_post[ (int) $r['post_id'] ][ $platform ] = $r['meta_value'];
+    $us_rows = $wpdb->get_results( $wpdb->prepare(
+        "SELECT anime_id, status, progress FROM {$status_table}
+         WHERE user_id=%d AND anime_id IN ({$in})",
+        $current_uid
+    ), ARRAY_A );
+    $us_map = [];
+    foreach ( $us_rows as $u ) {
+        $us_map[ (int) $u['anime_id'] ] = $u;
+    }
+    foreach ( $rows as $i => $r ) {
+        if ( isset( $us_map[ $r['ID'] ] ) ) {
+            $rows[ $i ]['user_status']   = $us_map[ $r['ID'] ]['status'];
+            $rows[ $i ]['user_progress'] = (int) $us_map[ $r['ID'] ]['progress'];
+        }
     }
 }
 
