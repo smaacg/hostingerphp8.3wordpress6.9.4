@@ -3,15 +3,12 @@
  * Bangumi 番組表主頁面
  *
  * @package weixiaoacg
- * @version 1.1.0 (2026-05-18)
+ * @version 1.2.0 (2026-05-18)
  *
  * 變更紀錄：
- *   1.1.0 (2026-05-18) 抽出 inline CSS / JS 至 assets/css/bangumi.css 與 assets/js/bangumi.js
- *                       動態主題色透過 <body> 內聯 CSS 變數注入
+ *   1.2.0 (2026-05-18) 改用番組表專屬卡片 .bgm-card（不再呼叫 smacg_render_anime_card）
+ *   1.1.0 (2026-05-18) 抽出 inline CSS / JS
  *   1.0.0 (2026-05-18) 初版
- *
- * 載入方式：由 bangumi-loader.php 的 template_redirect 自動 include
- * URL：/bangumi/{YYYYMM}/（YYYYMM 必須為季首月）
  */
 
 defined( 'ABSPATH' ) || exit;
@@ -31,7 +28,7 @@ $is_current_season = ( $ym === $cur_ym );
 $canonical = home_url( "/bangumi/{$ym}/" );
 
 /* ============================================================
- * 2. 查詢本季所有 anime（一次 SQL，含使用者狀態 LEFT JOIN）
+ * 2. 查詢本季所有 anime
  * ============================================================ */
 global $wpdb;
 $uid = get_current_user_id();
@@ -105,7 +102,6 @@ foreach ( $rows as $r ) {
     $ep_aired = (int) $r['anime_episodes_aired'];
     $popularity = (int) $r['anime_popularity'];
 
-    // 星期
     $weekday = 0;
     if ( $r['anime_next_airing'] ) {
         $ts = strtotime( $r['anime_next_airing'] );
@@ -116,7 +112,6 @@ foreach ( $rows as $r ) {
         if ( $ts ) $weekday = (int) date( 'N', $ts );
     }
 
-    // 使用者狀態
     $u_status = isset( $r['user_status'] ) && $r['user_status'] !== null
                   ? ( $status_map[ (int) $r['user_status'] ] ?? '' )
                   : '';
@@ -155,7 +150,7 @@ $avg_score = $score_n > 0 ? round( $score_sum / $score_n, 1 ) : 0;
 $total     = count( $all_posts );
 
 /* ============================================================
- * 4. SEO 上下文 + 注入 <head>
+ * 4. SEO
  * ============================================================ */
 $seo_ctx = [
     'label'       => $info['label'],
@@ -179,7 +174,7 @@ add_filter( 'pre_get_document_title', function () use ( $seo_ctx ) {
 } );
 
 /* ============================================================
- * 5. 季度視覺主題（給 CSS 變數使用）
+ * 5. 季度視覺主題
  * ============================================================ */
 $theme_colors = [
     'SPRING' => [ 'main' => '#f9a8d4', 'soft' => 'rgba(249,168,212,0.15)', 'icon' => '🌸' ],
@@ -189,13 +184,11 @@ $theme_colors = [
 ];
 $theme = $theme_colors[ $info['season'] ];
 
-// 把動態色彩注入 <body>，讓外部 CSS 透過 var() 讀取
 add_filter( 'body_class', function ( $classes ) {
     $classes[] = 'is-bangumi-season';
     return $classes;
 } );
 add_action( 'wp_footer', function () use ( $theme ) {
-    // 用 inline style 設定 CSS 變數到 body
     echo '<style id="bgm-vars">body.is-bangumi-season{--bgm-main:' . esc_attr( $theme['main'] ) . ';--bgm-soft:' . esc_attr( $theme['soft'] ) . ';}</style>';
 }, 1 );
 
@@ -204,6 +197,14 @@ add_action( 'wp_footer', function () use ( $theme ) {
  * ============================================================ */
 $now_day    = (int) date( 'N' );
 $weekday_zh = [ 0 => '全部', 1 => '週一', 2 => '週二', 3 => '週三', 4 => '週四', 5 => '週五', 6 => '週六', 7 => '週日' ];
+
+$card_status_label = [
+    'watching'  => '追番中',
+    'want'      => '想看',
+    'completed' => '已完結',
+    'dropped'   => '已棄',
+];
+$weekday_short = [ 1 => '一', 2 => '二', 3 => '三', 4 => '四', 5 => '五', 6 => '六', 7 => '日' ];
 
 get_header();
 ?>
@@ -301,27 +302,66 @@ get_header();
     ?>
       <div class="bgm-group" data-group="<?php echo (int) $day_id; ?>" <?php echo $is_visible_group ? '' : 'hidden'; ?>>
         <?php foreach ( $posts as $p ):
-            if ( function_exists( 'smacg_render_anime_card' ) ) {
-                smacg_render_anime_card( $p['pid'], [
-                    'status'    => $p['user_status'],
-                    'progress'  => $p['user_progress'],
-                    'favorited' => $p['user_favorited'],
-                ] );
-            } else {
-                ?>
-                <a class="mc-anime-card" href="<?php echo esc_url( $p['url'] ); ?>">
-                  <div class="mc-card-thumb">
-                    <?php if ( $p['cover'] ): ?>
-                      <img src="<?php echo esc_url( $p['cover'] ); ?>" alt="<?php echo esc_attr( $p['title'] ); ?>" loading="lazy">
-                    <?php endif; ?>
-                  </div>
-                  <div class="mc-card-body">
-                    <h4 class="mc-card-title"><?php echo esc_html( $p['title'] ); ?></h4>
-                  </div>
-                </a>
-                <?php
-            }
-        endforeach; ?>
+            $is_hot       = ( $p['score'] !== null && $p['score'] >= 8.0 );
+            $progress_pct = ( $p['ep_total'] > 0 && $p['user_progress'] > 0 )
+                            ? min( 100, round( $p['user_progress'] / $p['ep_total'] * 100 ) )
+                            : 0;
+        ?>
+        <a class="bgm-card<?php echo $p['user_status'] ? ' has-status status-' . esc_attr( $p['user_status'] ) : ''; ?>"
+           href="<?php echo esc_url( $p['url'] ); ?>"
+           data-score="<?php echo esc_attr( (string) ( $p['score'] ?? 0 ) ); ?>"
+           data-ep="<?php echo esc_attr( (string) $p['ep_total'] ); ?>"
+           data-pop="<?php echo esc_attr( (string) $p['popularity'] ); ?>">
+
+          <div class="bgm-card-cover">
+            <?php if ( $p['cover'] ): ?>
+              <img src="<?php echo esc_url( $p['cover'] ); ?>"
+                   alt="<?php echo esc_attr( $p['title'] ); ?>"
+                   loading="lazy">
+            <?php else: ?>
+              <div class="bgm-card-cover-ph"><i class="fa-solid fa-film" aria-hidden="true"></i></div>
+            <?php endif; ?>
+
+            <?php if ( $p['score'] !== null ): ?>
+              <div class="bgm-card-score<?php echo $is_hot ? ' is-hot' : ''; ?>">
+                <i class="fa-solid fa-star" aria-hidden="true"></i>
+                <?php echo esc_html( (string) $p['score'] ); ?>
+              </div>
+            <?php endif; ?>
+
+            <?php if ( $p['user_status'] && isset( $card_status_label[ $p['user_status'] ] ) ): ?>
+              <div class="bgm-card-chip"><?php echo esc_html( $card_status_label[ $p['user_status'] ] ); ?></div>
+            <?php endif; ?>
+
+            <div class="bgm-card-overlay">
+              <?php if ( $p['weekday'] >= 1 && $p['weekday'] <= 7 ): ?>
+                <span class="bgm-card-day"><i class="fa-solid fa-calendar" aria-hidden="true"></i> 週<?php echo esc_html( $weekday_short[ $p['weekday'] ] ); ?></span>
+              <?php endif; ?>
+              <?php if ( $p['ep_total'] > 0 ): ?>
+                <span class="bgm-card-ep">
+                  <?php if ( $p['ep_aired'] > 0 && $p['ep_aired'] < $p['ep_total'] ): ?>
+                    <?php echo (int) $p['ep_aired']; ?>/<?php echo (int) $p['ep_total']; ?> 集
+                  <?php else: ?>
+                    <?php echo (int) $p['ep_total']; ?> 集
+                  <?php endif; ?>
+                </span>
+              <?php endif; ?>
+            </div>
+
+            <?php if ( $progress_pct > 0 ): ?>
+              <div class="bgm-card-progress"><span style="width:<?php echo (int) $progress_pct; ?>%"></span></div>
+            <?php endif; ?>
+          </div>
+
+          <div class="bgm-card-meta">
+            <h3 class="bgm-card-title"><?php echo esc_html( $p['title'] ); ?></h3>
+            <?php if ( $p['title_jp'] ): ?>
+              <p class="bgm-card-jp"><?php echo esc_html( $p['title_jp'] ); ?></p>
+            <?php endif; ?>
+          </div>
+
+        </a>
+        <?php endforeach; ?>
       </div>
     <?php endforeach; endif; ?>
   </div>
