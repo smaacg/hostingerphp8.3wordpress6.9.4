@@ -2,29 +2,21 @@
 /**
  * Template Name: 番組表 - 季度詳細列表
  * File: blocksy-child/page-bangumi.php
- * Version: 1.3.0
+ * Version: 1.3.3
  * Date: 2026-05-18
  *
  * Changelog
- *  v1.3.0 (2026-05-18)
- *    - Hybrid 模式：保留 grid，新增點擊就地展開長條詳情
- *    - SQL 一次撈完 14 個 postmeta + tw_streaming_url_* LIKE 聚合
- *    - 解析 staff_json / cast_json / themes / streaming / tw_streaming
- *    - trailer_url 多 PV 解析（換行/逗號/分號/空格、可選 | 標題）
- *    - 桌面手風琴、手機 modal（由 bangumi.js 切換）
- *    - URL hash 同步 #anime-{id}
- *    - YouTube PV lazy load（點縮圖才嵌入）
- *  v1.2.0 (2026-05-18)
- *    - 自訂 .bgm-card markup（取代 smacg_render_anime_card）
- *  v1.1.0 (2026-05-18)
- *    - inline CSS/JS 抽離至 assets/css/bangumi.css 與 assets/js/bangumi.js
- *  v1.0.0 - 初版
+ *  v1.3.3 (2026-05-18)
+ *    - 改用 WP_Query + get_post_meta（避開 MySQL 8 strict mode 對 GROUP BY 的問題）
+ *    - 是否顯示「星期分頁」改為條件式：當季 + 至少 1 部有實際 weekday
+ *    - 非當季或全部 weekday=0 時：隱藏星期分頁、平鋪所有卡片、不顯示「其他」標題
+ *    - 平均分顯示修正為 10 分制（原 100 / 10）
+ *    - 卡片新增資料條（製作公司 + 台灣播放平台 icons + 播出時間）
  *
  * @package weixiaoacg
  */
 
 if ( ! defined( 'ABSPATH' ) ) { exit; }
-
 
 /* ============================================================
  * 區段 1：URL 解析、季節判定
@@ -51,6 +43,7 @@ if ( function_exists( 'smacg_bangumi_parse_ym' ) ) {
     $ctx = [
         'year'       => $y,
         'month'      => $m,
+        'season'     => $season_key,
         'season_key' => $season_key,
         'season_zh'  => $season_zh,
         'label'      => sprintf( '%d 年 %s新番', $y, $season_zh ),
@@ -58,7 +51,11 @@ if ( function_exists( 'smacg_bangumi_parse_ym' ) ) {
 }
 
 $prev_ym = function_exists( 'smacg_bangumi_shift_ym' ) ? smacg_bangumi_shift_ym( $ym, -3 ) : '';
-$next_ym = function_exists( 'smacg_bangumi_shift_ym' ) ? smacg_bangumi_shift_ym( $ym, +3 )  : '';
+$next_ym = function_exists( 'smacg_bangumi_shift_ym' ) ? smacg_bangumi_shift_ym( $ym, +3 ) : '';
+
+/* 當季判定 */
+$current_ym = function_exists( 'smacg_bangumi_current_ym' ) ? smacg_bangumi_current_ym() : date_i18n( 'Ym' );
+$is_current_season = ( $ym === $current_ym );
 
 /* 季節主題色 */
 $season_themes = [
@@ -67,13 +64,11 @@ $season_themes = [
     'FALL'   => [ 'main' => '#fb923c', 'soft' => '#fed7aa', 'icon' => '🍁' ],
     'WINTER' => [ 'main' => '#94a3b8', 'soft' => '#e2e8f0', 'icon' => '❄️' ],
 ];
-$theme = $season_themes[ $ctx['season_key'] ] ?? $season_themes['SPRING'];
+$theme_key = $ctx['season_key'] ?? ( $ctx['season'] ?? 'SPRING' );
+$theme = $season_themes[ $theme_key ] ?? $season_themes['SPRING'];
 
 /* ============================================================
- * 區段 2（v1.3.2 重寫）：改用 WP_Query + 個別 get_post_meta
- *   - 放棄複雜的 LEFT JOIN 聚合 SQL（在 MySQL 8 strict mode 會失敗）
- *   - 用 WP_Query 確保跟 admin 列表行為一致
- *   - 21 部 × ~25 個 meta 的查詢由 update_post_meta_cache 一次撈完
+ * 區段 2：WP_Query 撈本季作品 + 個別 get_post_meta
  * ============================================================ */
 global $wpdb;
 
@@ -96,47 +91,13 @@ $q = new WP_Query( [
 ] );
 
 $rows = [];
+$tw_urls_by_post = [];
+
 if ( $q->have_posts() ) {
-    // 一次預熱所有 postmeta（WP_Query 已經幫我們做了 update_post_meta_cache）
     foreach ( $q->posts as $post_obj ) {
         $pid = (int) $post_obj->ID;
-        $m   = get_post_meta( $pid ); // 一次拿全部，已被 cache
-        $row = [
-            'ID'             => $pid,
-            'post_title'     => $post_obj->post_title,
-            'post_name'      => $post_obj->post_name,
-            'post_content'   => $post_obj->post_content,
-            'post_excerpt'   => $post_obj->post_excerpt,
-            'cover'          => $m['anime_cover_image'][0]      ?? '',
-            'title_cn'       => $m['anime_title_chinese'][0]    ?? '',
-            'title_jp'       => $m['anime_title_native'][0]     ?? '',
-            'title_en'       => $m['anime_title_english'][0]    ?? '',
-            'title_romaji'   => $m['anime_title_romaji'][0]     ?? '',
-            'synopsis'       => $m['anime_synopsis_chinese'][0] ?? '',
-            'studios'        => $m['anime_studios'][0]          ?? '',
-            'staff'          => $m['anime_staff_json'][0]       ?? '',
-            'cast'           => $m['anime_cast_json'][0]        ?? '',
-            'episodes_json'  => $m['anime_episodes_json'][0]    ?? '',
-            'themes'         => $m['anime_themes'][0]           ?? '',
-            'streaming'      => $m['anime_streaming'][0]        ?? '',
-            'tw_platforms'   => $m['anime_tw_streaming'][0]     ?? '',
-            'tw_other'       => $m['anime_tw_streaming_other'][0] ?? '',
-            'tw_broadcast'   => $m['anime_tw_broadcast'][0]     ?? '',
-            'trailer'        => $m['anime_trailer_url'][0]      ?? '',
-            'score'          => $m['anime_score_anilist'][0]    ?? null,
-            'popularity'     => $m['anime_popularity'][0]       ?? 0,
-            'ep_total'       => $m['anime_episodes'][0]         ?? 0,
-            'ep_aired'       => $m['anime_episodes_aired'][0]   ?? 0,
-            'next_airing'    => $m['anime_next_airing'][0]      ?? '',
-            'start_date'     => $m['anime_start_date'][0]       ?? '',
-            'source'         => $m['anime_source'][0]           ?? '',
-            'format'         => $m['anime_format'][0]           ?? '',
-            'status'         => $m['anime_status'][0]           ?? '',
-            'official'       => $m['anime_official_site'][0]    ?? '',
-            'user_status'    => '',
-            'user_progress'  => 0,
-        ];
-        // tw_streaming_url_*（從同一個 $m 過濾，不用再查 DB）
+        $m   = get_post_meta( $pid );
+
         $tw_urls = [];
         foreach ( $m as $mk => $mv ) {
             if ( strpos( $mk, 'anime_tw_streaming_url_' ) === 0 && ! empty( $mv[0] ) ) {
@@ -144,22 +105,51 @@ if ( $q->have_posts() ) {
                 $tw_urls[ $platform ] = $mv[0];
             }
         }
-        $row['_tw_urls'] = $tw_urls;
-        $rows[] = $row;
+        $tw_urls_by_post[ $pid ] = $tw_urls;
+
+        $rows[] = [
+            'ID'             => $pid,
+            'post_title'     => $post_obj->post_title,
+            'post_name'      => $post_obj->post_name,
+            'post_content'   => $post_obj->post_content,
+            'post_excerpt'   => $post_obj->post_excerpt,
+            'cover'          => $m['anime_cover_image'][0]        ?? '',
+            'title_cn'       => $m['anime_title_chinese'][0]      ?? '',
+            'title_jp'       => $m['anime_title_native'][0]       ?? '',
+            'title_en'       => $m['anime_title_english'][0]      ?? '',
+            'title_romaji'   => $m['anime_title_romaji'][0]       ?? '',
+            'synopsis'       => $m['anime_synopsis_chinese'][0]   ?? '',
+            'studios'        => $m['anime_studios'][0]            ?? '',
+            'staff'          => $m['anime_staff_json'][0]         ?? '',
+            'cast'           => $m['anime_cast_json'][0]          ?? '',
+            'episodes_json'  => $m['anime_episodes_json'][0]      ?? '',
+            'themes'         => $m['anime_themes'][0]             ?? '',
+            'streaming'      => $m['anime_streaming'][0]          ?? '',
+            'tw_platforms'   => $m['anime_tw_streaming'][0]       ?? '',
+            'tw_other'       => $m['anime_tw_streaming_other'][0] ?? '',
+            'tw_broadcast'   => $m['anime_tw_broadcast'][0]       ?? '',
+            'trailer'        => $m['anime_trailer_url'][0]        ?? '',
+            'score'          => isset( $m['anime_score_anilist'][0] ) ? (float) $m['anime_score_anilist'][0] : null,
+            'popularity'     => (int) ( $m['anime_popularity'][0] ?? 0 ),
+            'ep_total'       => (int) ( $m['anime_episodes'][0]   ?? 0 ),
+            'ep_aired'       => (int) ( $m['anime_episodes_aired'][0] ?? 0 ),
+            'next_airing'    => $m['anime_next_airing'][0]        ?? '',
+            'start_date'     => $m['anime_start_date'][0]         ?? '',
+            'source'         => $m['anime_source'][0]             ?? '',
+            'format'         => $m['anime_format'][0]             ?? '',
+            'status'         => $m['anime_status'][0]             ?? '',
+            'official'       => $m['anime_official_site'][0]      ?? '',
+            'user_status'    => '',
+            'user_progress'  => 0,
+        ];
     }
 }
 wp_reset_postdata();
 
-// user_status 表（如果有）
-$tw_urls_by_post = [];
+/* user_status 表（如果有） */
 $current_uid     = get_current_user_id();
 $status_table    = $wpdb->prefix . 'anime_user_status';
 $has_status_table = (bool) $wpdb->get_var( $wpdb->prepare( "SHOW TABLES LIKE %s", $status_table ) );
-
-foreach ( $rows as $idx => $r ) {
-    $tw_urls_by_post[ $r['ID'] ] = $r['_tw_urls'];
-    unset( $rows[ $idx ]['_tw_urls'] );
-}
 
 if ( $has_status_table && $current_uid > 0 && $rows ) {
     $ids = array_map( 'intval', wp_list_pluck( $rows, 'ID' ) );
@@ -184,30 +174,14 @@ if ( $has_status_table && $current_uid > 0 && $rows ) {
 /* ============================================================
  * 區段 3：解析 JSON / 陣列欄位
  * ============================================================ */
-
-/* 台灣平台中文名對照（與 ACF get_tw_platforms 同步） */
 $tw_platform_labels = [
-    'bahamut'      => '巴哈動畫瘋',
-    'hami'         => 'Hami Video',
-    'myvideo'      => 'MyVideo',
-    'linetv'       => 'LINE TV',
-    'friday'       => 'friDay影音',
-    'ofiii'        => 'Ofiii',
-    'catchplay'    => 'CatchPlay+',
-    'bilibili'     => 'B站台灣',
-    'ani_one'      => 'Ani-One',
-    'muse'         => 'Muse 木棉花',
-    'mighty'       => '曼迪 YT',
-    'ani_mi'       => 'Ani-Mi',
-    'netflix'      => 'Netflix',
-    'disney'       => 'Disney+',
-    'litv'         => 'LiTV',
-    'tropicsanime' => '回歸線娛樂',
-    'iqiyi'        => '愛奇藝',
-    'renta'        => 'renta!',
-    'anipass'      => 'AniPASS',
-    'amazon'       => 'Prime Video',
-    'crunchyroll'  => 'Crunchyroll',
+    'bahamut'      => '巴哈動畫瘋',  'hami'      => 'Hami Video',  'myvideo'   => 'MyVideo',
+    'linetv'       => 'LINE TV',     'friday'    => 'friDay影音',  'ofiii'     => 'Ofiii',
+    'catchplay'    => 'CatchPlay+',  'bilibili'  => 'B站台灣',     'ani_one'   => 'Ani-One',
+    'muse'         => 'Muse 木棉花', 'mighty'    => '曼迪 YT',     'ani_mi'    => 'Ani-Mi',
+    'netflix'      => 'Netflix',     'disney'    => 'Disney+',     'litv'      => 'LiTV',
+    'tropicsanime' => '回歸線娛樂',  'iqiyi'     => '愛奇藝',      'renta'     => 'renta!',
+    'anipass'      => 'AniPASS',     'amazon'    => 'Prime Video', 'crunchyroll' => 'Crunchyroll',
 ];
 
 $source_labels = [
@@ -225,12 +199,10 @@ $format_labels = [
 
 $weekday_zh = [ 1 => '週一', 2 => '週二', 3 => '週三', 4 => '週四', 5 => '週五', 6 => '週六', 7 => '週日' ];
 
-/* 解析 trailer_url（多支） */
 $parse_trailers = function( $raw ) {
     if ( ! $raw ) return [];
     $lines = preg_split( '/[\r\n,;]+/u', $raw );
-    $out = [];
-    $idx = 0;
+    $out = []; $idx = 0;
     foreach ( $lines as $line ) {
         $line = trim( $line );
         if ( $line === '' ) continue;
@@ -260,7 +232,6 @@ $parse_trailers = function( $raw ) {
     return $out;
 };
 
-/* 解析 staff_json (Bangumi 格式: [{name, name_cn, relation}, ...]) */
 $parse_staff = function( $json ) {
     if ( ! $json ) return [];
     $arr = json_decode( $json, true );
@@ -276,7 +247,6 @@ $parse_staff = function( $json ) {
     return $out;
 };
 
-/* 解析 cast_json (Bangumi 格式: [{character:{name}, actors:[{name}]}, ...]) */
 $parse_cast = function( $json ) {
     if ( ! $json ) return [];
     $arr = json_decode( $json, true );
@@ -304,7 +274,6 @@ $parse_cast = function( $json ) {
     return $out;
 };
 
-/* 解析 themes (AnimeThemes 格式) → 簡化為 OP/ED 兩組 */
 $parse_themes = function( $json ) {
     if ( ! $json ) return [ 'op' => [], 'ed' => [] ];
     $arr = json_decode( $json, true );
@@ -327,7 +296,6 @@ $parse_themes = function( $json ) {
     return $out;
 };
 
-/* 解析 streaming (AniList externalLinks) */
 $parse_streaming = function( $json ) {
     if ( ! $json ) return [];
     $arr = json_decode( $json, true );
@@ -343,7 +311,6 @@ $parse_streaming = function( $json ) {
     return $out;
 };
 
-/* 解析 tw_streaming (ACF checkbox 通常是 serialized array) */
 $parse_tw_platforms = function( $raw ) {
     if ( ! $raw ) return [];
     if ( is_array( $raw ) ) return $raw;
@@ -351,7 +318,6 @@ $parse_tw_platforms = function( $raw ) {
         $arr = @unserialize( $raw );
         return is_array( $arr ) ? $arr : [];
     }
-    /* fallback: JSON 或逗號分隔 */
     $decoded = json_decode( $raw, true );
     if ( is_array( $decoded ) ) return $decoded;
     return array_filter( array_map( 'trim', explode( ',', $raw ) ) );
@@ -369,26 +335,25 @@ $stat_completed = 0;
 $score_sum = 0;
 $score_cnt = 0;
 $first_cover = '';
+$has_real_weekday = false;
 
 foreach ( $rows as $r ) {
     $pid = (int) $r['ID'];
 
-    /* 星期判定（優先 next_airing，否則 start_date） */
     $weekday = 0;
     $ts_src = $r['next_airing'] ?: $r['start_date'];
     if ( $ts_src ) {
         $ts = strtotime( $ts_src );
         if ( $ts ) {
-            $w = (int) date( 'N', $ts );
-            $weekday = $w;
+            $weekday = (int) date( 'N', $ts );
         }
     }
 
-    $title_cn = $r['title_cn'] ?: ( $r['title_en'] ?: ( $r['title_romaji'] ?: $r['post_title'] ) );
-    $score    = $r['score'] !== null ? (float) $r['score'] : null;
+    $title_cn   = $r['title_cn'] ?: ( $r['title_en'] ?: ( $r['title_romaji'] ?: $r['post_title'] ) );
+    $score      = $r['score'] !== null ? (float) $r['score'] : null;
     $score_disp = $score !== null ? round( $score / 10, 1 ) : null;
-    $ep_total = (int) ( $r['ep_total'] ?: 0 );
-    $ep_aired = (int) ( $r['ep_aired'] ?: 0 );
+    $ep_total   = (int) $r['ep_total'];
+    $ep_aired   = (int) $r['ep_aired'];
 
     $tw_platforms = $parse_tw_platforms( $r['tw_platforms'] );
     $tw_urls      = $tw_urls_by_post[ $pid ] ?? [];
@@ -409,7 +374,7 @@ foreach ( $rows as $r ) {
         'status'     => $r['status'] ?: '',
         'score'      => $score,
         'score_disp' => $score_disp,
-        'popularity' => (int) ( $r['popularity'] ?: 0 ),
+        'popularity' => (int) $r['popularity'],
         'ep_total'   => $ep_total,
         'ep_aired'   => $ep_aired,
         'next_airing'=> $r['next_airing'] ?: '',
@@ -425,12 +390,13 @@ foreach ( $rows as $r ) {
         'streaming'  => $parse_streaming( $r['streaming'] ),
         'tw_platforms' => $tw_platforms,
         'tw_urls'    => $tw_urls,
-        'user_status'  => $r['user_status']   ?? '',
+        'user_status'  => $r['user_status'] ?? '',
         'user_progress'=> (int) ( $r['user_progress'] ?? 0 ),
     ];
 
     $posts[] = $item;
     $by_weekday[ $weekday ][] = $item;
+    if ( $weekday >= 1 && $weekday <= 7 ) $has_real_weekday = true;
 
     $stat_total++;
     if ( $item['user_status'] !== '' ) $stat_owned++;
@@ -439,10 +405,15 @@ foreach ( $rows as $r ) {
     if ( $score !== null ) { $score_sum += $score; $score_cnt++; }
     if ( ! $first_cover && $item['cover'] ) $first_cover = $item['cover'];
 }
-$avg_score = $score_cnt > 0 ? round( $score_sum / $score_cnt / 10, 2 ) : null;
+
+/* 平均分（10 分制） */
+$avg_score = $score_cnt > 0 ? round( $score_sum / $score_cnt / 10, 1 ) : null;
+
+/* 是否顯示星期分頁：當季 + 至少 1 部有實際 weekday */
+$show_weekday_tabs = ( $is_current_season && $has_real_weekday );
 
 /* ============================================================
- * 區段 5：SEO（title / meta / OG / Schema）
+ * 區段 5：SEO
  * ============================================================ */
 $canonical = home_url( "/bangumi/{$ym}/" );
 $seo_title = sprintf(
@@ -462,6 +433,7 @@ $seo_ctx = [
     'canonical' => $canonical,
     'title'     => $seo_title,
     'desc'      => $seo_desc,
+    'description' => $seo_desc,
     'og_image'  => $first_cover,
     'total'     => $stat_total,
     'avg_score' => $avg_score,
@@ -492,7 +464,6 @@ get_header();
 
 <main class="bgm-main">
 
-    <!-- 麵包屑 -->
     <nav class="bgm-breadcrumb" aria-label="breadcrumb">
         <a href="<?php echo esc_url( home_url( '/' ) ); ?>">首頁</a>
         <span>›</span>
@@ -501,10 +472,9 @@ get_header();
         <span aria-current="page"><?php echo esc_html( $ctx['label'] ); ?></span>
     </nav>
 
-    <!-- Hero -->
     <section class="bgm-hero">
         <div class="bgm-hero-inner">
-            <div class="bgm-hero-badge"><?php echo esc_html( $theme['icon'] ); ?> <?php echo esc_html( $ctx['season_zh'] ); ?></div>
+            <div class="bgm-hero-badge"><?php echo esc_html( $theme['icon'] ); ?> <?php echo esc_html( $ctx['season_zh'] ); ?>季</div>
             <h1 class="bgm-hero-title"><?php echo esc_html( $ctx['label'] ); ?></h1>
             <p class="bgm-hero-sub"><?php echo esc_html( $seo_desc ); ?></p>
 
@@ -520,18 +490,34 @@ get_header();
             </div>
 
             <div class="bgm-stats">
-                <div class="bgm-stat"><span class="bgm-stat-n"><?php echo (int) $stat_total; ?></span><span class="bgm-stat-l">總作品</span></div>
-                <div class="bgm-stat"><span class="bgm-stat-n"><?php echo (int) $stat_owned; ?></span><span class="bgm-stat-l">我的收藏</span></div>
-                <div class="bgm-stat"><span class="bgm-stat-n"><?php echo (int) $stat_watching; ?></span><span class="bgm-stat-l">追番中</span></div>
-                <div class="bgm-stat"><span class="bgm-stat-n"><?php echo $avg_score !== null ? esc_html( $avg_score ) : '–'; ?></span><span class="bgm-stat-l">平均分</span></div>
+                <div class="bgm-stat">
+                    <span class="bgm-stat-n"><?php echo (int) $stat_total; ?></span>
+                    <span class="bgm-stat-l">總作品</span>
+                </div>
+                <div class="bgm-stat">
+                    <span class="bgm-stat-n"><?php echo $avg_score !== null ? esc_html( $avg_score ) : '–'; ?></span>
+                    <span class="bgm-stat-l">平均分</span>
+                </div>
+                <?php if ( $current_uid > 0 ) : ?>
+                <div class="bgm-stat">
+                    <span class="bgm-stat-n"><?php echo (int) $stat_owned; ?></span>
+                    <span class="bgm-stat-l">我的收藏</span>
+                </div>
+                <div class="bgm-stat">
+                    <span class="bgm-stat-n"><?php echo (int) $stat_watching; ?></span>
+                    <span class="bgm-stat-l">追番中</span>
+                </div>
+                <?php endif; ?>
             </div>
         </div>
     </section>
 
-    <!-- 工具列：星期 + 排序 -->
     <section class="bgm-toolbar">
+        <?php if ( $show_weekday_tabs ) : ?>
         <div class="bgm-days" role="tablist" aria-label="按星期篩選">
-            <button class="bgm-day is-active" data-day="all" role="tab" aria-selected="true">全部</button>
+            <button class="bgm-day is-active" data-day="all" role="tab" aria-selected="true">
+                全部<span class="bgm-day-n">(<?php echo (int) $stat_total; ?>)</span>
+            </button>
             <?php for ( $d = 1; $d <= 7; $d++ ) : if ( empty( $by_weekday[ $d ] ) ) continue; ?>
                 <button class="bgm-day" data-day="<?php echo (int) $d; ?>" role="tab" aria-selected="false">
                     <?php echo esc_html( $weekday_zh[ $d ] ); ?>
@@ -540,42 +526,52 @@ get_header();
             <?php endfor; ?>
             <?php if ( ! empty( $by_weekday[0] ) ) : ?>
                 <button class="bgm-day" data-day="0" role="tab" aria-selected="false">
-                    其他<span class="bgm-day-n">(<?php echo count( $by_weekday[0] ); ?>)</span>
+                    待定<span class="bgm-day-n">(<?php echo count( $by_weekday[0] ); ?>)</span>
                 </button>
             <?php endif; ?>
         </div>
+        <?php else : ?>
+        <div class="bgm-days-empty"><span class="bgm-result-count">共 <?php echo (int) $stat_total; ?> 部作品</span></div>
+        <?php endif; ?>
 
         <div class="bgm-sort-wrap">
             <label for="bgm-sort" class="bgm-sort-label">排序</label>
             <select id="bgm-sort" class="bgm-sort">
-                <option value="default">預設</option>
+                <option value="default">人氣高 → 低</option>
                 <option value="score">評分高 → 低</option>
-                <option value="popularity">人氣高 → 低</option>
                 <option value="ep">集數多 → 少</option>
             </select>
         </div>
     </section>
 
-    <!-- 卡片網格（Hybrid：點卡片就地展開） -->
     <section class="bgm-grid-wrap">
-    <?php for ( $d = 1; $d <= 7; $d++ ) :
-        $list = $by_weekday[ $d ];
-        if ( empty( $list ) ) continue; ?>
-        <div class="bgm-group" data-group="<?php echo (int) $d; ?>">
-            <h2 class="bgm-group-title"><?php echo esc_html( $weekday_zh[ $d ] ); ?>　<span class="bgm-group-n"><?php echo count( $list ); ?> 部</span></h2>
-            <div class="bgm-grid">
-                <?php foreach ( $list as $p ) : ?>
-                    <?php echo bgm_render_card( $p, $tw_platform_labels, $weekday_zh ); ?>
-                <?php endforeach; ?>
+    <?php if ( $show_weekday_tabs ) : ?>
+        <?php for ( $d = 1; $d <= 7; $d++ ) :
+            $list = $by_weekday[ $d ];
+            if ( empty( $list ) ) continue; ?>
+            <div class="bgm-group" data-group="<?php echo (int) $d; ?>">
+                <h2 class="bgm-group-title"><?php echo esc_html( $weekday_zh[ $d ] ); ?>　<span class="bgm-group-n"><?php echo count( $list ); ?> 部</span></h2>
+                <div class="bgm-grid">
+                    <?php foreach ( $list as $p ) : ?>
+                        <?php echo bgm_render_card( $p, $tw_platform_labels, $weekday_zh ); ?>
+                    <?php endforeach; ?>
+                </div>
             </div>
-        </div>
-    <?php endfor; ?>
-
-    <?php if ( ! empty( $by_weekday[0] ) ) : ?>
-        <div class="bgm-group" data-group="0">
-            <h2 class="bgm-group-title">其他　<span class="bgm-group-n"><?php echo count( $by_weekday[0] ); ?> 部</span></h2>
+        <?php endfor; ?>
+        <?php if ( ! empty( $by_weekday[0] ) ) : ?>
+            <div class="bgm-group" data-group="0">
+                <h2 class="bgm-group-title">播出時間待定　<span class="bgm-group-n"><?php echo count( $by_weekday[0] ); ?> 部</span></h2>
+                <div class="bgm-grid">
+                    <?php foreach ( $by_weekday[0] as $p ) : ?>
+                        <?php echo bgm_render_card( $p, $tw_platform_labels, $weekday_zh ); ?>
+                    <?php endforeach; ?>
+                </div>
+            </div>
+        <?php endif; ?>
+    <?php else : ?>
+        <div class="bgm-group is-flat" data-group="all">
             <div class="bgm-grid">
-                <?php foreach ( $by_weekday[0] as $p ) : ?>
+                <?php foreach ( $posts as $p ) : ?>
                     <?php echo bgm_render_card( $p, $tw_platform_labels, $weekday_zh ); ?>
                 <?php endforeach; ?>
             </div>
@@ -590,7 +586,6 @@ get_header();
     <?php endif; ?>
     </section>
 
-    <!-- 手機 modal 容器（JS 會把展開內容塞進來） -->
     <div class="bgm-sheet" id="bgm-sheet" role="dialog" aria-modal="true" aria-label="作品詳情" aria-hidden="true">
         <div class="bgm-sheet-backdrop" data-bgm-close></div>
         <div class="bgm-sheet-panel" role="document">
@@ -605,7 +600,7 @@ get_header();
 get_footer();
 
 /* ============================================================
- * Helper：渲染單張卡片（含內嵌 <template> 展開內容）
+ * Helper：渲染單張卡片（acgsecrets 風：小封面 + 資料條）
  * ============================================================ */
 function bgm_render_card( $p, $tw_platform_labels, $weekday_zh ) {
     $status_label = [
@@ -617,6 +612,16 @@ function bgm_render_card( $p, $tw_platform_labels, $weekday_zh ) {
     $is_hot = ( $p['score'] !== null && $p['score'] >= 80 );
     $progress_pct = ( $p['ep_total'] > 0 && $p['user_progress'] > 0 )
         ? min( 100, round( $p['user_progress'] / $p['ep_total'] * 100 ) ) : 0;
+
+    /* 平台 icons（最多 4 個，超過顯示 +N） */
+    $tw_icons = [];
+    if ( ! empty( $p['tw_platforms'] ) ) {
+        foreach ( (array) $p['tw_platforms'] as $key ) {
+            if ( isset( $tw_platform_labels[ $key ] ) ) {
+                $tw_icons[] = [ 'key' => $key, 'label' => $tw_platform_labels[ $key ] ];
+            }
+        }
+    }
 
     ob_start();
     ?>
@@ -646,17 +651,6 @@ function bgm_render_card( $p, $tw_platform_labels, $weekday_zh ) {
                     <span class="bgm-card-chip"><?php echo esc_html( $status_label[ $p['user_status'] ] ); ?></span>
                 <?php endif; ?>
 
-                <div class="bgm-card-overlay">
-                    <?php if ( $p['weekday'] > 0 ) : ?>
-                        <span class="bgm-card-day"><?php echo esc_html( $weekday_zh[ $p['weekday'] ] ); ?></span>
-                    <?php endif; ?>
-                    <?php if ( $p['ep_total'] > 0 ) : ?>
-                        <span class="bgm-card-ep">共 <?php echo (int) $p['ep_total']; ?> 集</span>
-                    <?php elseif ( $p['format_zh'] ) : ?>
-                        <span class="bgm-card-ep"><?php echo esc_html( $p['format_zh'] ); ?></span>
-                    <?php endif; ?>
-                </div>
-
                 <?php if ( $progress_pct > 0 ) : ?>
                     <div class="bgm-card-progress"><span style="width:<?php echo (int) $progress_pct; ?>%"></span></div>
                 <?php endif; ?>
@@ -667,10 +661,44 @@ function bgm_render_card( $p, $tw_platform_labels, $weekday_zh ) {
                 <?php if ( $p['title_jp'] ) : ?>
                     <div class="bgm-card-jp"><?php echo esc_html( $p['title_jp'] ); ?></div>
                 <?php endif; ?>
+
+                <div class="bgm-card-bar">
+                    <?php if ( $p['format_zh'] ) : ?>
+                        <span class="bgm-card-pill"><?php echo esc_html( $p['format_zh'] ); ?></span>
+                    <?php endif; ?>
+                    <?php if ( $p['ep_total'] > 0 ) : ?>
+                        <span class="bgm-card-pill">共 <?php echo (int) $p['ep_total']; ?> 集</span>
+                    <?php endif; ?>
+                    <?php if ( $p['weekday'] > 0 && isset( $weekday_zh[ $p['weekday'] ] ) ) : ?>
+                        <span class="bgm-card-pill is-day"><?php echo esc_html( $weekday_zh[ $p['weekday'] ] ); ?></span>
+                    <?php endif; ?>
+                </div>
+
+                <?php if ( $p['studios'] ) : ?>
+                    <div class="bgm-card-studio" title="<?php echo esc_attr( $p['studios'] ); ?>">
+                        🎬 <?php echo esc_html( $p['studios'] ); ?>
+                    </div>
+                <?php endif; ?>
+
+                <?php if ( $tw_icons ) : ?>
+                    <div class="bgm-card-plats">
+                        <?php
+                        $shown = array_slice( $tw_icons, 0, 4 );
+                        $extra = count( $tw_icons ) - count( $shown );
+                        foreach ( $shown as $plat ) : ?>
+                            <span class="bgm-plat-mini bgm-plat-<?php echo esc_attr( $plat['key'] ); ?>"
+                                  title="<?php echo esc_attr( $plat['label'] ); ?>">
+                                <?php echo esc_html( mb_substr( $plat['label'], 0, 2 ) ); ?>
+                            </span>
+                        <?php endforeach;
+                        if ( $extra > 0 ) : ?>
+                            <span class="bgm-plat-mini is-more">+<?php echo (int) $extra; ?></span>
+                        <?php endif; ?>
+                    </div>
+                <?php endif; ?>
             </div>
         </button>
 
-        <!-- 展開詳情（桌面手風琴 / 手機 modal 共用 markup） -->
         <div class="bgm-detail" id="bgm-detail-<?php echo (int) $p['id']; ?>" hidden>
             <?php echo bgm_render_detail( $p, $tw_platform_labels ); ?>
         </div>
@@ -680,14 +708,13 @@ function bgm_render_card( $p, $tw_platform_labels, $weekday_zh ) {
 }
 
 /* ============================================================
- * Helper：渲染長條詳情（acgsecrets 風格）
+ * Helper：渲染長條詳情（acgsecrets 風）
  * ============================================================ */
 function bgm_render_detail( $p, $tw_platform_labels ) {
     ob_start();
     ?>
     <div class="bgm-d-inner">
 
-        <!-- 標題群 -->
         <header class="bgm-d-header">
             <h3 class="bgm-d-title"><?php echo esc_html( $p['title_cn'] ); ?></h3>
             <?php if ( $p['title_jp'] ) : ?>
@@ -698,7 +725,6 @@ function bgm_render_detail( $p, $tw_platform_labels ) {
             <?php endif; ?>
         </header>
 
-        <!-- 標籤群 -->
         <div class="bgm-d-tags">
             <?php if ( $p['source_zh'] ) : ?>
                 <span class="bgm-tag bgm-tag-source"><?php echo esc_html( $p['source_zh'] ); ?></span>
@@ -717,29 +743,21 @@ function bgm_render_detail( $p, $tw_platform_labels ) {
             <?php endif; ?>
         </div>
 
-        <!-- 播出資訊 -->
         <?php if ( $p['next_airing'] || $p['start_date'] || $p['tw_broadcast'] ) : ?>
         <div class="bgm-d-row">
             <div class="bgm-d-label">播出時間</div>
             <div class="bgm-d-value">
                 <?php
                 $airing_lines = [];
-                if ( $p['start_date'] ) {
-                    $airing_lines[] = '開播：' . esc_html( $p['start_date'] );
-                }
-                if ( $p['next_airing'] ) {
-                    $airing_lines[] = '下集：' . esc_html( $p['next_airing'] ) . '（台灣時間）';
-                }
-                if ( $p['tw_broadcast'] ) {
-                    $airing_lines[] = '台灣播出：' . esc_html( $p['tw_broadcast'] );
-                }
+                if ( $p['start_date'] )  $airing_lines[] = '開播：' . esc_html( $p['start_date'] );
+                if ( $p['next_airing'] ) $airing_lines[] = '下集：' . esc_html( $p['next_airing'] ) . '（台灣時間）';
+                if ( $p['tw_broadcast'] ) $airing_lines[] = '台灣播出：' . esc_html( $p['tw_broadcast'] );
                 echo implode( '<br>', $airing_lines );
                 ?>
             </div>
         </div>
         <?php endif; ?>
 
-        <!-- 故事大綱 -->
         <?php if ( $p['synopsis'] ) : ?>
         <div class="bgm-d-section">
             <h4 class="bgm-d-h">故事大綱</h4>
@@ -747,7 +765,6 @@ function bgm_render_detail( $p, $tw_platform_labels ) {
         </div>
         <?php endif; ?>
 
-        <!-- 主題曲 -->
         <?php if ( ! empty( $p['themes']['op'] ) || ! empty( $p['themes']['ed'] ) ) : ?>
         <div class="bgm-d-section">
             <h4 class="bgm-d-h">主題曲</h4>
@@ -756,37 +773,28 @@ function bgm_render_detail( $p, $tw_platform_labels ) {
                     <div class="bgm-theme-row">
                         <span class="bgm-theme-tag bgm-theme-op">OP</span>
                         <span class="bgm-theme-title"><?php echo esc_html( $t['title'] ); ?></span>
-                        <?php if ( $t['artist'] ) : ?>
-                            <span class="bgm-theme-artist"><?php echo esc_html( $t['artist'] ); ?></span>
-                        <?php endif; ?>
+                        <?php if ( $t['artist'] ) : ?><span class="bgm-theme-artist"><?php echo esc_html( $t['artist'] ); ?></span><?php endif; ?>
                     </div>
                 <?php endforeach; ?>
                 <?php foreach ( $p['themes']['ed'] as $t ) : ?>
                     <div class="bgm-theme-row">
                         <span class="bgm-theme-tag bgm-theme-ed">ED</span>
                         <span class="bgm-theme-title"><?php echo esc_html( $t['title'] ); ?></span>
-                        <?php if ( $t['artist'] ) : ?>
-                            <span class="bgm-theme-artist"><?php echo esc_html( $t['artist'] ); ?></span>
-                        <?php endif; ?>
+                        <?php if ( $t['artist'] ) : ?><span class="bgm-theme-artist"><?php echo esc_html( $t['artist'] ); ?></span><?php endif; ?>
                     </div>
                 <?php endforeach; ?>
             </div>
         </div>
         <?php endif; ?>
 
-        <!-- 宣傳片（PV） -->
         <?php if ( ! empty( $p['trailers'] ) ) : ?>
         <div class="bgm-d-section">
             <h4 class="bgm-d-h">宣傳片</h4>
             <div class="bgm-d-trailers">
                 <?php foreach ( $p['trailers'] as $tr ) : ?>
                     <?php if ( $tr['vid'] ) : ?>
-                        <button class="bgm-pv" type="button"
-                                data-vid="<?php echo esc_attr( $tr['vid'] ); ?>"
-                                aria-label="<?php echo esc_attr( $tr['title'] ); ?>">
-                            <img src="<?php echo esc_url( $tr['thumb'] ); ?>"
-                                 alt="<?php echo esc_attr( $tr['title'] ); ?>"
-                                 loading="lazy">
+                        <button class="bgm-pv" type="button" data-vid="<?php echo esc_attr( $tr['vid'] ); ?>" aria-label="<?php echo esc_attr( $tr['title'] ); ?>">
+                            <img src="<?php echo esc_url( $tr['thumb'] ); ?>" alt="<?php echo esc_attr( $tr['title'] ); ?>" loading="lazy">
                             <span class="bgm-pv-play">▶</span>
                             <span class="bgm-pv-title"><?php echo esc_html( $tr['title'] ); ?></span>
                         </button>
@@ -800,18 +808,15 @@ function bgm_render_detail( $p, $tw_platform_labels ) {
         </div>
         <?php endif; ?>
 
-        <!-- 台灣串流平台 -->
         <?php if ( ! empty( $p['tw_platforms'] ) || $p['tw_other'] ) : ?>
         <div class="bgm-d-section">
             <h4 class="bgm-d-h">台灣播放平台</h4>
             <div class="bgm-d-platforms">
                 <?php foreach ( (array) $p['tw_platforms'] as $key ) :
                     $label = $tw_platform_labels[ $key ] ?? $key;
-                    $url   = $p['tw_urls'][ $key ] ?? '';
-                ?>
+                    $url   = $p['tw_urls'][ $key ] ?? ''; ?>
                     <?php if ( $url ) : ?>
-                        <a class="bgm-plat bgm-plat-<?php echo esc_attr( $key ); ?>"
-                           href="<?php echo esc_url( $url ); ?>" target="_blank" rel="noopener">
+                        <a class="bgm-plat bgm-plat-<?php echo esc_attr( $key ); ?>" href="<?php echo esc_url( $url ); ?>" target="_blank" rel="noopener">
                             <?php echo esc_html( $label ); ?> ↗
                         </a>
                     <?php else : ?>
@@ -827,7 +832,6 @@ function bgm_render_detail( $p, $tw_platform_labels ) {
         </div>
         <?php endif; ?>
 
-        <!-- 配音員 -->
         <?php if ( ! empty( $p['cast'] ) ) : ?>
         <div class="bgm-d-section">
             <h4 class="bgm-d-h">配音員</h4>
@@ -842,7 +846,6 @@ function bgm_render_detail( $p, $tw_platform_labels ) {
         </div>
         <?php endif; ?>
 
-        <!-- 製作人員 -->
         <?php if ( ! empty( $p['staff'] ) || $p['studios'] ) : ?>
         <div class="bgm-d-section">
             <h4 class="bgm-d-h">製作人員</h4>
@@ -863,7 +866,6 @@ function bgm_render_detail( $p, $tw_platform_labels ) {
         </div>
         <?php endif; ?>
 
-        <!-- 海外串流 + 官網 -->
         <?php if ( ! empty( $p['streaming'] ) || $p['official'] ) : ?>
         <div class="bgm-d-section">
             <h4 class="bgm-d-h">外部連結</h4>
@@ -880,7 +882,6 @@ function bgm_render_detail( $p, $tw_platform_labels ) {
         </div>
         <?php endif; ?>
 
-        <!-- CTA -->
         <div class="bgm-d-cta">
             <a class="bgm-d-more" href="<?php echo esc_url( $p['url'] ); ?>">查看完整資訊 →</a>
         </div>
