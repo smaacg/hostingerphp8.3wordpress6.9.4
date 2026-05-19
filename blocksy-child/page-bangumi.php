@@ -50,8 +50,9 @@ if ( function_exists( 'smacg_bangumi_parse_ym' ) ) {
     ];
 }
 
-$prev_ym = function_exists( 'smacg_bangumi_shift_ym' ) ? smacg_bangumi_shift_ym( $ym, -3 ) : '';
-$next_ym = function_exists( 'smacg_bangumi_shift_ym' ) ? smacg_bangumi_shift_ym( $ym, +3 ) : '';
+$prev_ym = function_exists( 'smacg_bangumi_shift_ym' ) ? smacg_bangumi_shift_ym( $ym, -1 ) : '';
+$next_ym = function_exists( 'smacg_bangumi_shift_ym' ) ? smacg_bangumi_shift_ym( $ym, +1 ) : '';
+
 
 /* 當季判定 */
 $current_ym = function_exists( 'smacg_bangumi_current_ym' ) ? smacg_bangumi_current_ym() : date_i18n( 'Ym' );
