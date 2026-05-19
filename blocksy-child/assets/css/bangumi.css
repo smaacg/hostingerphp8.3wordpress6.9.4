@@ -1,856 +1,1191 @@
-/*
+/**
+ * Bangumi 番組表樣式
  * File: blocksy-child/assets/css/bangumi.css
- * Version: 1.3.0
- * Date: 2026-05-18
+ * Version: 1.4.0 (2026-05-18)
  *
  * Changelog
- *  v1.3.0 - Hybrid 模式：新增 .bgm-detail 長條詳情、桌面手風琴動畫、手機 modal
- *  v1.2.0 - 自訂 .bgm-card 樣式（取代 mc-anime-card）
- *  v1.1.0 - inline CSS 抽離至此檔
- *  v1.0.0 - 初版
+ *  v1.4.0 (2026-05-18) 四季氛圍化：
+ *    - Hero 加入季節裝飾動畫（櫻花/陽光/落葉/雪花，純 CSS）
+ *    - 卡片 hover 加入季節主題色光暈
+ *    - 統計數字加入脈動動畫
+ *    - 季節色更鮮明、漸層更豐富
+ *  v1.3.2 - acgsecrets 風卡片
+ *  v1.3.0 - 初版
  */
 
 /* ============================================================
- * 0. CSS 變數（由 page-bangumi.php 動態注入 #bgm-vars）
+ * 1. CSS 變數（season 主題色由 page-bangumi.php 注入 main/soft）
  * ============================================================ */
 .is-bangumi-season {
-    --bgm-main: #f9a8d4;
-    --bgm-soft: #fce7f3;
-    --bgm-text: var(--text, #e5e7eb);
-    --bgm-text-muted: var(--text-muted, #9ca3af);
-    --bgm-bg: var(--bg, #0f172a);
-    --bgm-card-bg: rgba(255, 255, 255, 0.04);
-    --bgm-border: rgba(255, 255, 255, 0.08);
-    --bgm-radius: 12px;
-    --bgm-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
+    --bgm-text:       #e5e7eb;
+    --bgm-text-soft:  #cbd5e1;
+    --bgm-text-mute:  #94a3b8;
+    --bgm-bg:         #0f172a;
+    --bgm-bg-card:    #1e293b;
+    --bgm-bg-hover:   #273449;
+    --bgm-border:     rgba(255,255,255,0.08);
+    --bgm-border-h:   rgba(255,255,255,0.16);
+    --bgm-shadow:     0 1px 3px rgba(0,0,0,0.3);
+    --bgm-shadow-lg:  0 10px 30px rgba(0,0,0,0.4);
+    --bgm-radius:     12px;
+    --bgm-radius-sm:  6px;
+    --bgm-gap:        16px;
+
+    /* 季節輔助色（page-bangumi.php 沒注入，這裡 fallback） */
+    --bgm-accent:     var(--bgm-main);
+    --bgm-glow:       rgba(249,168,212,.4);
+}
+
+/* 各季節獨立變數（由 body class is-bangumi-season + main/soft 顏色判斷） */
+.is-bangumi-season[style*="#f9a8d4"],
+.is-bangumi-season {
+    --bgm-glow: rgba(249,168,212,.45);
 }
 
 /* ============================================================
- * 1. 麵包屑
+ * 2. 主容器 + 麵包屑
  * ============================================================ */
-.bgm-breadcrumb {
+.bgm-main {
     max-width: 1280px;
-    margin: 16px auto 0;
-    padding: 0 16px;
-    font-size: 13px;
-    color: var(--bgm-text-muted);
+    margin: 0 auto;
+    padding: 0 16px 80px;
+    color: var(--bgm-text);
 }
+
+.bgm-breadcrumb {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 16px 0;
+    font-size: 13px;
+    color: var(--bgm-text-soft);
+    flex-wrap: wrap;
+}
+
 .bgm-breadcrumb a {
-    color: var(--bgm-text-muted);
+    color: var(--bgm-text-soft);
     text-decoration: none;
     transition: color .15s;
 }
+
 .bgm-breadcrumb a:hover { color: var(--bgm-main); }
-.bgm-breadcrumb span { margin: 0 6px; }
-.bgm-breadcrumb [aria-current="page"] { color: var(--bgm-text); }
+
+.bgm-breadcrumb span[aria-current] {
+    color: var(--bgm-text);
+    font-weight: 600;
+}
 
 /* ============================================================
- * 2. Hero 區
+ * 3. Hero —— 四季通用基礎
  * ============================================================ */
-.bgm-main { max-width: 1280px; margin: 0 auto; padding: 0 16px 60px; }
-
 .bgm-hero {
-    margin: 16px 0 24px;
-    padding: 32px 24px;
-    border-radius: 16px;
-    background: linear-gradient(135deg, var(--bgm-soft) 0%, transparent 100%);
-    border: 1px solid var(--bgm-border);
     position: relative;
+    padding: 48px 36px 40px;
+    margin-bottom: 28px;
+    border: 1px solid var(--bgm-border);
+    border-radius: 18px;
     overflow: hidden;
+    color: #fff;
+    background:
+        linear-gradient(135deg, var(--bgm-soft) 0%, rgba(15,23,42,.45) 65%, rgba(15,23,42,.75) 100%),
+        var(--bgm-bg-card);
+    isolation: isolate;
 }
+
 .bgm-hero::before {
     content: '';
     position: absolute;
-    top: -50%; right: -10%;
-    width: 400px; height: 400px;
-    background: radial-gradient(circle, var(--bgm-main) 0%, transparent 70%);
-    opacity: 0.15;
+    top: -40%;
+    right: -10%;
+    width: 560px;
+    height: 560px;
+    background: radial-gradient(circle, var(--bgm-main) 0%, transparent 65%);
+    opacity: .28;
     pointer-events: none;
+    z-index: 0;
+    animation: bgmHeroGlow 8s ease-in-out infinite;
 }
-.bgm-hero-inner { position: relative; z-index: 1; }
+
+@keyframes bgmHeroGlow {
+    0%, 100% { transform: scale(1) translateY(0); opacity: .28; }
+    50%      { transform: scale(1.15) translateY(20px); opacity: .42; }
+}
+
+.bgm-hero-inner {
+    position: relative;
+    z-index: 2;
+}
 
 .bgm-hero-badge {
-    display: inline-block;
-    padding: 4px 12px;
-    border-radius: 20px;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 16px;
     background: var(--bgm-main);
-    color: #fff;
+    color: #1a1a1a;
+    border-radius: 999px;
     font-size: 13px;
-    font-weight: 600;
-    margin-bottom: 12px;
-}
-.bgm-hero-title {
-    margin: 0 0 8px;
-    font-size: 32px;
     font-weight: 700;
-    line-height: 1.2;
-    color: var(--bgm-text);
-}
-.bgm-hero-sub {
-    margin: 0 0 20px;
-    font-size: 14px;
-    line-height: 1.6;
-    color: var(--bgm-text-muted);
-    max-width: 800px;
+    margin-bottom: 14px;
+    box-shadow: 0 4px 16px var(--bgm-glow);
+    animation: bgmBadgePulse 3s ease-in-out infinite;
 }
 
-/* 季節導覽列 */
+@keyframes bgmBadgePulse {
+    0%, 100% { box-shadow: 0 4px 16px var(--bgm-glow); }
+    50%      { box-shadow: 0 4px 24px var(--bgm-glow), 0 0 0 6px rgba(255,255,255,0); }
+}
+
+.bgm-hero-title {
+    font-size: clamp(28px, 4.2vw, 42px);
+    font-weight: 800;
+    margin: 0 0 12px;
+    color: #ffffff;
+    line-height: 1.15;
+    letter-spacing: .5px;
+    text-shadow: 0 2px 16px rgba(0,0,0,.5), 0 0 40px var(--bgm-glow);
+}
+
+.bgm-hero-sub {
+    font-size: 14px;
+    color: rgba(255,255,255,.88);
+    margin: 0 0 28px;
+    max-width: 780px;
+    line-height: 1.7;
+    text-shadow: 0 1px 4px rgba(0,0,0,.3);
+}
+
+/* ============================================================
+ * 4. Hero 季節裝飾層
+ * ============================================================ */
+
+.bgm-hero::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    z-index: 1;
+    opacity: .9;
+}
+
+/* ----- 春 SPRING：櫻花花瓣飄落 ----- */
+.bgm-season-spring::after {
+    background-image:
+        radial-gradient(ellipse 8px 6px at 10% 20%, rgba(249,168,212,.85), transparent 70%),
+        radial-gradient(ellipse 6px 5px at 25% 60%, rgba(252,231,243,.7), transparent 70%),
+        radial-gradient(ellipse 7px 5px at 40% 30%, rgba(249,168,212,.6), transparent 70%),
+        radial-gradient(ellipse 5px 4px at 60% 75%, rgba(252,231,243,.8), transparent 70%),
+        radial-gradient(ellipse 8px 6px at 75% 25%, rgba(249,168,212,.7), transparent 70%),
+        radial-gradient(ellipse 6px 5px at 85% 55%, rgba(252,231,243,.65), transparent 70%),
+        radial-gradient(ellipse 7px 6px at 90% 85%, rgba(249,168,212,.6), transparent 70%),
+        radial-gradient(ellipse 5px 4px at 15% 90%, rgba(252,231,243,.75), transparent 70%),
+        radial-gradient(ellipse 6px 5px at 50% 10%, rgba(249,168,212,.5), transparent 70%),
+        radial-gradient(ellipse 7px 5px at 70% 95%, rgba(252,231,243,.7), transparent 70%);
+    animation: bgmFallSpring 14s linear infinite;
+}
+
+@keyframes bgmFallSpring {
+    0%   { background-position: 0% 0%, 0% 0%, 0% 0%, 0% 0%, 0% 0%, 0% 0%, 0% 0%, 0% 0%, 0% 0%, 0% 0%; }
+    100% { background-position: -8% 110%, 6% 110%, -4% 110%, 8% 110%, -6% 110%, 4% 110%, -2% 110%, 10% 110%, -8% 110%, 6% 110%; }
+}
+
+/* ----- 夏 SUMMER：陽光放射 + 海浪 ----- */
+.bgm-season-summer::after {
+    background-image:
+        conic-gradient(from 0deg at 85% 15%, transparent 0deg, rgba(255,255,180,.18) 5deg, transparent 10deg, rgba(255,255,180,.12) 30deg, transparent 35deg, rgba(255,255,180,.18) 60deg, transparent 65deg, rgba(255,255,180,.1) 90deg, transparent 95deg),
+        radial-gradient(ellipse 200% 60px at 0% 100%, transparent 40%, rgba(96,165,250,.25) 50%, transparent 60%),
+        radial-gradient(ellipse 200% 40px at 0% 95%, transparent 40%, rgba(125,211,252,.2) 50%, transparent 60%);
+    animation: bgmShimmerSummer 6s ease-in-out infinite;
+}
+
+@keyframes bgmShimmerSummer {
+    0%, 100% { opacity: .9; transform: translateX(0); }
+    50%      { opacity: 1; transform: translateX(-20px); }
+}
+
+/* ----- 秋 FALL：飄落楓葉 ----- */
+.bgm-season-fall::after {
+    background-image:
+        radial-gradient(ellipse 8px 8px at 12% 25%, rgba(251,146,60,.85), transparent 65%),
+        radial-gradient(ellipse 7px 7px at 28% 55%, rgba(220,38,38,.7), transparent 65%),
+        radial-gradient(ellipse 9px 9px at 45% 35%, rgba(251,146,60,.65), transparent 65%),
+        radial-gradient(ellipse 6px 6px at 62% 70%, rgba(217,119,6,.75), transparent 65%),
+        radial-gradient(ellipse 8px 8px at 78% 28%, rgba(251,146,60,.7), transparent 65%),
+        radial-gradient(ellipse 7px 7px at 88% 60%, rgba(220,38,38,.65), transparent 65%),
+        radial-gradient(ellipse 9px 9px at 18% 88%, rgba(217,119,6,.6), transparent 65%),
+        radial-gradient(ellipse 6px 6px at 52% 92%, rgba(251,146,60,.7), transparent 65%),
+        radial-gradient(circle 200px at 90% 90%, rgba(251,146,60,.2), transparent 70%);
+    animation: bgmFallAutumn 18s linear infinite;
+}
+
+@keyframes bgmFallAutumn {
+    0%   { background-position: 0% 0%, 0% 0%, 0% 0%, 0% 0%, 0% 0%, 0% 0%, 0% 0%, 0% 0%, 0 0; }
+    100% { background-position: -10% 110%, 8% 110%, -6% 110%, 12% 110%, -8% 110%, 6% 110%, -12% 110%, 10% 110%, 0 0; }
+}
+
+/* ----- 冬 WINTER：雪花 ----- */
+.bgm-season-winter::after {
+    background-image:
+        radial-gradient(circle 3px at 10% 20%, rgba(255,255,255,.9), transparent),
+        radial-gradient(circle 2px at 25% 45%, rgba(255,255,255,.7), transparent),
+        radial-gradient(circle 4px at 40% 25%, rgba(255,255,255,.85), transparent),
+        radial-gradient(circle 2px at 55% 65%, rgba(255,255,255,.7), transparent),
+        radial-gradient(circle 3px at 70% 30%, rgba(255,255,255,.8), transparent),
+        radial-gradient(circle 2px at 85% 55%, rgba(255,255,255,.7), transparent),
+        radial-gradient(circle 4px at 92% 80%, rgba(255,255,255,.85), transparent),
+        radial-gradient(circle 3px at 15% 88%, rgba(255,255,255,.8), transparent),
+        radial-gradient(circle 2px at 50% 12%, rgba(255,255,255,.65), transparent),
+        radial-gradient(circle 3px at 75% 95%, rgba(255,255,255,.75), transparent),
+        radial-gradient(circle 200px at 50% 50%, rgba(186,230,253,.15), transparent 70%);
+    animation: bgmFallWinter 22s linear infinite;
+}
+
+@keyframes bgmFallWinter {
+    0%   { background-position: 0% 0%, 0% 0%, 0% 0%, 0% 0%, 0% 0%, 0% 0%, 0% 0%, 0% 0%, 0% 0%, 0% 0%, 0 0; }
+    100% { background-position: 2% 110%, -4% 110%, 6% 110%, -2% 110%, 4% 110%, -6% 110%, 2% 110%, -4% 110%, 6% 110%, -2% 110%, 0 0; }
+}
+
+/* ============================================================
+ * 5. Hero 內元素（按鈕、統計）
+ * ============================================================ */
 .bgm-nav {
     display: flex;
     flex-wrap: wrap;
     gap: 8px;
-    margin-bottom: 20px;
+    margin-bottom: 28px;
 }
+
 .bgm-nav-btn {
     display: inline-flex;
     align-items: center;
-    padding: 8px 14px;
-    border-radius: 8px;
-    background: rgba(255, 255, 255, 0.06);
-    border: 1px solid var(--bgm-border);
-    color: var(--bgm-text);
-    text-decoration: none;
+    padding: 9px 18px;
+    background: rgba(255,255,255,.1);
+    border: 1px solid rgba(255,255,255,.2);
+    border-radius: 10px;
+    color: #ffffff;
     font-size: 13px;
-    transition: all .15s;
+    font-weight: 600;
+    text-decoration: none;
+    transition: all .2s;
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
 }
+
 .bgm-nav-btn:hover {
-    background: var(--bgm-main);
-    color: #fff;
-    transform: translateY(-1px);
+    background: rgba(255,255,255,.2);
+    border-color: var(--bgm-main);
+    color: var(--bgm-main);
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px var(--bgm-glow);
 }
+
 .bgm-nav-btn.is-current {
     background: var(--bgm-main);
-    color: #fff;
     border-color: var(--bgm-main);
+    color: #1a1a1a;
+    box-shadow: 0 4px 16px var(--bgm-glow);
 }
+
 .bgm-nav-btn.is-archive {
-    background: transparent;
-    border-style: dashed;
+    margin-left: auto;
+    background: rgba(255,255,255,.06);
 }
 
 /* 統計 */
 .bgm-stats {
     display: grid;
-    grid-template-columns: repeat(4, 1fr);
-    gap: 12px;
-    max-width: 600px;
+    grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+    gap: 14px;
+    max-width: 720px;
 }
+
 .bgm-stat {
-    background: rgba(255, 255, 255, 0.05);
-    border: 1px solid var(--bgm-border);
-    border-radius: 10px;
-    padding: 12px 8px;
+    background: rgba(0,0,0,.4);
+    border: 1px solid rgba(255,255,255,.14);
+    border-radius: 12px;
+    padding: 18px 14px;
     text-align: center;
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    transition: transform .2s, border-color .2s, box-shadow .2s;
 }
+
+.bgm-stat:hover {
+    transform: translateY(-3px);
+    border-color: var(--bgm-main);
+    box-shadow: 0 8px 24px var(--bgm-glow);
+}
+
 .bgm-stat-n {
     display: block;
-    font-size: 22px;
-    font-weight: 700;
+    font-size: 32px;
+    font-weight: 800;
     color: var(--bgm-main);
-    line-height: 1.2;
+    line-height: 1;
+    margin-bottom: 8px;
+    text-shadow: 0 2px 12px var(--bgm-glow);
+    animation: bgmStatPulse 4s ease-in-out infinite;
 }
+
+@keyframes bgmStatPulse {
+    0%, 100% { text-shadow: 0 2px 12px var(--bgm-glow); }
+    50%      { text-shadow: 0 2px 20px var(--bgm-glow), 0 0 30px var(--bgm-glow); }
+}
+
 .bgm-stat-l {
     display: block;
-    margin-top: 4px;
-    font-size: 11px;
-    color: var(--bgm-text-muted);
+    font-size: 12px;
+    color: rgba(255,255,255,.78);
+    letter-spacing: .5px;
 }
 
 /* ============================================================
- * 3. 工具列（星期切換 + 排序）
+ * 6. 工具列
  * ============================================================ */
 .bgm-toolbar {
     display: flex;
     justify-content: space-between;
     align-items: center;
+    flex-wrap: wrap;
     gap: 12px;
-    margin: 24px 0 16px;
-    padding: 12px 16px;
-    background: var(--bgm-card-bg);
+    padding: 14px 18px;
+    margin-bottom: 18px;
+    background: var(--bgm-bg-card);
     border: 1px solid var(--bgm-border);
-    border-radius: 10px;
+    border-radius: var(--bgm-radius);
     position: sticky;
-    top: 0;
+    top: 60px;
     z-index: 50;
-    backdrop-filter: blur(8px);
-    -webkit-backdrop-filter: blur(8px);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
 }
+
 .bgm-days {
     display: flex;
     flex-wrap: wrap;
     gap: 6px;
 }
+
 .bgm-day {
-    padding: 6px 12px;
-    border-radius: 6px;
-    border: 1px solid var(--bgm-border);
+    padding: 6px 14px;
     background: transparent;
-    color: var(--bgm-text);
+    border: 1px solid var(--bgm-border);
+    border-radius: 999px;
+    color: var(--bgm-text-soft);
     font-size: 13px;
+    font-weight: 600;
     cursor: pointer;
     transition: all .15s;
 }
-.bgm-day:hover { border-color: var(--bgm-main); color: var(--bgm-main); }
+
+.bgm-day:hover {
+    background: var(--bgm-bg-hover);
+    color: var(--bgm-text);
+    border-color: var(--bgm-border-h);
+}
+
 .bgm-day.is-active {
     background: var(--bgm-main);
-    color: #fff;
     border-color: var(--bgm-main);
+    color: #1a1a1a;
+    box-shadow: 0 2px 8px var(--bgm-glow);
 }
-.bgm-day-n { font-size: 11px; opacity: 0.8; margin-left: 2px; }
+
+.bgm-day-n { margin-left: 4px; font-size: 11px; opacity: .75; }
+
+.bgm-days-empty { color: var(--bgm-text-soft); font-size: 14px; }
+.bgm-result-count { font-weight: 600; color: var(--bgm-text); }
 
 .bgm-sort-wrap { display: flex; align-items: center; gap: 8px; }
-.bgm-sort-label { font-size: 13px; color: var(--bgm-text-muted); }
+.bgm-sort-label { font-size: 13px; color: var(--bgm-text-soft); }
+
 .bgm-sort {
-    padding: 6px 10px;
+    padding: 6px 28px 6px 12px;
+    background: var(--bgm-bg-hover);
     border: 1px solid var(--bgm-border);
-    border-radius: 6px;
-    background: var(--bgm-card-bg);
+    border-radius: 8px;
     color: var(--bgm-text);
     font-size: 13px;
     cursor: pointer;
+    appearance: none;
+    background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath fill='%239ca3af' d='M6 9L1 4h10z'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 8px center;
+    background-size: 10px;
 }
 
+.bgm-sort:focus { outline: 2px solid var(--bgm-main); outline-offset: 2px; }
+
 /* ============================================================
- * 4. 卡片網格
+ * 7. 卡片網格
  * ============================================================ */
-.bgm-group { margin-bottom: 32px; }
+.bgm-grid-wrap { margin-top: 8px; }
+
+.bgm-group { margin-bottom: 36px; }
+.bgm-group.is-flat { margin-bottom: 0; }
+
 .bgm-group-title {
-    margin: 0 0 12px;
-    font-size: 16px;
-    font-weight: 600;
+    font-size: 19px;
+    font-weight: 700;
     color: var(--bgm-text);
+    margin: 0 0 16px;
+    padding-left: 14px;
+    border-left: 4px solid var(--bgm-main);
     display: flex;
     align-items: baseline;
-    gap: 8px;
+    gap: 10px;
 }
-.bgm-group-n { font-size: 12px; color: var(--bgm-text-muted); font-weight: normal; }
+
+.bgm-group-n { font-size: 13px; font-weight: 500; color: var(--bgm-text-soft); }
 
 .bgm-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
-    gap: 16px;
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: var(--bgm-gap);
 }
 
 /* ============================================================
- * 5. 卡片本體（Hybrid：點觸發器展開）
+ * 8. 卡片本體（含季節主題色光暈 hover）
  * ============================================================ */
 .bgm-card {
     position: relative;
-    background: transparent;
+    background: var(--bgm-bg-card);
+    border: 1px solid var(--bgm-border);
     border-radius: var(--bgm-radius);
+    overflow: hidden;
+    transition: transform .25s cubic-bezier(.34,1.56,.64,1), border-color .2s, box-shadow .25s;
 }
+
+.bgm-card:hover {
+    transform: translateY(-6px);
+    border-color: var(--bgm-main);
+    box-shadow:
+        0 12px 32px rgba(0,0,0,.4),
+        0 0 0 1px var(--bgm-main),
+        0 0 24px var(--bgm-glow);
+}
+
+.bgm-card.has-status {
+    border-color: var(--bgm-main);
+}
+
+.bgm-card.status-watching::before,
+.bgm-card.status-want::before,
+.bgm-card.status-completed::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 3px;
+    background: var(--bgm-main);
+    z-index: 3;
+    box-shadow: 0 0 12px var(--bgm-glow);
+}
+
 .bgm-card-trigger {
     display: block;
     width: 100%;
     padding: 0;
+    background: none;
     border: 0;
-    background: transparent;
-    color: inherit;
     text-align: left;
     cursor: pointer;
-    transition: transform .2s;
+    color: inherit;
     font: inherit;
 }
-.bgm-card-trigger:hover { transform: translateY(-3px); }
+
 .bgm-card-trigger:focus-visible {
     outline: 2px solid var(--bgm-main);
-    outline-offset: 4px;
-    border-radius: var(--bgm-radius);
+    outline-offset: 2px;
 }
 
+/* 封面 */
 .bgm-card-cover {
     position: relative;
-    aspect-ratio: 2 / 3;
-    border-radius: var(--bgm-radius);
+    aspect-ratio: 3 / 4;
+    background: linear-gradient(135deg, #1f2937, #111827);
     overflow: hidden;
-    background: rgba(0,0,0,.3);
-    transition: box-shadow .2s;
 }
-.bgm-card-trigger:hover .bgm-card-cover {
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
-}
+
 .bgm-card-cover img {
     width: 100%;
     height: 100%;
     object-fit: cover;
-    transition: transform .4s;
+    display: block;
+    transition: transform .4s cubic-bezier(.25,.46,.45,.94);
 }
-.bgm-card-trigger:hover .bgm-card-cover img { transform: scale(1.06); }
+
+.bgm-card:hover .bgm-card-cover img {
+    transform: scale(1.06);
+}
+
+/* 封面 hover 季節色覆層 */
+.bgm-card-cover::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(180deg, transparent 60%, var(--bgm-main) 130%);
+    opacity: 0;
+    transition: opacity .25s;
+    pointer-events: none;
+    mix-blend-mode: overlay;
+}
+
+.bgm-card:hover .bgm-card-cover::after { opacity: .35; }
+
 .bgm-card-noimg {
-    width: 100%; height: 100%;
-    display: flex; align-items: center; justify-content: center;
-    font-size: 48px; color: rgba(255,255,255,.2);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    font-size: 48px;
+    color: var(--bgm-text-mute);
 }
 
 /* 評分徽章 */
 .bgm-card-score {
     position: absolute;
-    top: 8px; left: 8px;
-    padding: 3px 8px;
-    background: rgba(0, 0, 0, 0.7);
+    top: 8px;
+    left: 8px;
+    padding: 3px 9px;
+    background: rgba(0,0,0,0.78);
+    color: #fbbf24;
     border-radius: 6px;
-    font-size: 11px;
-    font-weight: 600;
-    color: #fff;
-    backdrop-filter: blur(4px);
-}
-.bgm-card-score.is-hot {
-    background: linear-gradient(135deg, #f59e0b, #d97706);
-    box-shadow: 0 2px 8px rgba(245, 158, 11, 0.4);
+    font-size: 12px;
+    font-weight: 700;
+    backdrop-filter: blur(6px);
+    z-index: 2;
 }
 
-/* 追番狀態 chip */
+.bgm-card-score.is-hot {
+    background: linear-gradient(135deg, #f59e0b, #ef4444);
+    color: #fff;
+    box-shadow: 0 2px 8px rgba(239,68,68,.4);
+}
+
 .bgm-card-chip {
     position: absolute;
-    top: 8px; right: 8px;
+    top: 8px;
+    right: 8px;
     padding: 3px 8px;
+    background: var(--bgm-main);
+    color: #1a1a1a;
     border-radius: 6px;
     font-size: 11px;
-    font-weight: 600;
-    color: #fff;
-    backdrop-filter: blur(4px);
+    font-weight: 700;
+    z-index: 2;
+    box-shadow: 0 2px 8px var(--bgm-glow);
 }
-.bgm-card.status-watching .bgm-card-chip { background: rgba(34, 197, 94, 0.9); }
-.bgm-card.status-want .bgm-card-chip { background: rgba(59, 130, 246, 0.9); }
-.bgm-card.status-completed .bgm-card-chip { background: rgba(168, 85, 247, 0.9); }
-.bgm-card.status-dropped .bgm-card-chip { background: rgba(100, 116, 139, 0.9); }
 
-/* 底部 overlay */
-.bgm-card-overlay {
-    position: absolute;
-    bottom: 0; left: 0; right: 0;
-    padding: 24px 10px 10px;
-    background: linear-gradient(to top, rgba(0, 0, 0, 0.88) 0%, transparent 100%);
-    color: #fff;
-    font-size: 11px;
-    display: flex;
-    justify-content: space-between;
-    gap: 6px;
-}
-.bgm-card-day { font-weight: 600; }
-.bgm-card-ep { opacity: 0.85; }
-
-/* 進度條 */
 .bgm-card-progress {
     position: absolute;
-    bottom: 0; left: 0; right: 0;
+    bottom: 0;
+    left: 0;
+    right: 0;
     height: 3px;
-    background: rgba(255, 255, 255, 0.1);
+    background: rgba(0,0,0,0.3);
+    z-index: 2;
 }
+
 .bgm-card-progress span {
     display: block;
     height: 100%;
     background: var(--bgm-main);
+    box-shadow: 0 0 8px var(--bgm-glow);
     transition: width .3s;
 }
 
-/* 卡片標題區 */
-.bgm-card-meta { padding: 10px 4px 0; }
+/* 卡片資訊 */
+.bgm-card-meta {
+    padding: 12px 12px 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
 .bgm-card-title {
     font-size: 14px;
-    font-weight: 600;
-    line-height: 1.4;
+    font-weight: 700;
     color: var(--bgm-text);
+    line-height: 1.4;
     display: -webkit-box;
     -webkit-line-clamp: 2;
     -webkit-box-orient: vertical;
     overflow: hidden;
     min-height: 2.8em;
+    transition: color .2s;
 }
+
+.bgm-card:hover .bgm-card-title { color: var(--bgm-main); }
+
 .bgm-card-jp {
     font-size: 11px;
-    color: var(--bgm-text-muted);
-    white-space: nowrap;
+    color: var(--bgm-text-mute);
+    line-height: 1.3;
     overflow: hidden;
     text-overflow: ellipsis;
-    opacity: 0.7;
+    white-space: nowrap;
+}
+
+.bgm-card-bar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
     margin-top: 2px;
 }
 
-/* 展開狀態 */
-.bgm-card.is-expanded .bgm-card-cover {
-    box-shadow: 0 0 0 3px var(--bgm-main);
+.bgm-card-pill {
+    display: inline-block;
+    padding: 1px 7px;
+    background: rgba(255,255,255,0.06);
+    border: 1px solid var(--bgm-border);
+    border-radius: 4px;
+    font-size: 10px;
+    color: var(--bgm-text-soft);
+    line-height: 1.6;
+    white-space: nowrap;
 }
-.bgm-card.is-expanded .bgm-card-trigger { cursor: zoom-out; }
+
+.bgm-card-pill.is-day {
+    background: var(--bgm-soft);
+    color: var(--bgm-main);
+    border-color: var(--bgm-main);
+    opacity: .9;
+}
+
+.bgm-card-studio {
+    font-size: 11px;
+    color: var(--bgm-text-soft);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    line-height: 1.4;
+}
+
+.bgm-card-plats {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 3px;
+    margin-top: 2px;
+}
+
+.bgm-plat-mini {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 32px;
+    height: 18px;
+    padding: 0 5px;
+    background: rgba(255,255,255,0.06);
+    border: 1px solid var(--bgm-border);
+    border-radius: 3px;
+    font-size: 10px;
+    font-weight: 600;
+    color: var(--bgm-text-soft);
+    letter-spacing: -.5px;
+}
+
+.bgm-plat-mini.is-more {
+    background: var(--bgm-soft);
+    color: var(--bgm-main);
+    border-color: var(--bgm-main);
+}
+
+/* 平台特定色 */
+.bgm-plat-bahamut    { background: rgba(252,211,77,.18);  color: #fcd34d; border-color: rgba(252,211,77,.35); }
+.bgm-plat-netflix    { background: rgba(239,68,68,.18);   color: #f87171; border-color: rgba(239,68,68,.35); }
+.bgm-plat-disney     { background: rgba(96,165,250,.18);  color: #93c5fd; border-color: rgba(96,165,250,.35); }
+.bgm-plat-bilibili   { background: rgba(125,211,252,.18); color: #7dd3fc; border-color: rgba(125,211,252,.35); }
+.bgm-plat-muse       { background: rgba(249,168,212,.18); color: #f9a8d4; border-color: rgba(249,168,212,.35); }
+.bgm-plat-crunchyroll{ background: rgba(251,146,60,.18);  color: #fdba74; border-color: rgba(251,146,60,.35); }
+.bgm-plat-iqiyi      { background: rgba(34,197,94,.18);   color: #86efac; border-color: rgba(34,197,94,.35); }
 
 /* ============================================================
- * 6. 長條詳情（acgsecrets 風格，桌面手風琴）
+ * 9. 長條詳情
  * ============================================================ */
 .bgm-detail {
-    grid-column: 1 / -1;        /* 撐滿整個 grid 寬度 */
-    margin-top: 12px;
-    background: var(--bgm-card-bg);
-    border: 1px solid var(--bgm-border);
+    grid-column: 1 / -1;
+    background: var(--bgm-bg-card);
+    border: 1px solid var(--bgm-main);
     border-radius: var(--bgm-radius);
-    overflow: hidden;
-    animation: bgmDetailIn .35s ease-out;
+    padding: 28px;
+    margin-top: -8px;
+    animation: bgmDetailIn .35s cubic-bezier(.34,1.2,.64,1);
+    box-shadow: 0 12px 40px rgba(0,0,0,.4), 0 0 24px var(--bgm-glow);
 }
+
 .bgm-detail[hidden] { display: none; }
 
 @keyframes bgmDetailIn {
-    from { opacity: 0; transform: translateY(-8px); max-height: 0; }
-    to   { opacity: 1; transform: translateY(0); max-height: 3000px; }
+    from { opacity: 0; transform: translateY(-12px) scale(.98); }
+    to   { opacity: 1; transform: translateY(0) scale(1); }
 }
 
 .bgm-d-inner {
-    padding: 24px;
     display: grid;
     grid-template-columns: 1fr 1fr;
-    gap: 20px 32px;
+    gap: 24px 36px;
 }
 
-/* 標題群（佔滿兩欄） */
 .bgm-d-header {
     grid-column: 1 / -1;
-    padding-bottom: 12px;
+    padding-bottom: 14px;
     border-bottom: 1px solid var(--bgm-border);
 }
+
 .bgm-d-title {
-    margin: 0 0 4px;
-    font-size: 22px;
-    font-weight: 700;
+    font-size: 24px;
+    font-weight: 800;
     color: var(--bgm-text);
-}
-.bgm-d-jp {
-    font-size: 14px;
-    color: var(--bgm-text-muted);
-    margin-bottom: 2px;
-}
-.bgm-d-en {
-    font-size: 12px;
-    color: var(--bgm-text-muted);
-    opacity: 0.7;
-    font-style: italic;
+    margin: 0 0 6px;
 }
 
-/* 標籤群（佔滿兩欄） */
+.bgm-d-jp { font-size: 14px; color: var(--bgm-text-soft); margin-bottom: 2px; }
+.bgm-d-en { font-size: 12px; color: var(--bgm-text-mute); }
+
 .bgm-d-tags {
     grid-column: 1 / -1;
     display: flex;
     flex-wrap: wrap;
     gap: 6px;
 }
+
 .bgm-tag {
     display: inline-block;
     padding: 3px 10px;
-    border-radius: 12px;
-    background: rgba(255, 255, 255, 0.08);
+    background: rgba(255,255,255,0.06);
     border: 1px solid var(--bgm-border);
-    font-size: 11px;
-    color: var(--bgm-text);
+    border-radius: 999px;
+    font-size: 12px;
+    color: var(--bgm-text-soft);
 }
-.bgm-tag-source { background: var(--bgm-main); color: #fff; border-color: var(--bgm-main); }
-.bgm-tag-score { background: linear-gradient(135deg, #f59e0b, #d97706); color: #fff; border: 0; font-weight: 600; }
 
-/* 一行式資訊（佔滿兩欄） */
+.bgm-tag-source {
+    background: var(--bgm-soft);
+    color: var(--bgm-main);
+    border-color: var(--bgm-main);
+    font-weight: 600;
+    box-shadow: 0 1px 4px var(--bgm-glow);
+}
+
+.bgm-tag-score {
+    background: rgba(251,191,36,.18);
+    color: #fbbf24;
+    border-color: #fbbf24;
+    font-weight: 700;
+}
+
 .bgm-d-row {
     grid-column: 1 / -1;
-    display: grid;
-    grid-template-columns: 100px 1fr;
+    display: flex;
     gap: 12px;
+    padding: 12px 16px;
+    background: rgba(255,255,255,0.03);
+    border-radius: 8px;
     font-size: 13px;
-    line-height: 1.6;
-    padding: 8px 0;
-    border-top: 1px dashed var(--bgm-border);
+    border-left: 3px solid var(--bgm-main);
 }
-.bgm-d-label { color: var(--bgm-text-muted); font-weight: 600; }
-.bgm-d-value { color: var(--bgm-text); }
 
-/* 區段標題 */
-.bgm-d-section { min-width: 0; }
-.bgm-d-h {
-    margin: 0 0 10px;
-    padding-bottom: 6px;
-    font-size: 14px;
+.bgm-d-label {
+    flex-shrink: 0;
+    width: 80px;
+    color: var(--bgm-text-soft);
     font-weight: 600;
-    color: var(--bgm-main);
-    border-bottom: 2px solid var(--bgm-main);
-    display: inline-block;
 }
 
-/* 故事大綱（佔滿兩欄） */
-.bgm-d-section:has(> .bgm-d-syn) { grid-column: 1 / -1; }
-.bgm-d-syn {
+.bgm-d-value { color: var(--bgm-text); line-height: 1.7; }
+
+.bgm-d-section { min-width: 0; }
+.bgm-d-section:has(.bgm-d-syn) { grid-column: 1 / -1; }
+
+.bgm-d-h {
     font-size: 14px;
-    line-height: 1.7;
+    font-weight: 700;
     color: var(--bgm-text);
+    margin: 0 0 10px;
+    padding-left: 10px;
+    border-left: 3px solid var(--bgm-main);
 }
+
+.bgm-d-syn {
+    font-size: 13.5px;
+    line-height: 1.8;
+    color: var(--bgm-text-soft);
+}
+
 .bgm-d-syn p { margin: 0 0 8px; }
+.bgm-d-syn p:last-child { margin-bottom: 0; }
 
 /* 主題曲 */
-.bgm-d-themes { display: flex; flex-direction: column; gap: 8px; }
+.bgm-d-themes { display: flex; flex-direction: column; gap: 6px; }
+
 .bgm-theme-row {
     display: flex;
     align-items: center;
     gap: 8px;
-    padding: 8px 12px;
-    background: rgba(255, 255, 255, 0.04);
-    border-radius: 8px;
+    padding: 7px 12px;
+    background: rgba(255,255,255,0.03);
+    border-radius: 6px;
     font-size: 13px;
     flex-wrap: wrap;
 }
+
 .bgm-theme-tag {
-    display: inline-block;
-    padding: 2px 8px;
+    flex-shrink: 0;
+    padding: 1px 7px;
     border-radius: 4px;
     font-size: 10px;
     font-weight: 700;
-    color: #fff;
-    flex-shrink: 0;
 }
-.bgm-theme-op { background: #ec4899; }
-.bgm-theme-ed { background: #8b5cf6; }
-.bgm-theme-title { font-weight: 600; color: var(--bgm-text); }
-.bgm-theme-artist { color: var(--bgm-text-muted); font-size: 12px; }
 
-/* 宣傳片（YouTube 縮圖）*/
+.bgm-theme-op { background: linear-gradient(135deg,#fef3c7,#fcd34d); color: #92400e; }
+.bgm-theme-ed { background: linear-gradient(135deg,#ddd6fe,#a78bfa); color: #5b21b6; }
+
+.bgm-theme-title { color: var(--bgm-text); font-weight: 600; }
+.bgm-theme-artist { color: var(--bgm-text-soft); font-size: 12px; }
+
+/* PV */
 .bgm-d-trailers {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
     gap: 10px;
 }
+
 .bgm-pv {
     position: relative;
     display: block;
-    width: 100%;
-    padding: 0;
-    border: 0;
-    background: transparent;
-    border-radius: 8px;
+    aspect-ratio: 16 / 9;
+    background: #000;
+    border: 1px solid var(--bgm-border);
+    border-radius: 6px;
     overflow: hidden;
     cursor: pointer;
-    aspect-ratio: 16 / 9;
-    color: inherit;
+    padding: 0;
     text-decoration: none;
+    transition: transform .2s, border-color .2s;
 }
+
+.bgm-pv:hover {
+    transform: scale(1.03);
+    border-color: var(--bgm-main);
+}
+
 .bgm-pv img {
-    width: 100%; height: 100%;
+    width: 100%;
+    height: 100%;
     object-fit: cover;
-    transition: transform .3s;
+    display: block;
+    opacity: .85;
+    transition: opacity .2s;
 }
-.bgm-pv:hover img { transform: scale(1.05); }
+
+.bgm-pv:hover img { opacity: 1; }
+
 .bgm-pv-play {
     position: absolute;
-    top: 50%; left: 50%;
+    top: 50%;
+    left: 50%;
     transform: translate(-50%, -50%);
-    width: 44px; height: 44px;
+    width: 44px;
+    height: 44px;
     border-radius: 50%;
-    background: rgba(0, 0, 0, 0.7);
-    color: #fff;
+    background: var(--bgm-main);
+    color: #1a1a1a;
     display: flex;
     align-items: center;
     justify-content: center;
     font-size: 18px;
-    transition: background .15s;
+    padding-left: 3px;
+    box-shadow: 0 4px 16px rgba(0,0,0,.5);
+    transition: transform .2s;
 }
-.bgm-pv:hover .bgm-pv-play { background: #e11d48; }
+
+.bgm-pv:hover .bgm-pv-play { transform: translate(-50%,-50%) scale(1.1); }
+
 .bgm-pv-title {
     position: absolute;
-    bottom: 0; left: 0; right: 0;
-    padding: 16px 8px 6px;
-    font-size: 11px;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    padding: 6px 8px;
+    background: linear-gradient(transparent, rgba(0,0,0,.85));
     color: #fff;
-    background: linear-gradient(to top, rgba(0,0,0,.85), transparent);
-}
-.bgm-pv iframe {
-    width: 100%;
-    height: 100%;
-    border: 0;
+    font-size: 11px;
+    font-weight: 600;
 }
 
-/* 台灣播放平台 */
-.bgm-d-platforms {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 6px;
-}
+.bgm-pv iframe { width: 100%; height: 100%; border: 0; }
+
+/* 平台（詳情） */
+.bgm-d-platforms { display: flex; flex-wrap: wrap; gap: 6px; }
+
 .bgm-plat {
-    display: inline-block;
-    padding: 5px 10px;
-    border-radius: 6px;
-    background: rgba(255, 255, 255, 0.08);
+    display: inline-flex;
+    align-items: center;
+    padding: 6px 14px;
+    background: var(--bgm-bg-hover);
     border: 1px solid var(--bgm-border);
+    border-radius: 8px;
     color: var(--bgm-text);
     font-size: 12px;
+    font-weight: 600;
     text-decoration: none;
     transition: all .15s;
 }
-.bgm-plat:hover:not(.is-nolink) {
+
+.bgm-plat:hover {
     background: var(--bgm-main);
-    color: #fff;
+    color: #1a1a1a;
     border-color: var(--bgm-main);
-    transform: translateY(-1px);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px var(--bgm-glow);
 }
-.bgm-plat.is-nolink {
-    opacity: 0.6;
-    cursor: default;
-}
-.bgm-plat-bahamut { background: rgba(255, 165, 0, 0.15); border-color: rgba(255, 165, 0, 0.4); }
-.bgm-plat-netflix { background: rgba(229, 9, 20, 0.15); border-color: rgba(229, 9, 20, 0.4); }
-.bgm-plat-disney { background: rgba(17, 60, 207, 0.15); border-color: rgba(17, 60, 207, 0.4); }
-.bgm-plat-crunchyroll { background: rgba(244, 117, 33, 0.15); border-color: rgba(244, 117, 33, 0.4); }
-.bgm-plat.is-other { font-style: italic; opacity: 0.8; }
 
-/* 配音員 / 製作人員清單 */
+.bgm-plat.is-nolink { opacity: .6; cursor: default; }
+.bgm-plat.is-other { background: rgba(255,255,255,0.05); color: var(--bgm-text-soft); border-style: dashed; }
+
+/* 列表 */
 .bgm-d-list {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-    gap: 4px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    font-size: 13px;
+    line-height: 1.6;
 }
-.bgm-d-li {
-    font-size: 12px;
-    line-height: 1.7;
-    padding: 2px 0;
-    color: var(--bgm-text);
-}
-.bgm-d-role { color: var(--bgm-text-muted); }
-.bgm-d-name { font-weight: 500; }
-.bgm-d-studios { grid-column: 1 / -1; font-weight: 600; padding-top: 6px; border-top: 1px dashed var(--bgm-border); margin-top: 6px; }
 
-/* 外部連結 */
+.bgm-d-li {
+    display: flex;
+    gap: 4px;
+    padding: 5px 10px;
+    border-radius: 4px;
+    transition: background .15s;
+}
+
+.bgm-d-li:hover { background: rgba(255,255,255,0.05); }
+.bgm-d-role { flex-shrink: 0; color: var(--bgm-text-soft); font-weight: 600; }
+.bgm-d-name { color: var(--bgm-text); }
+
+.bgm-d-studios {
+    margin-top: 6px;
+    padding-top: 10px;
+    border-top: 1px dashed var(--bgm-border);
+}
+
 .bgm-d-links { display: flex; flex-wrap: wrap; gap: 6px; }
+
 .bgm-link {
     display: inline-block;
-    padding: 5px 12px;
-    border-radius: 6px;
-    background: rgba(255, 255, 255, 0.05);
+    padding: 5px 14px;
+    background: rgba(255,255,255,0.04);
     border: 1px solid var(--bgm-border);
-    color: var(--bgm-text);
+    border-radius: 6px;
     font-size: 12px;
+    color: var(--bgm-text);
     text-decoration: none;
     transition: all .15s;
 }
+
 .bgm-link:hover {
-    background: var(--bgm-main);
-    color: #fff;
+    background: var(--bgm-bg-hover);
     border-color: var(--bgm-main);
+    color: var(--bgm-main);
 }
 
-/* CTA */
 .bgm-d-cta {
     grid-column: 1 / -1;
     text-align: center;
-    padding-top: 12px;
+    padding-top: 10px;
     border-top: 1px solid var(--bgm-border);
 }
+
 .bgm-d-more {
     display: inline-block;
-    padding: 10px 24px;
-    background: var(--bgm-main);
-    color: #fff;
-    border-radius: 8px;
+    padding: 12px 28px;
+    background: linear-gradient(135deg, var(--bgm-main), var(--bgm-soft));
+    color: #1a1a1a;
+    border-radius: 10px;
+    font-weight: 700;
+    font-size: 13px;
     text-decoration: none;
-    font-size: 14px;
-    font-weight: 600;
-    transition: all .15s;
+    transition: all .2s;
+    box-shadow: 0 4px 16px var(--bgm-glow);
 }
+
 .bgm-d-more:hover {
-    transform: translateY(-1px);
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+    transform: translateY(-3px);
+    box-shadow: 0 8px 24px var(--bgm-glow);
 }
 
 /* ============================================================
- * 7. 手機 Modal（bottom sheet）
+ * 10. 手機 modal
  * ============================================================ */
 .bgm-sheet {
     position: fixed;
     inset: 0;
-    z-index: 9999;
-    display: none;
+    z-index: 9998;
     pointer-events: none;
-}
-.bgm-sheet.is-open {
-    display: block;
-    pointer-events: auto;
-}
-.bgm-sheet-backdrop {
-    position: absolute;
-    inset: 0;
-    background: rgba(0, 0, 0, 0.7);
-    backdrop-filter: blur(4px);
-    -webkit-backdrop-filter: blur(4px);
     opacity: 0;
     transition: opacity .25s;
 }
-.bgm-sheet.is-open .bgm-sheet-backdrop { opacity: 1; }
+
+.bgm-sheet.is-open { pointer-events: auto; opacity: 1; }
+
+.bgm-sheet-backdrop {
+    position: absolute;
+    inset: 0;
+    background: rgba(0,0,0,.65);
+    backdrop-filter: blur(6px);
+}
+
 .bgm-sheet-panel {
     position: absolute;
-    left: 0; right: 0; bottom: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
     max-height: 90vh;
-    background: var(--bgm-bg, #0f172a);
-    border-radius: 16px 16px 0 0;
-    box-shadow: 0 -8px 32px rgba(0, 0, 0, 0.5);
+    background: var(--bgm-bg-card);
+    border-radius: 18px 18px 0 0;
+    box-shadow: 0 -12px 48px rgba(0,0,0,.5), 0 -2px 0 var(--bgm-main);
     transform: translateY(100%);
-    transition: transform .3s cubic-bezier(.32, .72, 0, 1);
+    transition: transform .35s cubic-bezier(.32,.72,0,1);
     overflow: hidden;
     display: flex;
     flex-direction: column;
 }
+
 .bgm-sheet.is-open .bgm-sheet-panel { transform: translateY(0); }
+
 .bgm-sheet-panel::before {
     content: '';
     position: absolute;
-    top: 8px; left: 50%;
+    top: 10px;
+    left: 50%;
     transform: translateX(-50%);
-    width: 40px; height: 4px;
+    width: 44px;
+    height: 4px;
+    background: var(--bgm-main);
     border-radius: 2px;
-    background: rgba(255, 255, 255, 0.2);
+    opacity: .6;
 }
+
 .bgm-sheet-close {
     position: absolute;
-    top: 12px; right: 12px;
-    width: 32px; height: 32px;
+    top: 18px;
+    right: 18px;
+    width: 36px;
+    height: 36px;
+    background: var(--bgm-bg-hover);
     border: 0;
     border-radius: 50%;
-    background: rgba(255, 255, 255, 0.1);
     color: var(--bgm-text);
     font-size: 22px;
-    line-height: 1;
     cursor: pointer;
     z-index: 2;
     display: flex;
     align-items: center;
     justify-content: center;
-}
-.bgm-sheet-close:hover { background: rgba(255, 255, 255, 0.2); }
-.bgm-sheet-body {
-    flex: 1;
-    overflow-y: auto;
-    padding: 32px 16px 24px;
-    -webkit-overflow-scrolling: touch;
+    line-height: 1;
+    transition: background .15s;
 }
 
-/* 在 modal 內部用單欄佈局 */
-.bgm-sheet-body .bgm-d-inner {
-    display: block;
-    padding: 0;
+.bgm-sheet-close:hover { background: var(--bgm-main); color: #1a1a1a; }
+
+.bgm-sheet-body {
+    padding: 36px 22px 28px;
+    overflow-y: auto;
+    flex: 1;
 }
-.bgm-sheet-body .bgm-d-section { margin-bottom: 20px; }
+
+.bgm-sheet-body .bgm-d-inner { grid-template-columns: 1fr; }
+
+body.bgm-sheet-open { overflow: hidden; }
 
 /* ============================================================
- * 8. 空狀態
+ * 11. 空狀態
  * ============================================================ */
 .bgm-empty {
-    padding: 60px 20px;
     text-align: center;
-    color: var(--bgm-text-muted);
-    background: var(--bgm-card-bg);
-    border: 1px dashed var(--bgm-border);
-    border-radius: var(--bgm-radius);
+    padding: 80px 20px;
+    color: var(--bgm-text-soft);
 }
-.bgm-empty p { margin: 0 0 16px; }
+
+.bgm-empty p { font-size: 16px; margin: 0 0 20px; }
 
 /* ============================================================
- * 9. Archive 頁面（page-bangumi-archive.php 用，保留不動）
+ * 12. RWD
  * ============================================================ */
-.bgm-arc-hero {
-    margin: 16px 0 24px;
-    padding: 40px 24px;
-    border-radius: 16px;
-    background: linear-gradient(135deg, rgba(139, 92, 246, 0.15), transparent);
-    border: 1px solid var(--bgm-border);
-    text-align: center;
+@media (max-width: 1024px) {
+    .bgm-grid {
+        grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+        gap: 12px;
+    }
+    .bgm-hero { padding: 36px 28px 32px; }
 }
-.bgm-arc-hero h1 {
-    margin: 0 0 8px;
-    font-size: 28px;
-    color: var(--bgm-text);
-}
-.bgm-arc-hero p { margin: 0; color: var(--bgm-text-muted); font-size: 14px; }
 
-.bgm-arc-years { display: flex; flex-direction: column; gap: 20px; }
-.bgm-arc-year {
-    background: var(--bgm-card-bg);
-    border: 1px solid var(--bgm-border);
-    border-radius: var(--bgm-radius);
-    padding: 16px;
-    opacity: 0;
-    transform: translateY(20px);
-    transition: opacity .5s, transform .5s;
-}
-.bgm-arc-year.is-visible {
-    opacity: 1;
-    transform: translateY(0);
-}
-.bgm-arc-year-title {
-    margin: 0 0 12px;
-    font-size: 20px;
-    font-weight: 700;
-    color: var(--bgm-text);
-}
-.bgm-arc-seasons {
-    display: grid;
-    grid-template-columns: repeat(4, 1fr);
-    gap: 8px;
-}
-.bgm-arc-season {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    padding: 16px 8px;
-    border-radius: 8px;
-    text-decoration: none;
-    color: var(--bgm-text);
-    background: var(--s-color, rgba(255,255,255,.04));
-    border: 1px solid var(--bgm-border);
-    transition: transform .15s;
-    text-align: center;
-}
-.bgm-arc-season:hover:not(.is-empty) {
-    transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(0,0,0,.3);
-}
-.bgm-arc-season.is-empty {
-    opacity: 0.3;
-    cursor: not-allowed;
-}
-.bgm-arc-season-icon { font-size: 24px; margin-bottom: 4px; }
-.bgm-arc-season-name { font-size: 13px; font-weight: 600; }
-.bgm-arc-season-count { font-size: 11px; color: var(--bgm-text-muted); margin-top: 2px; }
-
-/* ============================================================
- * 10. 響應式（≤768px：手機切 modal、grid 縮小）
- * ============================================================ */
 @media (max-width: 768px) {
-    .bgm-main { padding: 0 12px 40px; }
-    .bgm-hero { padding: 20px 16px; }
+    .bgm-main { padding: 0 12px 60px; }
+    .bgm-hero { padding: 28px 22px 26px; border-radius: 14px; }
     .bgm-hero-title { font-size: 24px; }
     .bgm-hero-sub { font-size: 13px; }
-    .bgm-stats { grid-template-columns: repeat(2, 1fr); }
-    .bgm-stat-n { font-size: 18px; }
+    .bgm-nav-btn.is-archive { margin-left: 0; }
 
-    .bgm-toolbar { flex-direction: column; align-items: stretch; padding: 10px; }
-    .bgm-days { justify-content: flex-start; overflow-x: auto; flex-wrap: nowrap; padding-bottom: 4px; }
-    .bgm-day { flex-shrink: 0; }
-    .bgm-sort-wrap { justify-content: flex-end; }
+    /* 手機關掉重動畫，省效能 */
+    .bgm-hero::after { animation-duration: 30s; opacity: .6; }
+    .bgm-hero::before { animation: none; }
+    .bgm-stat-n { animation: none; }
+    .bgm-hero-badge { animation: none; }
 
-    .bgm-grid { grid-template-columns: repeat(3, 1fr); gap: 10px; }
+    .bgm-toolbar { position: static; padding: 12px; }
+
+    .bgm-grid {
+        grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+        gap: 10px;
+    }
+
+    .bgm-card-meta { padding: 8px 10px 10px; }
     .bgm-card-title { font-size: 13px; min-height: 2.6em; }
     .bgm-card-jp { display: none; }
 
-    /* 手機隱藏桌面手風琴詳情（改走 modal） */
-    .bgm-card .bgm-detail { display: none !important; }
-
-    .bgm-arc-seasons { grid-template-columns: repeat(2, 1fr); }
+    .bgm-detail { display: none !important; }
 }
 
 @media (max-width: 480px) {
-    .bgm-grid { grid-template-columns: repeat(2, 1fr); }
-    .bgm-hero-title { font-size: 20px; }
-    .bgm-nav-btn { font-size: 12px; padding: 6px 10px; }
-    .bgm-d-inner { grid-template-columns: 1fr; gap: 16px; padding: 16px; }
-    .bgm-d-row { grid-template-columns: 1fr; gap: 4px; }
+    .bgm-grid { grid-template-columns: repeat(2, 1fr); gap: 8px; }
+    .bgm-card-bar { gap: 3px; }
+    .bgm-card-pill { font-size: 9px; padding: 0 5px; }
+    .bgm-card-plats { display: none; }
+    .bgm-card-studio { font-size: 10px; }
+    .bgm-stats { grid-template-columns: 1fr 1fr; }
+    .bgm-stat-n { font-size: 24px; }
 }
 
 /* ============================================================
- * 11. 桌面寬螢幕優化（≥1024px：手風琴詳情用兩欄）
+ * 13. 減少動畫偏好（無障礙）
  * ============================================================ */
-@media (min-width: 1024px) {
-    .bgm-grid { grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); }
+@media (prefers-reduced-motion: reduce) {
+    .bgm-hero::before,
+    .bgm-hero::after,
+    .bgm-hero-badge,
+    .bgm-stat-n,
+    .bgm-card,
+    .bgm-card-cover img {
+        animation: none !important;
+        transition: none !important;
+    }
 }
 
-/* 列印樣式（移除互動元素） */
+/* ============================================================
+ * 14. 列印
+ * ============================================================ */
 @media print {
-    .bgm-toolbar, .bgm-nav, .bgm-sheet, .bgm-card-trigger { all: unset; display: block; }
-    .bgm-detail { display: block !important; }
+    .bgm-hero::before,
+    .bgm-hero::after,
+    .bgm-toolbar,
+    .bgm-nav,
+    .bgm-sheet,
+    .bgm-card-trigger { display: none !important; }
+
+    .bgm-detail { display: block !important; break-inside: avoid; }
+    .bgm-card { break-inside: avoid; }
 }
